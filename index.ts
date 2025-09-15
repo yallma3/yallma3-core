@@ -1,21 +1,20 @@
-import type { WorkspaceData } from "./Models/Workspace";
-import { generateWorkspacePrompt } from "./Utils/Runtime";
+import express from "express";
+import mcpRoutes from "./Routes/Mcp.route";
 
- // Handle running workspace (placeholder for future implementation)
-const handleRunWorkspace = async (workspaceData: WorkspaceData) => {
+const app = express();
+const PORT = 3001;
 
-    if (!workspaceData) return;
-    // send event for starting execution
-    // prepare prompt
+// Middleware
+app.use(express.json());
 
-    // Main workspace LLM
-    const propmt = generateWorkspacePrompt(workspaceData)
+// Health check route
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", message: "Server is healthy 🚀" });
+});
 
-    // run the prompt throught the main LLM to get back the plan
-    // parse plan
-    // send event for plan created
-    // run plan steps sequentially (Task graph of tasks that are executed in parallel or sequentially will be implemented in the future)
-    // each step is exectuted through agent or workflow then result is returned
-    // keep track of the results from each step to give to the next step as input
-    // send final result and finished workspace execution event
-}
+// MCP routes
+app.use("/mcp", mcpRoutes);
+
+app.listen(PORT, () => {
+  console.log(`✅ Server is running at http://localhost:${PORT}`);
+});
