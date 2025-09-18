@@ -1,7 +1,7 @@
-import { json } from "express";
 import { getLLMProvider, runLLM } from "../LLM/LLMRunner";
 import type { WorkspaceData } from "../Models/Workspace";
 import { WebSocket } from "ws";
+import { AgentRuntime } from "./Agent";
 
 function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
   const prompt = `
@@ -25,7 +25,7 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
       background: agent.background,
       capabilities: agent.capabilities,
       tools: agent.tools?.map((t) => t.name) || [],
-      llmId: agent.llmId,
+      llm: agent.llm,
     })),
     null,
     2
@@ -191,6 +191,50 @@ export const BasicAgentRuntime = async (
     })
   );
 
+  console.log("STEPS:", parsedPlan.steps);
+  let prevResults: string[] = [];
+
+  for (const step of parsedPlan.steps) {
+    const task = workspaceData.tasks.find(
+      (t) => t.id === step.task || t.name === step.task
+    );
+    const agent = workspaceData.agents.find(
+      (a) => a.id === step.agent || a.name === step.agent
+    );
+
+    const type = step.type;
+    if (type == "workflow") {
+      ws.send(
+        JSON.stringify({
+          type: "message",
+          data: "Executing Workflow" + step.workflow,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      prevResults.push(`Workflow result ${step.workflow}`);
+    }
+
+    if (agent && task) {
+      const agentRuntime = new AgentRuntime(
+        agent,
+        task,
+        prevResults[prevResults.length - 1] || "",
+        workspaceData.apiKey,
+        workspaceData.mainLLM
+      );
+      const response = await agentRuntime.run();
+      prevResults.push(response);
+    }
+    ws.send(
+      JSON.stringify({
+        type: "message",
+        data: `Step ${prevResults.length} completed`,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+  console.log(prevResults);
+
   // run the prompt throught the main LLM to get back the plan
   // parse plan
   // send event for plan created
@@ -198,5 +242,5 @@ export const BasicAgentRuntime = async (
   // each step is exectuted through agent or workflow then result is returned
   // keep track of the results from each step to give to the next step as input
   // send final result and finished workspace execution event
-  return plan;
+  return prevResults;
 };
