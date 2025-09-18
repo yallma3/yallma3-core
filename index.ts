@@ -1,6 +1,10 @@
 import express from "express";
-import mcpRoutes from "./Routes/Mcp.route";
 import cors from "cors";
+import { createServer } from "http";
+import { WebSocketServer } from "ws";
+
+import mcpRoutes from "./Routes/Mcp.route";
+import { setupWebSocketServer } from "./Websocket/socket";
 
 const app = express();
 const PORT = 3001;
@@ -17,6 +21,24 @@ app.get("/health", (req, res) => {
 // MCP routes
 app.use("/mcp", mcpRoutes);
 
-app.listen(PORT, () => {
+
+// Create an HTTP server from Express
+const server = createServer(app);
+
+// Create a WebSocket server attached to the same HTTP server
+const wss = new WebSocketServer({ server });
+
+// Setup your WebSocket utilities
+const wsUtils = setupWebSocketServer(wss);
+
+// Example: trigger broadcast from API
+app.post("/broadcast", (req, res) => {
+  wsUtils.broadcast({ type: "announcement", text: "Hello clients 🎉" });
+  res.json({ success: true });
+});
+
+// Start HTTP + WebSocket server
+server.listen(PORT, () => {
   console.log(`✅ Server is running at http://localhost:${PORT}`);
+  console.log(`🌐 WebSocket is available at ws://localhost:${PORT}`);
 });

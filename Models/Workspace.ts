@@ -1,6 +1,7 @@
 import type { Task } from "./Task";
 import type { Agent } from "./Agent";
 import type { Workflow } from "./Workflow";
+import type { LLMOption } from "./LLM";
 
 export interface WorkspaceData {
   id: string;
@@ -10,7 +11,7 @@ export interface WorkspaceData {
   name: string;
   description: string;
   // Step 2: LLM Selection
-  mainLLM: string;
+  mainLLM: LLMOption;
   apiKey: string;
   useSavedCredentials: boolean;
 

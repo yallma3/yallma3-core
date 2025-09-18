@@ -58,7 +58,7 @@ export const stdioListPrompts = async(serverConfig: ServerConfig) => {
 
     return response;
   } catch (err) {
-      throw err;
+      return {}
   }
 }
 
@@ -84,7 +84,7 @@ export const stdioListResources = async(serverConfig: ServerConfig) => {
 
     return response;
   } catch (err) {
-      throw err;
+      return {}
   }
 }
 
