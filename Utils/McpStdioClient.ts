@@ -1,105 +1,90 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { getTools, callTool, getPrompts, getPrompt, getResources, getResource } from "./Mcp";
-import { type ToolCall, type ServerConfig } from "../Models/Mcp"
+import {
+  getTools,
+  callTool,
+  getPrompts,
+  getPrompt,
+  getResources,
+  getResource,
+} from "./Mcp";
+import { type ToolCall, type ServerConfig } from "../Models/Mcp";
 
-const getSTDIOPClient = async (serverConfig: ServerConfig) => {
+export class McpSTDIOClient {
+  private serverConfig: ServerConfig;
+  private client: Client;
+
+  constructor(serverConfig: ServerConfig) {
+    this.client = new Client({
+      name: "http-client",
+      version: "1.0.0",
+    });
+    this.serverConfig = serverConfig;
+  }
+
+  async init() {
+    console.log("initializing");
     try {
-      const client = new Client({
-            name: "stdio-client",
-            version: "1.0.0",
-          });
-
-        const transport = new StdioClientTransport({
-            command: serverConfig.command,
-            args: serverConfig.args || [],
-        });
-
-        await client.connect(transport);
-
-      return client;
+      const transport = new StdioClientTransport({
+        command: this.serverConfig.command,
+        args: this.serverConfig.args || [],
+      });
+      await this.client.connect(transport);
+      console.log("connected");
     } catch (err) {
       throw err;
     }
-}
-
-export const stdioListTools = async(serverConfig: ServerConfig) => {
-  try{
-    const client = await getSTDIOPClient(serverConfig)
-
-    const response = await getTools(client)
-    await client.close();
-
-    return response;
-  } catch (err) {
-      throw err;
   }
-}
 
-export const stdioToolCall = async(serverConfig: ServerConfig, toolCall: ToolCall) => {
+  async listTools() {
     try {
-      const client = await  getSTDIOPClient(serverConfig);
-
-      const response = await callTool(client, toolCall);
-      await client.close();
-
+      const response = await getTools(this.client);
+      return response;
+    } catch (err) {
+      return [];
+    }
+  }
+  async callTool(toolCall: ToolCall) {
+    try {
+      const response = await callTool(this.client, toolCall);
       return response;
     } catch (err) {
       throw err;
     }
-}
-
-export const stdioListPrompts = async(serverConfig: ServerConfig) => {
-  try{
-    const client = await getSTDIOPClient(serverConfig)
-
-    const response = await getPrompts(client)
-    await client.close();
-
-    return response;
-  } catch (err) {
-      return {}
   }
-}
-
-export const stdioGetPrompt = async(serverConfig: ServerConfig, prompt: string) => {
+  async listPrompts() {
     try {
-      const client = await  getSTDIOPClient(serverConfig);
-
-      const response = await getPrompt(client, prompt);
-      await client.close();
-
+      const response = await getPrompts(this.client);
+      return response;
+    } catch (err) {
+      return [];
+    }
+  }
+  async getPrompt(prompt: string) {
+    try {
+      const response = await getPrompt(this.client, prompt);
       return response;
     } catch (err) {
       throw err;
     }
-}
-
-export const stdioListResources = async(serverConfig: ServerConfig) => {
-  try{
-    const client = await getSTDIOPClient(serverConfig)
-
-    const response = await getResources(client)
-    await client.close();
-
-    return response;
-  } catch (err) {
-      return {}
   }
-}
-
-export const stdioGetResource = async(serverConfig: ServerConfig, resource: string) => {
+  async listResources() {
     try {
-      const client = await  getSTDIOPClient(serverConfig);
-
-      const response = await getResource(client, resource);
-      await client.close();
-
+      const response = await getResources(this.client);
+      return response;
+    } catch (err) {
+      return [];
+    }
+  }
+  async getResource(resource: string) {
+    try {
+      const response = await getResource(this.client, resource);
       return response;
     } catch (err) {
       throw err;
     }
+  }
+  async close() {
+    await this.client.close();
+  }
 }
-
-
-

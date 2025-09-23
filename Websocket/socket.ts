@@ -1,18 +1,22 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
 import { handleRunWorkspace } from "../Utils/Runtime";
+import { executeFlowRuntime } from "../Workflow/runtime";
 
 export function setupWebSocketServer(wss: WebSocketServer) {
   const clients = new Set<WebSocket>();
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-    console.log("New WebSocket connection established:", req.socket.remoteAddress);
+    console.log(
+      "New WebSocket connection established:",
+      req.socket.remoteAddress
+    );
     clients.add(ws);
 
     // Handle incoming messages from frontend
-    ws.on("message", (message: WebSocket.RawData) => {
+    ws.on("message", async (message: WebSocket.RawData) => {
       try {
-        console.log("Client Count:", clients.size)
+        console.log("Client Count:", clients.size);
         const data = JSON.parse(message.toString());
         // console.log("Received message from yaLLMa3 Studio:", data);
 
@@ -27,15 +31,39 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             break;
           case "run_workspace":
             ws.send(
-                JSON.stringify({
-                  type: "message",
-                  data:  "Starting workspace runtime",
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              JSON.stringify({
+                type: "message",
+                data: "Starting workspace runtime",
+                timestamp: new Date().toISOString(),
+              })
+            );
 
             handleRunWorkspace(data.data, "basic_agent", ws);
-              break;
+            break;
+          case "run_workflow":
+            ws.send(
+              JSON.stringify({
+                type: "message",
+                data: "Starting workflow runtime",
+                timestamp: new Date().toISOString(),
+              })
+            );
+            const workflow = JSON.parse(data.data);
+            const result = await executeFlowRuntime(workflow);
+            ws.send(
+              JSON.stringify({
+                id: workflow.id,
+                type: "workflow_result",
+                data: result,
+                timestamp: new Date().toISOString(),
+              })
+            );
+            console.log("Workflow  result:", result);
+
+            break;
+          case "workflow_json":
+            // console.log(data.data);
+            break;
           case "command_response":
             console.log("Command response:", data.payload);
             break;

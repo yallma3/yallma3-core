@@ -28,6 +28,7 @@ export class AgentRuntime {
     this.llm = getLLMProvider(llmOption, this.apiKey);
   }
   async run(): Promise<string> {
+    console.log("CONTEXRTT", this.context);
     let iteration = 0;
     let output = "";
     let feedback = "";
@@ -46,7 +47,7 @@ export class AgentRuntime {
         break;
       }
       feedback = reviewResultParsed.feedback;
-      console.log("📝 Feedback:", feedback);
+      //   console.log("📝 Feedback:", feedback);
 
       iteration++;
     }
@@ -91,6 +92,14 @@ export class AgentRuntime {
                 - Maintain and build upon the strengths mentioned in the feedback
                 - Ensure the response meets all accuracy and clarity standards
                 - Focus particularly on areas marked as incomplete or inadequate`;
+    }
+
+    if (this.context) {
+      intro += `Here is the input you should solve the task based on ${JSON.stringify(
+        this.context,
+        null,
+        2
+      )}`;
     }
 
     const completionInstructions = `

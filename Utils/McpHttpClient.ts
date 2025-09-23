@@ -1,116 +1,89 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { getTools, callTool, getPrompts, getPrompt, getResources, getResource } from "./Mcp";
-import { type ToolCall } from "../Models/Mcp"
+import {
+  getTools,
+  callTool,
+  getPrompts,
+  getPrompt,
+  getResources,
+  getResource,
+} from "./Mcp";
+import { type ToolCall } from "../Models/Mcp";
 
+export class McpHttpClient {
+  private serverUrl: string = "http://localhost:3001/mcp";
+  private client: Client;
 
-const getHTTPClient = async (serverUrl: string) => {
-    const url = new URL(serverUrl);
-
-    try {
-      const client = new Client({
-            name: "http-client",
-            version: "1.0.0",
-          });
-
-      let transport: StreamableHTTPClientTransport | SSEClientTransport;
-
-      try {
-        transport = new StreamableHTTPClientTransport(url);
-        await client.connect(transport);
-      } catch (err) {
-        const sseTransport = new SSEClientTransport(url);
-        try {
-          await client.connect(sseTransport);
-        } catch (err) {
-          throw err;
-        }
-      }
-
-      return client;
-    } catch (err) {
-      throw err;
-    }
-}
-
-export const httpListTools = async(serverUrl: string) => {
-  try{
-    const client = await getHTTPClient(serverUrl)
-
-    const response = await getTools(client)
-    await client.close();
-
-    return response;
-  } catch (err) {
-      throw err;
+  constructor(serverUrl: string) {
+    this.client = new Client({
+      name: "http-client",
+      version: "1.0.0",
+    });
+    this.serverUrl = serverUrl;
   }
-}
 
-export const httpToolCall = async(serverUrl: string, toolCall: ToolCall) => {
+  async init() {
+    const url = new URL(this.serverUrl);
+
     try {
-      const client = await  getHTTPClient(serverUrl);
+      const transport = new StreamableHTTPClientTransport(url);
+      await this.client.connect(transport);
+    } catch (err) {
+      const sseTransport = new SSEClientTransport(url);
+      await this.client.connect(sseTransport);
+    }
+  }
 
-      const response = await callTool(client, toolCall);
-      await client.close();
-
+  async listTools() {
+    try {
+      const response = await getTools(this.client);
+      return response;
+    } catch (err) {
+      return err;
+    }
+  }
+  async callTool(toolCall: ToolCall) {
+    try {
+      const response = await callTool(this.client, toolCall);
       return response;
     } catch (err) {
       throw err;
     }
-}
-
-export const httpListPrompts = async(serverUrl: string) => {
-  try{
-    const client = await getHTTPClient(serverUrl)
-
-    const response = await getPrompts(client)
-    await client.close();
-
-    return response;
-  } catch (err) {
-      throw err;
   }
-}
-
-export const httpGetPrompt = async(serverUrl: string, prompt: string) => {
+  async listPrompts() {
     try {
-      const client = await  getHTTPClient(serverUrl);
-
-      const response = await getPrompt(client, prompt);
-      await client.close();
-
+      const response = await getPrompts(this.client);
+      return response;
+    } catch (err) {
+      return err;
+    }
+  }
+  async getPrompt(prompt: string) {
+    try {
+      const response = await getPrompt(this.client, prompt);
       return response;
     } catch (err) {
       throw err;
     }
-}
-
-export const httpListResources = async(serverUrl: string) => {
-  try{
-    const client = await getHTTPClient(serverUrl)
-
-    const response = await getResources(client)
-    await client.close();
-
-    return response;
-  } catch (err) {
-      throw err;
   }
-}
-
-export const httpGetResource = async(serverUrl: string, resource: string) => {
+  async listResources() {
     try {
-      const client = await  getHTTPClient(serverUrl);
-
-      const response = await getResource(client, resource);
-      await client.close();
-
+      const response = await getResources(this.client);
+      return response;
+    } catch (err) {
+      return err;
+    }
+  }
+  async getResource(resource: string) {
+    try {
+      const response = await getResource(this.client, resource);
       return response;
     } catch (err) {
       throw err;
     }
+  }
+  async close() {
+    await this.client.close();
+  }
 }
-
-
-

@@ -3,8 +3,10 @@ import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 
-import mcpRoutes from "./Routes/Mcp.route";
+// import mcpRoutes from "./Routes/Mcp.route";
+import workflowRoute from "./Routes/workflow.route";
 import { setupWebSocketServer } from "./Websocket/socket";
+import { initFlowSystem } from "./Workflow/initFlowSystem";
 
 const app = express();
 const PORT = 3001;
@@ -19,8 +21,8 @@ app.get("/health", (req, res) => {
 });
 
 // MCP routes
-app.use("/mcp", mcpRoutes);
-
+// app.use("/mcp", mcpRoutes);
+app.use("/workflow", workflowRoute);
 
 // Create an HTTP server from Express
 const server = createServer(app);
@@ -30,6 +32,7 @@ const wss = new WebSocketServer({ server });
 
 // Setup your WebSocket utilities
 const wsUtils = setupWebSocketServer(wss);
+initFlowSystem();
 
 // Example: trigger broadcast from API
 app.post("/broadcast", (req, res) => {

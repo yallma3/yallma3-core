@@ -2,6 +2,44 @@ import { getLLMProvider, runLLM } from "../LLM/LLMRunner";
 import type { WorkspaceData } from "../Models/Workspace";
 import { WebSocket } from "ws";
 import { AgentRuntime } from "./Agent";
+import { executeFlowRuntime } from "../Workflow/runtime";
+import { json } from "express";
+import type { Workflow } from "../Models/Workflow";
+
+function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const requestId = crypto.randomUUID();
+
+    const listener = (message: WebSocket.RawData) => {
+      try {
+        const data = JSON.parse(message.toString());
+        console.log(typeof data.data);
+        const workflowJson = JSON.stringify(data.data);
+        console.log(typeof workflowJson);
+        if (data.type === "workflow_json" && data.id === requestId) {
+          ws.off("message", listener); // cleanup
+          resolve(workflowJson); // return result to caller
+        }
+      } catch (err) {
+        reject(err);
+      }
+    };
+    console.log("Listenersss");
+
+    ws.on("message", listener);
+
+    // send request
+    ws.send(
+      JSON.stringify({
+        id: requestId,
+        type: "run_workflow",
+        requestId,
+        data: workflow,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  });
+}
 
 function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
   const prompt = `
@@ -204,14 +242,28 @@ export const BasicAgentRuntime = async (
 
     const type = step.type;
     if (type == "workflow") {
+      const workflow = await sendWorkflow(ws, step.workflow);
+      const wrapper = JSON.parse(workflow);
+
+      // If workflow is already an object (not string), guard against double-parse
+      const json: Workflow =
+        typeof wrapper.data === "string"
+          ? JSON.parse(wrapper.data)
+          : wrapper.data;
+
+      console.log("Parsed workflow:", json);
+      const result = await executeFlowRuntime(json);
+      if (result && (result as any).finalResult) {
+        prevResults.push((result as any).finalResult);
+      }
       ws.send(
         JSON.stringify({
           type: "message",
-          data: "Executing Workflow" + step.workflow,
+          data: `Step ${prevResults.length} completed`,
           timestamp: new Date().toISOString(),
         })
       );
-      prevResults.push(`Workflow result ${step.workflow}`);
+      continue;
     }
 
     if (agent && task) {
@@ -222,6 +274,7 @@ export const BasicAgentRuntime = async (
         workspaceData.apiKey,
         workspaceData.mainLLM
       );
+      console.log("BEFORE RUNNING AGENT", prevResults);
       const response = await agentRuntime.run();
       prevResults.push(response);
     }
