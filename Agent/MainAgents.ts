@@ -397,7 +397,16 @@ export const yallma3GenSeqential = async (
 
       // Simple task proceed with agent to perform single task
       const agent = workspaceData.agents.find((a) => a.id == agentId);
-      if (!agent) return;
+      if (!agent) {
+        ws.send(
+          JSON.stringify({
+            type: "message",
+            data: `Task ${task.id} failed (agent ${agentId ?? "unknown"} not found)`,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        continue;
+      }
 
       const agentRuntime = new Yallma3GenOneAgentRuntime(
         agent,
