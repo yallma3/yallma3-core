@@ -117,13 +117,16 @@ export function register(nodeRegistry: NodeRegistry): void {
         const n = context.node as TextNode;
 
         if (typeof n.nodeValue === "string") {
-          let input = "";
-          if (typeof context.inputs[n.id * 100 + 1] != "string") {
-            input = JSON.stringify(context.inputs[n.id * 100 + 1], null, 2);
-          } else {
-            input = context.inputs[n.id * 100 + 1];
-          }
-          return processTextTemplate(n.nodeValue, input, n.id);
+         const rawInput = context.inputs[n.id * 100 + 1];
+         let input: string;
+         if (rawInput === undefined || rawInput === null) {
+          input = "";
+         } else if (typeof rawInput !== "string") {
+          input = JSON.stringify(rawInput, null, 2);
+         } else {
+            input = rawInput;
+         }
+         return processTextTemplate(n.nodeValue, input, n.id);
         }
         return n.nodeValue;
       },
