@@ -245,10 +245,6 @@ export function register(
   nodeRegistry: NodeRegistry,
   category: string = "Tools"
 ): void {
-  console.log(
-    "Registering Arxiv Scraper Node (API-based) under category:",
-    category
-  );
   nodeRegistry.registerNodeType(
     "ArxivScraper",
     createArxivScraperNode,

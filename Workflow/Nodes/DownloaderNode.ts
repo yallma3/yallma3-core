@@ -438,7 +438,6 @@ async function downloadPDFToDirectory(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering PDF Batch Downloader Node with Directory Storage");
   nodeRegistry.registerNodeType(
     metadata.nodeType,
     createPDFDownloaderNode,

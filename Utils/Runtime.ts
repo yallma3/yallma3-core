@@ -1,4 +1,4 @@
-import { BasicAgentRuntime } from "../Agent/MainAgents";
+import { BasicAgentRuntime, yallma3GenSeqential } from "../Agent/MainAgents";
 import { WebSocket } from "ws";
 
 export async function handleRunWorkspace(
@@ -11,6 +11,9 @@ export async function handleRunWorkspace(
   switch (agentType) {
     case "basic_agent":
       await BasicAgentRuntime(workspaceData, ws);
+      break;
+    case "yallma3-gen-seq":
+      await yallma3GenSeqential(workspaceData, ws);
       break;
     default:
       ws.send(

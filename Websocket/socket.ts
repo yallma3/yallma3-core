@@ -38,7 +38,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               })
             );
 
-            handleRunWorkspace(data.data, "basic_agent", ws);
+            handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
             break;
           case "run_workflow":
             ws.send(
@@ -58,7 +58,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 timestamp: new Date().toISOString(),
               })
             );
-            console.log("Workflow  result:", result);
+            // console.log("Workflow  result:", result);
 
             break;
           case "workflow_json":

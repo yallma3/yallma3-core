@@ -35,7 +35,7 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     const json = await res.json();
-    console.log(JSON.stringify(json, null, 2));
+
     return (
       (json as { choices?: Array<{ message?: { content?: string } }> })
         ?.choices?.[0]?.message?.content || "No response from OpenAI"
@@ -76,7 +76,7 @@ export class GroqProvider implements LLMProvider {
     }
 
     const json = await res.json();
-    console.log((json as any).choices[0].message.content);
+
     return (json as any).choices[0].message.content;
   }
 }
@@ -112,7 +112,7 @@ export class OpenRouterProvider implements LLMProvider {
     }
 
     const json = await res.json();
-    console.log(JSON.stringify(json, null, 2));
+
     return (
       (json as { choices?: Array<{ message?: { content?: string } }> })
         ?.choices?.[0]?.message?.content || "No response from OpenRouter"
@@ -205,7 +205,7 @@ export class ClaudeProvider implements LLMProvider {
     }
 
     const json = await res.json();
-    console.log(JSON.stringify(json, null, 2));
+
     return (
       (json as { content?: Array<{ text?: string }> })?.content?.[0]?.text ||
       "No response from Claude"

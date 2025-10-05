@@ -245,6 +245,5 @@ export function createNGeminiChatNode(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering Gemini Chat Node");
   nodeRegistry.registerNodeType("GeminiChat", createNGeminiChatNode, metadata);
 }

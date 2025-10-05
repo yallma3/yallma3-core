@@ -1,10 +1,18 @@
 import { getLLMProvider, runLLM } from "../LLM/LLMRunner";
 import type { WorkspaceData } from "../Models/Workspace";
 import { WebSocket } from "ws";
-import { AgentRuntime } from "./Agent";
+import { AgentRuntime, Yallma3GenOneAgentRuntime } from "./Agent";
 import { executeFlowRuntime } from "../Workflow/runtime";
 import { json } from "express";
 import type { Workflow } from "../Models/Workflow";
+import { getTaskExecutionOrderWithContext } from "../Task/TaskGraph";
+import type { AgentStep, SubTask, TaskGraph } from "../Models/Task";
+import {
+  analyzeTaskCore,
+  decomposeTask,
+  planAgenticTask,
+} from "../Task/TaskIntrepreter";
+import { assignBestFit } from "./Utls/MainAgentHelper";
 
 function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -73,30 +81,11 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
   ${JSON.stringify(
     workspaceData.tasks.map((task) => ({
       id: task.id,
-      name: task.name,
+      name: task.title,
       description: task.description,
       expectedOutput: task.expectedOutput,
-      type: task.executeWorkflow ? "workflow" : "agentic",
-      workflow:
-        task.executeWorkflow && task.workflowId
-          ? {
-              id: task.workflowId,
-              name: task.workflowName || "Unnamed Workflow",
-            }
-          : null,
-      assignedAgent: task.executeWorkflow
-        ? null
-        : task.assignedAgent
-        ? {
-            name:
-              workspaceData.agents.find((a) => a.id === task.assignedAgent)
-                ?.name || "Unknown",
-            fixed: true,
-          }
-        : {
-            name: null,
-            fixed: false,
-          },
+      type: task.type,
+      executor: task.executorId,
     })),
     null,
     2
@@ -234,7 +223,7 @@ export const BasicAgentRuntime = async (
 
   for (const step of parsedPlan.steps) {
     const task = workspaceData.tasks.find(
-      (t) => t.id === step.task || t.name === step.task
+      (t) => t.id === step.task || t.title === step.task
     );
     const agent = workspaceData.agents.find(
       (a) => a.id === step.agent || a.name === step.agent
@@ -296,4 +285,150 @@ export const BasicAgentRuntime = async (
   // keep track of the results from each step to give to the next step as input
   // send final result and finished workspace execution event
   return prevResults;
+};
+
+export const yallma3GenSeqential = async (
+  workspaceData: WorkspaceData,
+  ws: WebSocket
+) => {
+  if (!workspaceData) return;
+
+  let results: Record<string, string> = {};
+
+  const taskGraph: TaskGraph = {
+    tasks: workspaceData.tasks,
+    connections: workspaceData.connections,
+  };
+
+  const layers = getTaskExecutionOrderWithContext(taskGraph);
+  const MainLLM = getLLMProvider(workspaceData.mainLLM, workspaceData.apiKey);
+
+  for (const layer of layers) {
+    let taskContext = "";
+    let task = taskGraph.tasks.find((t) => t.id == layer.taskId);
+    if (!task) continue;
+    console.log("Executing:", task.title);
+    if (layer.taskId == task.id) {
+      for (const cont of layer.context) {
+        taskContext += `,${results[cont]}`;
+      }
+    }
+
+    console.log("Task Context:", taskContext);
+
+    let bestFit = null;
+    // Auto assigne best Tool, Workflow, Or Agent for the task
+    if (task.type == "agentic") {
+      console.log(workspaceData.workflows);
+      bestFit = await assignBestFit(
+        MainLLM,
+        task,
+        workspaceData.workflows,
+        workspaceData.agents
+      );
+    }
+
+    // Workflow Type
+    if (task.type == "workflow" || bestFit?.type == "workflow") {
+      const workflowId =
+        task.type == "workflow" ? task.executorId : bestFit?.id;
+      if (!workflowId) throw "no workflow id";
+
+      const workflow = await sendWorkflow(ws, workflowId);
+      const wrapper = await JSON.parse(workflow);
+
+      // If workflow is already an object (not string), guard against double-parse
+      const json: Workflow =
+        typeof wrapper.data === "string"
+          ? JSON.parse(wrapper.data)
+          : wrapper.data;
+
+      const result = await executeFlowRuntime(json);
+      console.log(result);
+      if (result && (result as any).finalResult) {
+        results[task.id] = (result as any).finalResult;
+        ws.send(
+          JSON.stringify({
+            type: "message",
+            data: `Task ${task.id} completed`,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      } else {
+        ws.send(
+          JSON.stringify({
+            type: "message",
+            data: `Task ${task.id} failed`,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+      continue;
+    }
+
+    const coreAnalysis = await analyzeTaskCore(MainLLM, task, taskContext);
+    console.log(coreAnalysis);
+
+    // Specific Agent Type with assigned agent
+    if (task.type == "specific-agent" || bestFit?.type == "agent") {
+      let subtasks: SubTask[] | null = null;
+      let agentPlan: AgentStep[] | null = null;
+
+      const agentId =
+        task.type == "specific-agent" ? task.executorId : bestFit?.id;
+
+      // Complex task needs decomposition
+      // if (coreAnalysis.needsDecomposition) {
+      //   subtasks = await decomposeTask(MainLLM, coreAnalysis);
+      //   // proceed in case of subtasks
+      // }
+
+      // Simple task execute through agent directly
+      agentPlan = await planAgenticTask(
+        MainLLM,
+        coreAnalysis,
+        task,
+        taskContext
+      );
+
+      console.log("AGENT PLAN:", agentPlan);
+
+      // Simple task proceed with agent to perform single task
+      const agent = workspaceData.agents.find((a) => a.id == agentId);
+      if (!agent) return;
+
+      const agentRuntime = new Yallma3GenOneAgentRuntime(
+        agent,
+        task,
+        taskContext,
+        agentPlan,
+        workspaceData.apiKey,
+        workspaceData.mainLLM
+      );
+
+      const result = await agentRuntime.run();
+      if (result) {
+        results[task.id] = result;
+        ws.send(
+          JSON.stringify({
+            type: "message",
+            data: `Task ${task.id} completed`,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      } else {
+        ws.send(
+          JSON.stringify({
+            type: "message",
+            data: `Task ${task.id} failed`,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+    }
+
+    console.log("Result for task:", task.id, ":", results[task.id]);
+  }
+  console.log("Results:", JSON.stringify(results, null, 2));
+  return results;
 };

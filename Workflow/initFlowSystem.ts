@@ -38,8 +38,6 @@ import { register as registerDelayNode } from "./Nodes/DelayNode";
 import { register as registerEmbeddingNode } from "./Nodes/EmbeddingNode";
 
 export async function initFlowSystem() {
-  console.log("Registering built in nodes");
-
   registerMathNode(nodeRegistry);
   registerTextNode(nodeRegistry);
   registerJoinNode(nodeRegistry);
@@ -59,7 +57,7 @@ export async function initFlowSystem() {
   registerPdfDownloaderNode(nodeRegistry);
   registerPdfExtractorNode(nodeRegistry);
   registerChunkingNode(nodeRegistry);
-  
+
   registerHashNode(nodeRegistry);
   registerHttpCallNode();
   registerUrlReferenceNode();

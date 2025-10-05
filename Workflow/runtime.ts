@@ -68,10 +68,6 @@ export const executeFlowRuntime = async (workflow: Workflow) => {
           }
 
           results.set(nodeId, output);
-          console.log(
-            `Node ${nodeId} executed. Output:`,
-            String(output).substring(0, 30)
-          );
         })
       );
     }

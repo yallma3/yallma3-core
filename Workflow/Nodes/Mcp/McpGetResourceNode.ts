@@ -239,7 +239,6 @@ export function createNMcpGetResourcelNode(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering MCP ToolCall Node");
   nodeRegistry.registerNodeType(
     metadata.nodeType,
     createNMcpGetResourcelNode,

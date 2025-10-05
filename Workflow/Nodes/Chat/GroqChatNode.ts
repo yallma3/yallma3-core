@@ -249,6 +249,5 @@ export function createNGroqChatNode(id: number, position: Position): ChatNode {
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering Groq Chat Node");
   nodeRegistry.registerNodeType("GroqChat", createNGroqChatNode, metadata);
 }

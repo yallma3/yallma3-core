@@ -274,7 +274,6 @@ export function createNMcpToolCallNode(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering MCP ToolCall Node");
   nodeRegistry.registerNodeType(
     "McpToolCall",
     createNMcpToolCallNode,

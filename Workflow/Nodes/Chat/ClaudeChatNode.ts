@@ -238,6 +238,5 @@ export function createNClaudeChatNode(id: number): ChatNode {
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering Claude Chat Node");
   nodeRegistry.registerNodeType("ClaudeChat", createNClaudeChatNode, metadata);
 }

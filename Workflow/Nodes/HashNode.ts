@@ -90,13 +90,19 @@ export function createHashNode(id: number, position: Position): HashNode {
         const inputValue = await context.inputs[id * 100 + 1];
         const inputText = inputValue !== undefined ? String(inputValue) : "";
 
-        console.log(`Executing Hash node ${id} with input: ${inputText.substring(0, 100)}...`);
+        console.log(
+          `Executing Hash node ${id} with input: ${inputText.substring(
+            0,
+            100
+          )}...`
+        );
 
         // Get selected algorithm from config
         const algoParam = context.node.configParameters?.find(
           (param: ConfigParameterType) => param.parameterName === "Algorithm"
         );
-        const algo = (algoParam?.paramValue as HashAlgorithm) ||
+        const algo =
+          (algoParam?.paramValue as HashAlgorithm) ||
           (algoParam?.defaultValue as HashAlgorithm) ||
           "SHA256";
 
@@ -105,24 +111,29 @@ export function createHashNode(id: number, position: Position): HashNode {
 
         switch (algo) {
           case "MD5":
-            hash = createHash('md5').update(inputText).digest('hex');
+            hash = createHash("md5").update(inputText).digest("hex");
             algorithmName = "md5";
             break;
           case "SHA1":
-            hash = createHash('sha1').update(inputText).digest('hex');
+            hash = createHash("sha1").update(inputText).digest("hex");
             algorithmName = "sha1";
             break;
           case "SHA512":
-            hash = createHash('sha512').update(inputText).digest('hex');
+            hash = createHash("sha512").update(inputText).digest("hex");
             algorithmName = "sha512";
             break;
           case "SHA256":
           default:
-            hash = createHash('sha256').update(inputText).digest('hex');
+            hash = createHash("sha256").update(inputText).digest("hex");
             algorithmName = "sha256";
         }
 
-        console.log(`Hash node ${id} generated ${algorithmName} hash: ${hash.substring(0, 16)}...`);
+        console.log(
+          `Hash node ${id} generated ${algorithmName} hash: ${hash.substring(
+            0,
+            16
+          )}...`
+        );
 
         return {
           [id * 100 + 2]: hash,
@@ -145,7 +156,10 @@ export function createHashNode(id: number, position: Position): HashNode {
       );
     },
 
-    setConfigParameter(parameterName: string, value: string | number | boolean): void {
+    setConfigParameter(
+      parameterName: string,
+      value: string | number | boolean
+    ): void {
       if (parameterName === "Algorithm") {
         this.algorithm = value as HashAlgorithm;
         this.nodeValue = String(value); // ensure it's stored as string
@@ -161,6 +175,5 @@ export function createHashNode(id: number, position: Position): HashNode {
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log(`Registering ${metadata.title} Node under category: ${metadata.category}`);
   nodeRegistry.registerNodeType(metadata.nodeType, createHashNode, metadata);
 }

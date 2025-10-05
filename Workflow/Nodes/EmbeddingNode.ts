@@ -156,7 +156,8 @@ export function createEmbeddingNode(
         // Get API key from config
         let API_KEY = "";
         const apiKeyParam = context.node.configParameters?.find(
-          (param: ConfigParameterType) => param.parameterName === "Google API Key"
+          (param: ConfigParameterType) =>
+            param.parameterName === "Google API Key"
         );
         API_KEY = (apiKeyParam?.paramValue as string) || "";
 
@@ -170,7 +171,8 @@ export function createEmbeddingNode(
         const modelParam = context.node.configParameters?.find(
           (param: ConfigParameterType) => param.parameterName === "Model"
         );
-        const model = (modelParam?.paramValue as string) ||
+        const model =
+          (modelParam?.paramValue as string) ||
           (modelParam?.defaultValue as string) ||
           "gemini-embedding-001";
 
@@ -199,7 +201,7 @@ export function createEmbeddingNode(
           throw new Error(`Batch embedding failed: ${errorText}`);
         }
 
-        const data = await response.json() as {
+        const data = (await response.json()) as {
           embeddings: Array<{ values: number[] }>;
         };
 
@@ -220,9 +222,9 @@ export function createEmbeddingNode(
               ? JSON.stringify(embeddings[0], null, 2)
               : JSON.stringify({ embeddings }, null, 2),
           // Socket id 3 is for Status
-          [id * 100 + 3]: `Success: Generated embeddings for ${
-            chunks.length
-          } ${isSingleString ? "text input" : "chunks"} using Google Gemini`,
+          [id * 100 + 3]: `Success: Generated embeddings for ${chunks.length} ${
+            isSingleString ? "text input" : "chunks"
+          } using Google Gemini`,
         };
       } catch (error) {
         console.error("Error in Embedding node:", error);
@@ -247,7 +249,10 @@ export function createEmbeddingNode(
       );
     },
 
-    setConfigParameter(parameterName: string, value: string | number | boolean): void {
+    setConfigParameter(
+      parameterName: string,
+      value: string | number | boolean
+    ): void {
       const parameter = (this.configParameters ?? []).find(
         (param: ConfigParameterType) => param.parameterName === parameterName
       );
@@ -259,6 +264,9 @@ export function createEmbeddingNode(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log(`Registering ${metadata.title} Node under category: ${metadata.category}`);
-  nodeRegistry.registerNodeType(metadata.nodeType, createEmbeddingNode, metadata);
+  nodeRegistry.registerNodeType(
+    metadata.nodeType,
+    createEmbeddingNode,
+    metadata
+  );
 }

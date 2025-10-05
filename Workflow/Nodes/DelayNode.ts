@@ -28,9 +28,9 @@ export interface DelayNode extends BaseNode {
 
 const metadata: NodeMetadata = {
   category: "Logic",
-  title: "Delay",
+  title: "Delay (ms)",
   nodeType: "Delay",
-  nodeValue: "1000 ms",
+  nodeValue: 1000,
   sockets: [
     { title: "Input", type: "input", dataType: "unknown" },
     { title: "Output", type: "output", dataType: "unknown" },
@@ -45,15 +45,12 @@ const metadata: NodeMetadata = {
       valueSource: "UserInput",
       UIConfigurable: true,
       description: "How long to wait before passing the value through (in ms).",
+      isNodeBodyContent: true,
     },
   ],
 };
 
-
-export function createDelayNode(
-  id: number,
-  position: Position
-): DelayNode {
+export function createDelayNode(id: number, position: Position): DelayNode {
   return {
     id,
     category: metadata.category,
@@ -83,8 +80,10 @@ export function createDelayNode(
       const delayParam = context.node.configParameters?.find(
         (param: ConfigParameterType) => param.parameterName === "Delay (ms)"
       );
-      const delayMs = Number(delayParam?.paramValue ?? delayParam?.defaultValue ?? 1000);
-      
+      const delayMs = Number(
+        delayParam?.paramValue ?? delayParam?.defaultValue ?? 1000
+      );
+
       // Update node value to show current delay
       context.node.nodeValue = `${delayMs} ms`;
 
@@ -122,6 +121,5 @@ export function createDelayNode(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log(`Registering ${metadata.title} Node under category: ${metadata.category}`);
   nodeRegistry.registerNodeType(metadata.nodeType, createDelayNode, metadata);
 }

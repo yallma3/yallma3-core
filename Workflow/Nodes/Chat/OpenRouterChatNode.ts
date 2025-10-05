@@ -142,8 +142,6 @@ export function createNOpenRouterChatNode(
       // Extract model name from node value
       const model =
         n.nodeValue?.toString().trim() || "qwen/qwen2-7b-instruct:free";
-      console.log("n.nodeValue", n.nodeValue);
-      console.log(`Using model: ${model}`);
 
       let OPENROUTER_API_KEY = "";
       if (n.getConfigParameter) {
@@ -152,16 +150,6 @@ export function createNOpenRouterChatNode(
       } else {
         throw new Error("API Key not found");
       }
-
-      console.log(
-        "OPENROUTER_API_KEY",
-        OPENROUTER_API_KEY ? "[set]" : "[missing]"
-      );
-      console.log(
-        `Executing OpenRouter Chat node ${
-          n.id
-        } with prompt: "${prompt.substring(0, 50)}..."`
-      );
 
       try {
         const messages = system
@@ -182,7 +170,6 @@ export function createNOpenRouterChatNode(
             body: JSON.stringify({
               model,
               messages,
-              max_tokens: 1000,
               temperature: 0.7,
               top_p: 1,
             }),
@@ -195,11 +182,6 @@ export function createNOpenRouterChatNode(
 
         const json = await res.json();
         const content = (json as any)?.choices?.[0]?.message?.content || "";
-
-        console.log(
-          `Chat node ${n.id} received response:`,
-          content.substring(0, 50) + "..."
-        );
 
         return {
           [n.id * 100 + 3]: content,
@@ -237,7 +219,6 @@ export function createNOpenRouterChatNode(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering OpenRouter Chat Node");
   nodeRegistry.registerNodeType(
     "OpenRouterChat",
     createNOpenRouterChatNode,
