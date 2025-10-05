@@ -13,6 +13,8 @@ import {
   planAgenticTask,
 } from "../Task/TaskIntrepreter";
 import { assignBestFit } from "./Utls/MainAgentHelper";
+import { mkdir, writeFile } from "fs/promises";
+import { join } from "path";
 
 function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -430,5 +432,45 @@ export const yallma3GenSeqential = async (
     console.log("Result for task:", task.id, ":", results[task.id]);
   }
   console.log("Results:", JSON.stringify(results, null, 2));
+
+  // Save results to file
+  try {
+    const outputDir = "Output";
+    await mkdir(outputDir, { recursive: true });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const workspaceName = workspaceData.name.replace(" ", "_");
+    const filename = `${workspaceName}_${timestamp}.txt`;
+    const filepath = join(outputDir, filename);
+
+    const output = `${workspaceData.name} Workspace Execution Results
+Generated: ${new Date().toISOString()}
+
+${layers.map((l) => {
+  const text = l.taskId + "\n" + results[l.taskId] + "\n\n";
+  return text;
+})}`;
+
+    await writeFile(filepath, output, "utf8");
+    console.log(`Results saved to: ${filepath}`);
+
+    ws.send(
+      JSON.stringify({
+        type: "message",
+        data: `Results saved to ${filepath}`,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  } catch (error) {
+    console.error("Failed to save results:", error);
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        data: `Failed to save results: ${error}`,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+
   return results;
 };
