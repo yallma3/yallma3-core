@@ -402,7 +402,13 @@ function cleanExtractedText(text: string): string {
   );
 }
 
-// Parse page range string (e.g., "1-5,10,15-20")
+/**
+ * Parse a human-readable page range string into a sorted array of valid page numbers.
+ *
+ * @param rangeStr - Page range expression (e.g., "1-5,10,15-20"). An empty or whitespace-only string selects all pages.
+ * @param maxPages - Total number of pages in the document; used to bound and validate requested pages.
+ * @returns An ascending array of unique page numbers between 1 and `maxPages` inclusive.
+ */
 function parsePageRange(rangeStr: string, maxPages: number): number[] {
   if (!rangeStr.trim()) {
     return Array.from({ length: maxPages }, (_, i) => i + 1);
@@ -439,7 +445,23 @@ function parsePageRange(rangeStr: string, maxPages: number): number[] {
   return Array.from(pages).sort((a, b) => a - b);
 }
 
-// Enhanced extraction with page range support
+/**
+ * Extracts text (and optional metadata) from a PDF file and returns extraction details.
+ *
+ * Note: the `pageRange` parameter is accepted but ignored because the underlying parser does not support page-specific extraction; the function extracts text from all pages and reports which pages were processed.
+ *
+ * @param filePath - Path to the PDF file to read
+ * @param pageRange - Requested pages or ranges (e.g., "1-3,5"); ignored due to parser limitation but returned `extractedPages` will list all pages processed
+ * @param includeMetadata - If true, include available PDF metadata fields in the result
+ * @param cleanText - If true, apply text cleaning before counting words and returning text
+ * @returns An object with:
+ *   - `text`: cleaned or raw extracted text,
+ *   - `pageCount`: total number of pages in the PDF,
+ *   - `wordCount`: number of whitespace-separated words in `text`,
+ *   - `metadata`: metadata fields when requested (empty object otherwise),
+ *   - `extractedPages`: array of page numbers that were processed
+ * @throws Error when reading or parsing the PDF fails (message prefixed with "PDF text extraction failed:")
+ */
 async function extractTextFromPDFFileWithRange(
   filePath: string,
   pageRange: string = "",
@@ -496,7 +518,14 @@ async function extractTextFromPDFFileWithRange(
   }
 }
 
-// Batch process multiple PDFs with progress tracking
+/**
+ * Extracts text from a batch of downloaded PDF files and returns per-file extraction results.
+ *
+ * @param downloadResults - Array of download result objects; items with `status === "success"` and a `filePath` will be processed. Each object may include `title` or `filename` for progress messages.
+ * @param maxPages - Maximum number of pages to process from each PDF.
+ * @param progressCallback - Optional callback invoked with (progress, current) where `progress` is an integer percentage and `current` is the title or filename currently being processed; invoked with 100 and `"Complete"` after finishing.
+ * @returns An array of result objects corresponding to the input downloads. Successful entries include the original download fields plus `extractedText`, `pageCount`, `wordCount`, `metadata`, `extractionStats`, and `extractionStatus: "success"`. Failed entries include `extractedText: ""`, zeroed counts, `metadata: {}`, `extractionStatus: "failed"`, and `extractionError` containing the error message.
+ */
 async function batchExtractTextFromFiles(
   downloadResults: any[],
   maxPages: number,
@@ -554,6 +583,11 @@ async function batchExtractTextFromFiles(
   return results;
 }
 
+/**
+ * Register the PDF Text Extractor node type with the provided registry using this module's metadata and factory.
+ *
+ * @param nodeRegistry - The NodeRegistry instance where the node type should be added
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     metadata.nodeType,

@@ -327,6 +327,16 @@ async function getUniqueFilename(
   return filename;
 }
 
+/**
+ * Download a PDF from the given URL into the specified directory, enforcing size and PDF-header validation and producing a unique, sanitized filename.
+ *
+ * @param url - The source URL of the PDF to download.
+ * @param targetDir - Filesystem directory where the PDF will be written; directory must be writable.
+ * @param paper - Metadata object (e.g., contains `arxivId` or `title`) used to generate a sanitized filename.
+ * @param maxSizeMB - Maximum allowed PDF size in megabytes; defaults to 50.
+ * @returns An object containing `filePath` (absolute path to the saved file), `fileSize` (size in KB), and `filename` (the saved filename).
+ * @throws When the HTTP response is not OK; when the declared or actual file size exceeds `maxSizeMB`; when the downloaded bytes do not start with the PDF header; or when file write/fetch operations fail.
+ */
 async function downloadPDFToDirectory(
   url: string,
   targetDir: string,
@@ -437,6 +447,11 @@ async function downloadPDFToDirectory(
   }
 }
 
+/**
+ * Register the PDF downloader node type with a node registry.
+ *
+ * @param nodeRegistry - The registry instance to which the PDF downloader node type will be added
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     metadata.nodeType,

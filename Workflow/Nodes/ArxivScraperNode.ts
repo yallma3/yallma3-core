@@ -241,6 +241,12 @@ export function createArxivScraperNode(
   };
 }
 
+/**
+ * Register the ArxivScraper node type with a NodeRegistry.
+ *
+ * @param nodeRegistry - The registry instance to register the node type with
+ * @param category - Optional category label for registration; defaults to `"Tools"`
+ */
 export function register(
   nodeRegistry: NodeRegistry,
   category: string = "Tools"

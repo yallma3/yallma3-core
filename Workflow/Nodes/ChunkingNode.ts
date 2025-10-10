@@ -96,6 +96,17 @@ const chunkByTokens = (
   return chunks;
 };
 
+/**
+ * Create a text-chunking node configured for the given id and canvas position.
+ *
+ * The returned node exposes input/output sockets, configurable "Max Tokens" and "Overlap"
+ * parameters, a `process` handler that splits input text into token-based chunks and
+ * updates the node's display value to show the chunk count.
+ *
+ * @param id - Unique numeric identifier for the node
+ * @param position - Initial x/y coordinates for the node on the canvas
+ * @returns The constructed ChunkingNode ready for registration or execution
+ */
 export function createChunkingNode(
   id: number,
   position: Position
@@ -193,6 +204,11 @@ export function createChunkingNode(
   };
 }
 
+/**
+ * Registers the Text Chunking node type with the provided node registry.
+ *
+ * @param nodeRegistry - The registry instance used to add the Chunking node type
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     metadata.nodeType,

@@ -112,6 +112,13 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Creates an MCP Tool Call node configured for the given canvas position and identifier.
+ *
+ * @param id - Unique numeric identifier for the node
+ * @param position - Canvas coordinates where the node will be placed
+ * @returns A fully configured McpToolCallNode including sockets, processing logic, and configuration parameters
+ */
 export function createNMcpToolCallNode(
   id: number,
   position: Position
@@ -273,6 +280,11 @@ export function createNMcpToolCallNode(
   };
 }
 
+/**
+ * Register the MCP Tool Call node type with the provided NodeRegistry.
+ *
+ * @param nodeRegistry - The registry where the "McpToolCall" node type will be registered
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     "McpToolCall",

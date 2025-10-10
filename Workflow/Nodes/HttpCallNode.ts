@@ -47,6 +47,13 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create an HttpCall node instance configured to perform HTTP requests within the node graph.
+ *
+ * @param id - Unique identifier for the node
+ * @param position - Initial position (x, y) for the node on the canvas
+ * @returns A configured `HttpCallNode` including input/output sockets, a `process` handler that executes HTTP requests, and helpers to get/set configuration parameters
+ */
 function createHttpCallNode(id: number, position: Position): HttpCallNode {
   return {
     id,

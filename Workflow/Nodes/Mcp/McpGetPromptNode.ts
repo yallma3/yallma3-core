@@ -101,6 +101,13 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a McpGetPromptlNode configured to fetch prompts from an MCP server.
+ *
+ * @param id - Unique node identifier used to derive socket ids
+ * @param position - Node position for layout (`x` and `y`)
+ * @returns The configured McpGetPromptlNode instance ready for registration and execution
+ */
 export function createNMcpGetPromptlNode(
   id: number,
   position: Position
@@ -238,6 +245,11 @@ export function createNMcpGetPromptlNode(
   };
 }
 
+/**
+ * Register the MCP Prompt node type with the provided node registry.
+ *
+ * @param nodeRegistry - The registry used to register node types; the MCP Prompt node type and its factory will be added to this registry.
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     metadata.nodeType,

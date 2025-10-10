@@ -83,6 +83,13 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a configured OpenAI Chat node instance at the given position.
+ *
+ * @param id - Unique numeric identifier for the node
+ * @param position - Position object with `x` and `y` coordinates for node placement
+ * @returns The constructed `ChatNode` with sockets, execution `process` handler, and config-parameter helpers
+ */
 export function creatOpenAIChatNode(id: number, position: Position): ChatNode {
   return {
     id,
@@ -229,6 +236,11 @@ export function creatOpenAIChatNode(id: number, position: Position): ChatNode {
   };
 }
 
+/**
+ * Registers the OpenAI Chat node type with the provided node registry.
+ *
+ * @param nodeRegistry - The registry where the "OpenAIChat" node type will be registered.
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType("OpenAIChat", creatOpenAIChatNode, metadata);
 }

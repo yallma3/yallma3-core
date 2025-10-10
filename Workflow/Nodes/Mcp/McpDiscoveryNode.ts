@@ -95,6 +95,13 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a McpDiscoveryNode configured with sockets, layout, configuration parameters, and a processing function that discovers MCP server capabilities.
+ *
+ * @param id - Unique node identifier used to compute socket ids
+ * @param position - Initial x and y coordinates for the node's placement
+ * @returns A fully initialized McpDiscoveryNode ready for registration and execution in the node registry
+ */
 export function createNMcpDiscoveryNode(
   id: number,
   position: Position
@@ -247,6 +254,11 @@ export function createNMcpDiscoveryNode(
   };
 }
 
+/**
+ * Register the McpDiscovery node type in the given node registry.
+ *
+ * @param nodeRegistry - The registry where the "McpDiscovery" node type will be registered using the node factory and associated metadata.
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     "McpDiscovery",

@@ -16,6 +16,16 @@ import { assignBestFit } from "./Utls/MainAgentHelper";
 import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
 
+/**
+ * Request execution of a workflow over a WebSocket and return the workflow payload from the matched response.
+ *
+ * Sends a `run_workflow` request with a generated request id and resolves when a `workflow_json` message
+ * with the same id is received from the socket; the resolved value is the response payload serialized as a JSON string.
+ *
+ * @param ws - The WebSocket used to send the request and receive responses
+ * @param workflow - The workflow payload to send (typically a JSON or stringified workflow definition)
+ * @returns The workflow response payload as a JSON string when a matching `workflow_json` message is received; rejects if an incoming message cannot be parsed
+ */
 function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
@@ -51,6 +61,16 @@ function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
   });
 }
 
+/**
+ * Builds an LLM prompt that requests a structured JSON execution plan for the given workspace.
+ *
+ * The prompt includes project info, agents, tasks, and workflows from `workspaceData` and instructs
+ * the model to return a valid JSON object describing the project, ordered steps, collaboration
+ * guidance, and workflow recommendations (with strict instructions to return only JSON).
+ *
+ * @param workspaceData - Workspace metadata (name, description, agents, tasks, workflows) used to populate the prompt
+ * @returns A string prompt that instructs an LLM to produce a valid JSON-formatted project execution plan
+ */
 function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
   const prompt = `
   You are an expert AI project planner. Given the following project metadata, return a structured execution plan in **valid JSON**.

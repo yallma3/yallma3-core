@@ -84,6 +84,21 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a Groq Chat node configured for the yaLLMa3 node graph.
+ *
+ * The returned node includes four sockets (Prompt, System Prompt, Response, Tokens),
+ * UI positioning/size from metadata, config parameters, and a `process` implementation
+ * that sends messages to the GROQ chat completions API using the node's "API Key"
+ * configuration. The `process` handler returns an object mapping output socket ids
+ * to values: the Response content and the token count.
+ *
+ * @param id - Unique numeric identifier for the node; used to derive socket ids
+ * @param position - Coordinates where the node should be placed in the graph
+ * @returns A ChatNode with configured sockets, configParameter helpers, and a `process` function that produces:
+ * - `[id * 100 + 3]`: the chat response content
+ * - `[id * 100 + 4]`: the total token count (number)
+ */
 export function createNGroqChatNode(id: number, position: Position): ChatNode {
   return {
     id,
@@ -248,6 +263,11 @@ export function createNGroqChatNode(id: number, position: Position): ChatNode {
   };
 }
 
+/**
+ * Registers the Groq Chat node type with the provided node registry.
+ *
+ * @param nodeRegistry - Registry instance used to register node constructors and metadata
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType("GroqChat", createNGroqChatNode, metadata);
 }

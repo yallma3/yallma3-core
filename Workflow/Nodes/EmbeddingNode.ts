@@ -67,6 +67,18 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a configured Embedding node instance placed at the specified coordinates.
+ *
+ * The node is pre-populated with metadata (category, title, type, default model),
+ * sockets derived from metadata, cloned configuration parameters, and runtime
+ * methods including `process`, `getConfigParameters`, `getConfigParameter`, and
+ * `setConfigParameter`.
+ *
+ * @param id - Unique numeric identifier for the node; used to derive socket IDs
+ * @param position - Screen coordinates where the node will be placed
+ * @returns An EmbeddingNode object ready for registration and execution within the graph
+ */
 export function createEmbeddingNode(
   id: number,
   position: Position
@@ -263,6 +275,11 @@ export function createEmbeddingNode(
   };
 }
 
+/**
+ * Register the Embedding node type on the provided NodeRegistry.
+ *
+ * @param nodeRegistry - The registry instance where the Embedding node type, its factory, and metadata will be registered
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     metadata.nodeType,

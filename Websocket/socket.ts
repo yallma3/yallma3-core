@@ -3,6 +3,16 @@ import { IncomingMessage } from "http";
 import { handleRunWorkspace } from "../Utils/Runtime";
 import { executeFlowRuntime } from "../Workflow/runtime";
 
+/**
+ * Initializes WebSocket handlers on the provided WebSocketServer and manages connected clients.
+ *
+ * @param wss - The WebSocketServer to attach connection, message, close, and error handlers to.
+ * @returns An API object with:
+ *   - `broadcast(message)`: sends `message` to all currently connected clients that are open.
+ *   - `sendToClient(ws, message)`: sends `message` to a specific client if its connection is open.
+ *   - `broadcastCommand(commandData)`: constructs and broadcasts an `execute_command` message containing `id`, `command`, optional `data`, and a timestamp.
+ *   - `getClientCount()`: returns the current number of connected clients.
+ */
 export function setupWebSocketServer(wss: WebSocketServer) {
   const clients = new Set<WebSocket>();
 

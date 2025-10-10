@@ -77,6 +77,18 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Creates a ChatNode configured to interact with the Claude conversational API.
+ *
+ * The returned node exposes input sockets for a user prompt and an optional system prompt,
+ * and output sockets for the model's text response and a token count. Its process implementation
+ * sends the prompt(s) to the Claude endpoint using the node's configured model and API key,
+ * and maps the API response into the node's output sockets; on error it returns an error
+ * message in the response socket and zero tokens.
+ *
+ * @param id - Numeric node identifier used to derive socket ids and associate the node with execution context
+ * @returns A ChatNode instance preconfigured for Claude-based chat with Prompt/System Prompt inputs and Response/Tokens outputs
+ */
 export function createNClaudeChatNode(id: number): ChatNode {
   return {
     id,
@@ -237,6 +249,11 @@ export function createNClaudeChatNode(id: number): ChatNode {
   };
 }
 
+/**
+ * Registers the ClaudeChat node type with the provided NodeRegistry.
+ *
+ * @param nodeRegistry - Registry used to register node factories and metadata
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType("ClaudeChat", createNClaudeChatNode, metadata);
 }

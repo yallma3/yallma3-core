@@ -37,6 +37,13 @@ import { register as registerIfElseNode } from "./Nodes/ifElseNode";
 import { register as registerDelayNode } from "./Nodes/DelayNode";
 import { register as registerEmbeddingNode } from "./Nodes/EmbeddingNode";
 
+/**
+ * Initialize the flow system by registering the built-in node types into the global node registry.
+ *
+ * Registers a predefined set of nodes (grouped by categories such as math, text, chat, web/data,
+ * downloader/processing, hashing/http, logic, and embeddings) into `nodeRegistry`. The registration
+ * order is preserved and is significant for certain node types.
+ */
 export async function initFlowSystem() {
   registerMathNode(nodeRegistry);
   registerTextNode(nodeRegistry);

@@ -79,6 +79,13 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a Gemini Chat node instance configured for the yaLLMa3 framework.
+ *
+ * @param id - Numeric identifier for the node; used to derive socket ids and internal references
+ * @param position - Screen coordinates where the node should be placed ({ x, y })
+ * @returns A ChatNode configured with input/output sockets (Prompt, System Prompt, Response, Tokens), layout and sizing, a runtime `process` implementation that calls the Google Gemini API, and configuration accessors (`getConfigParameters`, `getConfigParameter`, `setConfigParameter`)
+ */
 export function createNGeminiChatNode(
   id: number,
   position: Position
@@ -244,6 +251,11 @@ export function createNGeminiChatNode(
   };
 }
 
+/**
+ * Register the GeminiChat node type with the provided NodeRegistry.
+ *
+ * @param nodeRegistry - The registry to receive the GeminiChat node type
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType("GeminiChat", createNGeminiChatNode, metadata);
 }

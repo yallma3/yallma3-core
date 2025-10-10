@@ -44,6 +44,15 @@ const processTextTemplate = async (
   return result;
 };
 
+/**
+ * Register the "Text" node type with the provided NodeRegistry.
+ *
+ * Creates a node type that produces TextNode instances capable of interpolating a text template (default "{{input}}")
+ * with the node's input value. When a TextNode processes input, it coerces the input to a string: `undefined` or `null`
+ * becomes an empty string, non-strings are converted via `JSON.stringify` (2-space indentation), and strings are used as-is.
+ *
+ * @param nodeRegistry - The registry where the "Text" node type will be registered
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
     category: "Text",

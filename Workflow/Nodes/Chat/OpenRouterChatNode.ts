@@ -81,6 +81,18 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a ChatNode configured to interact with the OpenRouter chat API.
+ *
+ * The returned node includes input sockets for a user prompt and an optional system prompt,
+ * output sockets for the model response and token usage, configuration parameters (including
+ * an "API Key"), and a `process` implementation that sends messages to OpenRouter and maps
+ * the API response to the node's outputs.
+ *
+ * @param id - Unique numeric identifier for the node
+ * @param position - Initial x/y position of the node in the editor
+ * @returns A ChatNode instance preconfigured for OpenRouter Chat with sockets, config parameters, and processing logic
+ */
 export function createNOpenRouterChatNode(
   id: number,
   position: Position
@@ -218,6 +230,11 @@ export function createNOpenRouterChatNode(
   };
 }
 
+/**
+ * Registers the OpenRouter Chat node type with the provided registry.
+ *
+ * @param nodeRegistry - Registry to which the "OpenRouterChat" node type will be added
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     "OpenRouterChat",

@@ -101,6 +101,17 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a configured McpGetResourcelNode positioned at the given coordinates.
+ *
+ * The returned node is pre-populated with sockets, default UI dimensions, processing
+ * logic to retrieve MCP resources via HTTP or STDIO transports, and helpers to
+ * get/set configuration parameters.
+ *
+ * @param id - Unique numeric identifier for the node
+ * @param position - Initial x/y coordinates for the node placement
+ * @returns The created McpGetResourcelNode instance ready for registration and execution
+ */
 export function createNMcpGetResourcelNode(
   id: number,
   position: Position
@@ -238,6 +249,13 @@ export function createNMcpGetResourcelNode(
   };
 }
 
+/**
+ * Register the MCP Resource node type with a NodeRegistry.
+ *
+ * Registers the node type identifier, its factory function, and associated metadata so the registry can create and expose MCP Resource nodes.
+ *
+ * @param nodeRegistry - The registry to register the node type with
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(
     metadata.nodeType,

@@ -1,5 +1,16 @@
 import type { Layer, TaskGraph } from "../Models/Task";
 
+/**
+ * Produce topologically ordered execution layers of task IDs from the provided task graph.
+ *
+ * Each returned layer is an array of task IDs that have no unresolved dependencies within the same layer;
+ * all dependencies for tasks in a layer appear in earlier layers. The first layer contains tasks with no inputs.
+ *
+ * @param taskGraph - Graph containing `tasks` (with `id` and `sockets`) and `connections` (with `fromSocket` and `toSocket`) used to derive edges.
+ * @returns An array of layers; each layer is an array of task IDs representing a concurrent execution group in topological order.
+ * @throws Error if `taskGraph.tasks` is empty.
+ * @throws Error if a cycle is detected in the task workflow graph.
+ */
 export function buildTaskExecutionLayers(taskGraph: TaskGraph): string[][] {
   const { tasks, connections } = taskGraph;
 
@@ -76,6 +87,14 @@ export function buildTaskExecutionLayers(taskGraph: TaskGraph): string[][] {
   return layers;
 }
 
+/**
+ * Produce layered execution groups where each task lists its predecessor task IDs.
+ *
+ * @param taskGraph - The task graph containing `tasks` (with sockets) and `connections` that define dependencies.
+ * @returns An array of layers; each layer is an array of objects `{ taskId, context }` where `context` is an array of predecessor task IDs.
+ * @throws If `taskGraph.tasks` is empty.
+ * @throws If a cycle is detected in the task graph.
+ */
 export function buildLayersWithContext(
   taskGraph: TaskGraph
 ): { taskId: string; context: string[] }[][] {
@@ -162,13 +181,23 @@ export function buildLayersWithContext(
   return layers;
 }
 
-// Utility function to get task execution order as a flat array
+/**
+ * Produce a flat execution order of task ids for a task graph.
+ *
+ * @param taskGraph - The TaskGraph containing tasks and connections used to derive execution order
+ * @returns An array of task ids in execution order
+ */
 export function getTaskExecutionOrder(taskGraph: TaskGraph): string[] {
   const layers = buildTaskExecutionLayers(taskGraph);
   return layers.flat();
 }
 
-// Utility function to get task execution order as a flat array
+/**
+ * Produce a flat execution sequence of tasks where each entry includes its predecessor context.
+ *
+ * @param taskGraph - The TaskGraph containing tasks and their connections
+ * @returns An array of `Layer` entries (objects with `taskId` and `context`), flattened in execution order
+ */
 export function getTaskExecutionOrderWithContext(
   taskGraph: TaskGraph
 ): Layer[] {
@@ -176,7 +205,14 @@ export function getTaskExecutionOrderWithContext(
   return layers.flat();
 }
 
-// Utility function to check if a task can be executed (all dependencies completed)
+/**
+ * Determines whether a task's input dependencies are satisfied given a set of completed tasks.
+ *
+ * @param taskId - The id of the task to check.
+ * @param taskGraph - The task graph containing tasks and connections.
+ * @param completedTasks - Set of task ids that have already completed; used to evaluate dependency fulfillment.
+ * @returns `true` if every input socket of the task has either no incoming connection or is provided by a task in `completedTasks`; `false` if a required dependency is not completed or the task with `taskId` is not found.
+ */
 export function canExecuteTask(
   taskId: string,
   taskGraph: TaskGraph,

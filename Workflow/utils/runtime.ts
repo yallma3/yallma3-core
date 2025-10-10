@@ -71,6 +71,14 @@ export function buildExecutionLayers(workflow: Workflow): number[][] {
   return layers;
 }
 
+/**
+ * Instantiate runtime node objects for all nodes defined in a workflow.
+ *
+ * Missing node coordinates default to 0 when creating the runtime node.
+ *
+ * @returns An array of hydrated `BaseNode` instances that combine the created runtime node properties with the original node data.
+ * @throws Error if no factory is registered for a node's `nodeType`.
+ */
 export function hydrateWorkflowNodes(workflow: Workflow): BaseNode[] {
   return workflow.nodes.map((nodeData) => {
     const factory = nodeRegistry.getFactory(nodeData.nodeType);

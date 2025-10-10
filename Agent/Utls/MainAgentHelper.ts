@@ -3,6 +3,17 @@ import type { Task } from "../../Models/Task";
 import type { Workflow } from "../../Models/Workflow";
 import type { LLMProvider } from "../../LLM/LLMProvider";
 
+/**
+ * Selects the best executor (workflow, agent, or MCP) for a task using the provided LLM.
+ *
+ * @param llm - LLMProvider used to generate the decision based on the constructed prompt
+ * @param task - Task to evaluate (title, description, expectedOutput are used)
+ * @param workflows - Available workflow options (each must include id, name, description)
+ * @param agents - Available agent options (each must include id, name, role, objective, capabilities, tools, llm)
+ * @param mcps - Optional list of available MCP tool identifiers
+ * @returns An object containing the chosen executor `type` ("workflow" | "agent" | "mcp"), the exact executor `id`, a `confidence` score between 0 and 1, and a `reasoning` string explaining the choice
+ * @throws If the LLM response cannot be parsed into the required structure or the chosen `id` is not present among the provided executors
+ */
 export async function assignBestFit(
   llm: LLMProvider,
   task: Task,
@@ -129,6 +140,16 @@ Analyze the task and provide your decision:`;
   }
 }
 
+/**
+ * Checks whether a candidate executor ID exists for the specified executor type.
+ *
+ * @param type - Executor category to validate against; one of `"workflow"`, `"agent"`, or `"mcp"`.
+ * @param id - The executor identifier to verify.
+ * @param workflows - Available workflows (each with an `id` property) to check when `type` is `"workflow"`.
+ * @param agents - Available agents (each with an `id` property) to check when `type` is `"agent"`.
+ * @param mcps - Available MCP tool identifiers to check when `type` is `"mcp"`.
+ * @returns `true` if `id` is present among the corresponding executors for `type`, `false` otherwise.
+ */
 function validateExecutorId(
   type: string,
   id: string,

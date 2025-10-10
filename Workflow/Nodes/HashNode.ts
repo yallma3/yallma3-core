@@ -61,6 +61,13 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Create a Hash node configured to compute hexadecimal digests of input strings using selectable algorithms.
+ *
+ * @param id - Unique numeric identifier for the node; used to generate socket ids and identify outputs
+ * @param position - Initial x/y coordinates for the node's placement
+ * @returns A fully-initialized HashNode with default algorithm "SHA256", input/output sockets, configuration parameters, and runtime `process` / config helper methods
+ */
 export function createHashNode(id: number, position: Position): HashNode {
   return {
     id,
@@ -174,6 +181,11 @@ export function createHashNode(id: number, position: Position): HashNode {
   };
 }
 
+/**
+ * Register the Hash node type with a NodeRegistry so it becomes available to the system.
+ *
+ * @param nodeRegistry - The registry to which the Hash node type will be added
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(metadata.nodeType, createHashNode, metadata);
 }

@@ -50,6 +50,13 @@ const metadata: NodeMetadata = {
   ],
 };
 
+/**
+ * Creates a Delay node that waits a configured number of milliseconds before forwarding its input to its output.
+ *
+ * @param id - Unique numeric identifier for the node
+ * @param position - Position object specifying the node's x and y coordinates
+ * @returns A DelayNode prepopulated with metadata, sockets, configuration parameters, and a `process` function that delays forwarding the input by the configured milliseconds
+ */
 export function createDelayNode(id: number, position: Position): DelayNode {
   return {
     id,
@@ -120,6 +127,11 @@ export function createDelayNode(id: number, position: Position): DelayNode {
   };
 }
 
+/**
+ * Register the Delay node type ("Delay (ms)") with a node registry.
+ *
+ * @param nodeRegistry - The registry used to register node types
+ */
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(metadata.nodeType, createDelayNode, metadata);
 }

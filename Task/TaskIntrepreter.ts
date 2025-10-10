@@ -9,6 +9,16 @@ import type {
   CoreTaskAnalysis,
 } from "../Models/Task";
 
+/**
+ * Produce a structured interpretation of an execution TaskGraph into per-task metadata.
+ *
+ * Parses the LLM's JSON output into an InterpretationResult that contains an `interpretedTasks` array with each task's intent, entities, execution constraints, context (inputs/outputs/feedsInto), classification, optional `formatForNext`, and optional decomposition hints.
+ *
+ * @param graph - The execution graph to interpret; its JSON form is provided to the LLM as input.
+ * @returns An InterpretationResult object with an `interpretedTasks` array describing each task's extracted metadata.
+ *
+ * @throws If the LLM does not return valid JSON parseable into an InterpretationResult.
+ */
 export async function interpretExecutionGraph(
   llm: LLMProvider,
   graph: TaskGraph
@@ -69,6 +79,16 @@ export async function interpretExecutionGraph(
   return JSON.parse(response) as InterpretationResult;
 }
 
+/**
+ * Produce a concise core analysis of a single task for downstream planning and decomposition.
+ *
+ * The result contains the task's canonical intent, a simple classification, whether it requires decomposition,
+ * and any required user-provided input.
+ *
+ * @param context - Optional additional context to include when analyzing the task
+ * @returns A `CoreTaskAnalysis` object with fields: `taskId`, `intent`, `classification` (`simple | one_tool_call | complex`), `needsDecomposition`, and `userInput`.
+ * @throws Error if the LLM response cannot be parsed as the expected JSON `CoreTaskAnalysis`
+ */
 export async function analyzeTaskCore(
   llm: LLMProvider,
   task: Task,
@@ -107,6 +127,13 @@ export async function analyzeTaskCore(
   }
 }
 
+/**
+ * Decomposes a task marked for decomposition into an array of atomic, self-contained subtasks.
+ *
+ * @param coreAnalysis - Core analysis of the task; its `intent` will be used as the decomposition target (should indicate `needsDecomposition`).
+ * @returns An array of subtasks where each subtask has `id`, `title`, `description`, and `expectedOutput`.
+ * @throws Error if the LLM output cannot be parsed as the expected JSON array of subtasks.
+ */
 export async function decomposeTask(
   llm: LLMProvider,
   coreAnalysis: CoreTaskAnalysis
@@ -147,6 +174,17 @@ export async function decomposeTask(
   }
 }
 
+/**
+ * Produce a sequential, JSON-formatted plan of agent steps for an agentic task.
+ *
+ * Each step will contain `id`, `action`, `rationale`, and `expectedOutput`.
+ *
+ * @param coreAnalysis - Core analysis for the task; its `intent` guides the plan
+ * @param task - The task's metadata (title, description, expectedOutput) used to shape steps
+ * @param context - Optional additional context to inform planning
+ * @returns An array of steps where each step has `id`, `action`, `rationale`, and `expectedOutput`
+ * @throws If the LLM response cannot be parsed as a JSON array of steps
+ */
 export async function planAgenticTask(
   llm: LLMProvider,
   coreAnalysis: CoreTaskAnalysis,

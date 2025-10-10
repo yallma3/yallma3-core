@@ -1,6 +1,14 @@
 import { BasicAgentRuntime, yallma3GenSeqential } from "../Agent/MainAgents";
 import { WebSocket } from "ws";
 
+/**
+ * Dispatches a JSON-encoded workspace payload to the appropriate agent runtime and forwards responses over the WebSocket.
+ *
+ * Parses `data` as JSON and invokes the runtime for `agentType` ("basic_agent" or "yallma3-gen-seq"); if `agentType` is unrecognized, sends an informational message over `ws`.
+ *
+ * @param data - JSON string containing the workspace payload to be processed by the agent runtime
+ * @param agentType - Identifier of the agent runtime to use; defaults to `"basic_agent"`
+ */
 export async function handleRunWorkspace(
   data: string,
   agentType: string = "basic_agent",
