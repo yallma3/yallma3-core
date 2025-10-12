@@ -1,5 +1,6 @@
 import type { Workflow } from "../Models/Workflow";
 import { buildExecutionLayers, hydrateWorkflowNodes } from "./utils/runtime";
+import { globalBroadcast } from "../Websocket/socket";
 
 export const executeFlowRuntime = async (
   workflow: Workflow,
@@ -43,7 +44,7 @@ export const executeFlowRuntime = async (
           if (node.nodeType == "WorkflowInput") {
             inputs[0] = context;
           }
-
+          
           for (const socketId of inputSockets[nodeId] ?? []) {
             const fromSocket = inputConnections[socketId];
             if (fromSocket !== undefined) {
@@ -74,8 +75,21 @@ export const executeFlowRuntime = async (
             // fallback: just echo nodeValue
             output = node.nodeValue ?? null;
           }
-
           results.set(nodeId, output);
+          console.log(
+            `Node ${nodeId} executed. Output:`,
+            String(output).substring(0, 30)
+          );
+          globalBroadcast?.({
+          type: "workflow_output",
+          data: {
+            id: Date.now().toString(),
+            timestamp: Date.now(),
+            type: "info",
+            message: `Node ${node.title || nodeId} executed.`,
+            details: JSON.stringify(output, null, 2),
+          },
+        });
         })
       );
     }
