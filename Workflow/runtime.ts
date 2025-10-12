@@ -1,8 +1,10 @@
 import type { Workflow } from "../Models/Workflow";
-import type { BaseNode, NodeValue } from "./types/types";
 import { buildExecutionLayers, hydrateWorkflowNodes } from "./utils/runtime";
 
-export const executeFlowRuntime = async (workflow: Workflow) => {
+export const executeFlowRuntime = async (
+  workflow: Workflow,
+  context?: string
+) => {
   try {
     const connections = workflow.connections;
     const nodes = hydrateWorkflowNodes(workflow);
@@ -36,6 +38,12 @@ export const executeFlowRuntime = async (workflow: Workflow) => {
 
           // gather inputs for this node
           const inputs: Record<string, any> = {};
+
+          // Add context to WoflowInput Node
+          if (node.nodeType == "WorkflowInput") {
+            inputs[0] = context;
+          }
+
           for (const socketId of inputSockets[nodeId] ?? []) {
             const fromSocket = inputConnections[socketId];
             if (fromSocket !== undefined) {

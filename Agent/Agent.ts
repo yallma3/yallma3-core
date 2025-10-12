@@ -1,8 +1,9 @@
 import type { Agent, ReviewResult } from "../Models/Agent";
 import type { AgentStep, Task } from "../Models/Task";
 import { getLLMProvider } from "../LLM/LLMRunner";
-import type { LLMProvider } from "../LLM/LLMProvider";
-import type { LLMOption } from "../Models/LLM";
+import type { LLMProvider, LLMOption } from "../Models/LLM";
+import type WebSocket from "ws";
+import { toolExecutorAttacher } from "../Agent/Utls/ToolCallingHelper";
 
 export class AgentRuntime {
   private agent: Agent;
@@ -164,13 +165,15 @@ export class Yallma3GenOneAgentRuntime {
   private context: string = "";
   private llm: LLMProvider;
   private apiKey: string;
-  private maxIterations = 5;
+  private ws: WebSocket;
+  private maxIterations = 1;
 
   constructor(
     agent: Agent,
     task: Task,
     context: string,
     plan: AgentStep[],
+    ws: WebSocket,
     workspaceKey?: string,
     workspaceLLM?: LLMOption,
     intent?: string
@@ -184,12 +187,22 @@ export class Yallma3GenOneAgentRuntime {
     const llmOption = agent.llm || workspaceLLM;
     this.llm = getLLMProvider(llmOption, this.apiKey);
     this.intent = intent || "";
+    this.ws = ws;
   }
 
   async run(): Promise<string> {
     let iteration = 0;
     let output = "";
     let feedback: any = null;
+
+    if (this.agent.tools.length > 0) {
+      const attachedTools = await toolExecutorAttacher(
+        this.ws,
+        this.agent.tools
+      );
+
+      this.llm.registerTools(attachedTools);
+    }
 
     while (iteration < this.maxIterations) {
       console.log(`\n🔄 Iteration ${iteration + 1}/${this.maxIterations}`);

@@ -15,8 +15,9 @@ import {
 import { assignBestFit } from "./Utls/MainAgentHelper";
 import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
+import { workflowExecutor } from "./Utls/ToolCallingHelper";
 
-function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
+export function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
 
@@ -311,8 +312,14 @@ export const yallma3GenSeqential = async (
     if (!task) continue;
     console.log("Executing:", task.title);
     if (layer.taskId == task.id) {
+      let i = 0;
       for (const cont of layer.context) {
-        taskContext += `,${results[cont]}`;
+        if (i > 0) {
+          taskContext += ` , ${results[cont]}`;
+        } else {
+          taskContext = `${results[cont]}`;
+        }
+        i++;
       }
     }
 
@@ -336,19 +343,10 @@ export const yallma3GenSeqential = async (
         task.type == "workflow" ? task.executorId : bestFit?.id;
       if (!workflowId) throw "no workflow id";
 
-      const workflow = await sendWorkflow(ws, workflowId);
-      const wrapper = await JSON.parse(workflow);
+      const finalResult = await workflowExecutor(ws, workflowId, taskContext);
 
-      // If workflow is already an object (not string), guard against double-parse
-      const json: Workflow =
-        typeof wrapper.data === "string"
-          ? JSON.parse(wrapper.data)
-          : wrapper.data;
-
-      const result = await executeFlowRuntime(json);
-      console.log(result);
-      if (result && (result as any).finalResult) {
-        results[task.id] = (result as any).finalResult;
+      if (finalResult) {
+        results[task.id] = finalResult;
         ws.send(
           JSON.stringify({
             type: "message",
@@ -404,6 +402,7 @@ export const yallma3GenSeqential = async (
         task,
         taskContext,
         agentPlan,
+        ws,
         workspaceData.apiKey,
         workspaceData.mainLLM
       );

@@ -1,5 +1,5 @@
 import { runLLM } from "../LLM/LLMRunner";
-import type { LLMProvider } from "../LLM/LLMProvider";
+import type { LLMProvider } from "../Models/LLM";
 import type {
   InterpretationResult,
   TaskGraph,

@@ -1,11 +1,10 @@
-import type { LLMOption } from "../Models/LLM";
+import type { LLMOption, LLMProvider } from "../Models/LLM";
 import {
   ClaudeProvider,
   GeminiProvider,
   GroqProvider,
   OpenAIProvider,
   OpenRouterProvider,
-  type LLMProvider,
 } from "./LLMProvider";
 
 export function runLLM(provider: LLMProvider, prompt: string) {

@@ -1,7 +1,7 @@
 import type { Agent } from "../../Models/Agent";
 import type { Task } from "../../Models/Task";
 import type { Workflow } from "../../Models/Workflow";
-import type { LLMProvider } from "../../LLM/LLMProvider";
+import type { LLMProvider } from "../../Models/LLM";
 
 export async function assignBestFit(
   llm: LLMProvider,

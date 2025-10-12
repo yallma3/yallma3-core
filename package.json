@@ -11,6 +11,7 @@
     "@types/bun": "latest",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/nodemailer": "^6.4.19",
     "@types/pdf-parse": "^1.1.5",
     "@types/ws": "^8.18.1"
   },
@@ -22,6 +23,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "http": "^0.0.1-security",
+    "nodemailer": "^6.10.1",
     "pdf-parse": "^1.1.1",
     "ws": "^8.18.3"
   }
