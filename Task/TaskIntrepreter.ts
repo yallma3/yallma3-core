@@ -64,9 +64,20 @@ export async function interpretExecutionGraph(
   ${JSON.stringify(graph, null, 2)}
   `;
 
-  const response = await runLLM(llm, prompt);
+  const raw = await runLLM(llm, prompt);
+  const trimmed = raw.trim();
 
-  return JSON.parse(response) as InterpretationResult;
+  try {
+    return JSON.parse(trimmed) as InterpretationResult;
+  } catch {
+    const match = trimmed.match(/(\{[\s\S]*\})/);
+    if (match) {
+      return JSON.parse(match[1] ?? "") as InterpretationResult;
+    }
+    throw new Error(
+      "Failed to parse execution graph interpretation: " + trimmed
+    );
+  }
 }
 
 export async function analyzeTaskCore(
