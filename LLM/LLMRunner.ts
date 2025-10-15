@@ -13,17 +13,17 @@ export function runLLM(provider: LLMProvider, prompt: string) {
 
 export function getLLMProvider(llmOption: LLMOption, apiKey: string) {
   switch (llmOption.provider) {
-    case "groq":
-      return new GroqProvider(llmOption.model, apiKey);
-    case "openrouter":
-      return new OpenRouterProvider(llmOption.model, apiKey);
-    case "openai":
-      return new OpenAIProvider(llmOption.model, apiKey);
-    case "gemini":
-      return new GeminiProvider(llmOption.model, apiKey);
-    case "claude":
-      return new ClaudeProvider(llmOption.model, apiKey);
+    case "Groq":
+      return new GroqProvider(llmOption.model.id, apiKey);
+    case "OpenRouter":
+      return new OpenRouterProvider(llmOption.model.id, apiKey);
+    case "OpenAI":
+      return new OpenAIProvider(llmOption.model.id, apiKey);
+    case "Gemini":
+      return new GeminiProvider(llmOption.model.id, apiKey);
+    case "Anthropic":
+      return new ClaudeProvider(llmOption.model.id, apiKey);
     default:
-      return new GroqProvider(llmOption.model, apiKey);
+      return new GroqProvider(llmOption.model.id, apiKey);
   }
 }

@@ -81,6 +81,7 @@ Analyze the task and provide your decision:`;
 
   try {
     const response = await llm.generateText(prompt);
+    console.log(response);
 
     // Parse the JSON response
     const cleanResponse = response.trim();

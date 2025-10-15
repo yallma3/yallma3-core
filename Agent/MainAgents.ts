@@ -35,7 +35,7 @@ export function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
         reject(err);
       }
     };
-    console.log("Listenersss");
+    console.log("Executing Workflow:", workflow);
 
     ws.on("message", listener);
 

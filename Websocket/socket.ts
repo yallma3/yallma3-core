@@ -3,6 +3,9 @@ import { IncomingMessage } from "http";
 import { handleRunWorkspace } from "../Utils/Runtime";
 import { executeFlowRuntime } from "../Workflow/runtime";
 
+import { ConsoleInputUtils } from "../Workflow/Nodes/ConsoleInput";
+export let globalBroadcast: ((message: unknown) => void) | null = null;
+
 export function setupWebSocketServer(wss: WebSocketServer) {
   const clients = new Set<WebSocket>();
 
@@ -37,6 +40,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 timestamp: new Date().toISOString(),
               })
             );
+            console.log("Project Data:", data.data);
 
             handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
             break;
@@ -70,6 +74,22 @@ export function setupWebSocketServer(wss: WebSocketServer) {
           case "command_status_update":
             console.log("Command status update:", data.payload);
             break;
+
+          case "console_input":
+            console.log("Received console input:", data.data);
+            if (data.data && typeof data.data === "object") {
+              const event = data.data;
+              ConsoleInputUtils.addEvent(event);
+            }
+
+            // Broadcast to all clients
+            broadcast({
+              type: "console_input",
+              data: data.data,
+              timestamp: new Date().toISOString(),
+            });
+            break;
+
           default:
             console.log("Unknown message type:", data.type);
         }

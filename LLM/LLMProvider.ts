@@ -459,6 +459,7 @@ export class GeminiProvider implements LLMProvider {
    */
   async generateText(prompt: string): Promise<string> {
     const response = await this.callLLM([{ role: "user", content: prompt }]);
+    console.log("GEM RESPONL:", response);
 
     // If the model requested a tool call, execute it automatically
     if (response.toolCalls && response.toolCalls.length > 0) {
@@ -551,7 +552,7 @@ export class GeminiProvider implements LLMProvider {
     }
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/${this.model}:generateContent`,
       {
         method: "POST",
         headers: {
@@ -561,8 +562,6 @@ export class GeminiProvider implements LLMProvider {
         body: JSON.stringify(body),
       }
     );
-
-    console.log(res);
 
     if (!res.ok) {
       const error = await res.text();

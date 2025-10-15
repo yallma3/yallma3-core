@@ -1,8 +1,13 @@
 import type { LLMSpecTool, ToolCall } from "./Tool";
 
+export interface LLMModel {
+  name: string;
+  id: string;
+}
+
 export interface LLMOption {
-  provider: "groq" | "openrouter" | "openai" | "gemini" | "claude";
-  model: string;
+  provider: "Groq" | "OpenAI" | "OpenRouter" | "Gemini" | "Anthropic";
+  model: LLMModel;
 }
 
 export interface LLMMessage {
