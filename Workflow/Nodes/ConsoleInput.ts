@@ -72,7 +72,10 @@ export function register(nodeRegistry: NodeRegistry): void {
     title: "Console Input",
     nodeType: "ConsoleInput",
     nodeValue: "",
-    sockets: [{ title: "Message", type: "output", dataType: "string" }],
+    sockets: [
+      { title: "Prompt", type: "input", dataType: "string" },
+      { title: "Message", type: "output", dataType: "string" },
+    ],
     width: 320,
     height: 150,
     configParameters: [
@@ -136,6 +139,13 @@ export function register(nodeRegistry: NodeRegistry): void {
       sockets: [
         {
           id: id * 100 + 1,
+          title: "Prompt",
+          type: "input",
+          nodeId: id,
+          dataType: "string",
+        },
+        {
+          id: id * 100 + 2,
           title: "Message",
           type: "output",
           nodeId: id,
@@ -151,11 +161,18 @@ export function register(nodeRegistry: NodeRegistry): void {
       process: async (context: NodeExecutionContext) => {
         const n = context.node as ConsoleInputNode;
 
-        const promptParam = n.getConfigParameter?.("Prompt Message");
+        let prompt: string;
+
+        if (context.inputs[id * 100 + 1]) {
+          prompt = context.inputs[id * 100 + 1];
+        } else {
+          prompt =
+            (n.getConfigParameter?.("Prompt Message")?.paramValue as string) ||
+            "Please enter your input";
+        }
+
         const timeoutParam = n.getConfigParameter?.("Timeout (seconds)");
 
-        const promptMessage =
-          (promptParam?.paramValue as string) || "Please enter your input:";
         const timeoutSeconds = (timeoutParam?.paramValue as number) || 30;
 
         const executionStartTime = Date.now();
@@ -165,9 +182,9 @@ export function register(nodeRegistry: NodeRegistry): void {
             executionStartTime.toString() +
             Math.random().toString(36).slice(2, 9),
           timestamp: executionStartTime,
-          type: "info" as const,
-          message: promptMessage,
-          details: "Waiting for input",
+          type: "input" as const,
+          message: prompt,
+          details: "Waiting for user input",
         };
 
         addConsoleEvent(promptEvent);

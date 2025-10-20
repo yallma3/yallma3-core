@@ -301,14 +301,16 @@ export const yallma3GenSeqential = async (
     connections: workspaceData.connections,
   };
 
+  let consoleMessage: ConsoleEvent | null;
+
   const layers = getTaskExecutionOrderWithContext(taskGraph);
   const MainLLM = getLLMProvider(workspaceData.mainLLM, workspaceData.apiKey);
+  let step = 1;
 
   for (const layer of layers) {
     let taskContext = "";
     let task = taskGraph.tasks.find((t) => t.id == layer.taskId);
     if (!task) continue;
-    console.log("Executing:", task.title);
     if (layer.taskId == task.id) {
       let i = 0;
       for (const cont of layer.context) {
@@ -321,17 +323,42 @@ export const yallma3GenSeqential = async (
       }
     }
 
-    console.log("Task Context:", taskContext);
-
     let bestFit = null;
     // Auto assigne best Tool, Workflow, Or Agent for the task
     if (task.type == "agentic") {
-      console.log(workspaceData.workflows);
+      consoleMessage = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: "system",
+        message: `Assigning task '${task.title}'...`,
+      };
+      ws.send(
+        JSON.stringify({
+          type: "message",
+          data: consoleMessage,
+          timestamp: new Date().toISOString(),
+        })
+      );
       bestFit = await assignBestFit(
         MainLLM,
         task,
         workspaceData.workflows,
         workspaceData.agents
+      );
+      consoleMessage = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: "system",
+        message: `Assigned task '${task.title}' to ${bestFit.type} '${
+          bestFit.id
+        }' with confidence: ${bestFit.confidence.toFixed(2)}.`,
+      };
+      ws.send(
+        JSON.stringify({
+          type: "message",
+          data: consoleMessage,
+          timestamp: new Date().toISOString(),
+        })
       );
     }
 
@@ -340,6 +367,20 @@ export const yallma3GenSeqential = async (
       const workflowId =
         task.type == "workflow" ? task.executorId : bestFit?.id;
       if (!workflowId) throw "no workflow id";
+
+      consoleMessage = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: "info",
+        message: `[${step}/${layers.length}] Running task '${task.title}' (workflow: ${workflowId})`,
+      };
+      ws.send(
+        JSON.stringify({
+          type: "message",
+          data: consoleMessage,
+          timestamp: new Date().toISOString(),
+        })
+      );
 
       const finalResult = await workflowExecutor(ws, workflowId, taskContext);
 
@@ -350,8 +391,10 @@ export const yallma3GenSeqential = async (
           id: crypto.randomUUID(),
           timestamp: Date.now(),
           type: "success",
-          message: `Task ${task.title} completed succesfully`,
+          message: `[${step}/${layers.length}] Task '${task.title}' completed successfully.`,
+          results: finalResult,
         };
+        console.log("Console event with result example: ", consoleMessage);
         ws.send(
           JSON.stringify({
             type: "message",
@@ -359,12 +402,13 @@ export const yallma3GenSeqential = async (
             timestamp: new Date().toISOString(),
           })
         );
+        step++;
       } else {
-        const consoleMessage: ConsoleEvent = {
+        consoleMessage = {
           id: crypto.randomUUID(),
           timestamp: Date.now(),
           type: "error",
-          message: `Task ${task.title} failed`,
+          message: `[${step}/${layers.length}] Task '${task.title}' failed.`,
         };
         ws.send(
           JSON.stringify({
@@ -376,17 +420,48 @@ export const yallma3GenSeqential = async (
       }
       continue;
     }
+    consoleMessage = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: "system",
+      message: `Analysing task '${task.title}'...`,
+    };
+    ws.send(
+      JSON.stringify({
+        type: "message",
+        data: consoleMessage,
+        timestamp: new Date().toISOString(),
+      })
+    );
 
     const coreAnalysis = await analyzeTaskCore(MainLLM, task, taskContext);
     console.log(coreAnalysis);
 
     // Specific Agent Type with assigned agent
     if (task.type == "specific-agent" || bestFit?.type == "agent") {
-      let subtasks: SubTask[] | null = null;
-      let agentPlan: AgentStep[] | null = null;
-
       const agentId =
         task.type == "specific-agent" ? task.executorId : bestFit?.id;
+
+      // Simple task proceed with agent to perform single task
+      const agent = workspaceData.agents.find((a) => a.id == agentId);
+      if (!agent) return;
+
+      consoleMessage = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: "info",
+        message: `[${step}/${layers.length}] Running task '${task.title}' (Agent: ${agent.name})`,
+      };
+      ws.send(
+        JSON.stringify({
+          type: "message",
+          data: consoleMessage,
+          timestamp: new Date().toISOString(),
+        })
+      );
+
+      let subtasks: SubTask[] | null = null;
+      let agentPlan: AgentStep[] | null = null;
 
       // Complex task needs decomposition
       // if (coreAnalysis.needsDecomposition) {
@@ -394,19 +469,74 @@ export const yallma3GenSeqential = async (
       //   // proceed in case of subtasks
       // }
 
-      // Simple task execute through agent directly
-      agentPlan = await planAgenticTask(
-        MainLLM,
-        coreAnalysis,
-        task,
-        taskContext
+      consoleMessage = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: "info",
+        message: `Creating agent plan...`,
+      };
+      ws.send(
+        JSON.stringify({
+          type: "message",
+          data: consoleMessage,
+          timestamp: new Date().toISOString(),
+        })
       );
 
-      console.log("AGENT PLAN:", agentPlan);
+      try {
+        // Simple task execute through agent directly
+        agentPlan = await planAgenticTask(
+          MainLLM,
+          coreAnalysis,
+          task,
+          taskContext
+        );
+        consoleMessage = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: "success",
+          message: `Agent plan created successfully`,
+          results: JSON.stringify(agentPlan, null, 2),
+        };
+        ws.send(
+          JSON.stringify({
+            type: "message",
+            data: consoleMessage,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      } catch (err) {
+        consoleMessage = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: "error",
+          message: `Agent plan creation failed.`,
+        };
+        ws.send(
+          JSON.stringify({
+            type: "message",
+            data: consoleMessage,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
 
-      // Simple task proceed with agent to perform single task
-      const agent = workspaceData.agents.find((a) => a.id == agentId);
-      if (!agent) return;
+      if (!agentPlan) {
+        consoleMessage = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: "error",
+          message: `Agent plan creation failed.`,
+        };
+        ws.send(
+          JSON.stringify({
+            type: "message",
+            data: consoleMessage,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        return;
+      }
 
       const agentRuntime = new Yallma3GenOneAgentRuntime(
         agent,
@@ -421,11 +551,12 @@ export const yallma3GenSeqential = async (
       const result = await agentRuntime.run();
       if (result) {
         results[task.id] = result;
-        const consoleMessage: ConsoleEvent = {
+        consoleMessage = {
           id: crypto.randomUUID(),
           timestamp: Date.now(),
           type: "success",
-          message: `Task ${task.title} completed succesfully`,
+          message: `[${step}/${layers.length}] Task '${task.title}' completed successfully.`,
+          results: result,
         };
 
         ws.send(
@@ -435,12 +566,13 @@ export const yallma3GenSeqential = async (
             timestamp: new Date().toISOString(),
           })
         );
+        step++;
       } else {
-        const consoleMessage: ConsoleEvent = {
+        consoleMessage = {
           id: crypto.randomUUID(),
           timestamp: Date.now(),
           type: "error",
-          message: `Task ${task.title} failed`,
+          message: `[${step}/${layers.length}] Task '${task.title}' failed.`,
         };
 
         ws.send(
@@ -455,7 +587,26 @@ export const yallma3GenSeqential = async (
 
     console.log("Result for task:", task.id, ":", results[task.id]);
   }
-  console.log("Results:", JSON.stringify(results, null, 2));
+  let finalResult: string;
+  const finalTaskId = layers[layers.length - 1]?.taskId ?? "";
+
+  finalResult = results[finalTaskId] || JSON.stringify(results, null, 2);
+
+  consoleMessage = {
+    id: crypto.randomUUID(),
+    timestamp: Date.now(),
+    type: "success",
+    message: `Workspace completed successfully.`,
+    results: finalResult,
+  };
+
+  ws.send(
+    JSON.stringify({
+      type: "message",
+      data: consoleMessage,
+      timestamp: new Date().toISOString(),
+    })
+  );
 
   // Save results to file
   try {
@@ -478,7 +629,7 @@ ${layers.map((l) => {
     await writeFile(filepath, output, "utf8");
     console.log(`Results saved to: ${filepath}`);
 
-    const consoleMessage: ConsoleEvent = {
+    consoleMessage = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
       type: "success",

@@ -76,9 +76,7 @@ export function buildTaskExecutionLayers(taskGraph: TaskGraph): string[][] {
   return layers;
 }
 
-export function buildLayersWithContext(
-  taskGraph: TaskGraph
-): { taskId: string; context: string[] }[][] {
+export function buildLayersWithContext(taskGraph: TaskGraph): Layer[][] {
   const { tasks, connections } = taskGraph;
 
   if (tasks.length === 0) {
@@ -122,7 +120,7 @@ export function buildLayersWithContext(
   }
 
   // Layered topological sort
-  const layers: { taskId: string; context: string[] }[][] = [];
+  const layers: Layer[][] = [];
   let currentLayer: string[] = [];
 
   // Start with tasks that have no dependencies (indegree 0)
@@ -136,6 +134,7 @@ export function buildLayersWithContext(
     layers.push(
       currentLayer.map((taskId) => ({
         taskId,
+
         context: Array.from(contextMap.get(taskId) || []),
       }))
     );

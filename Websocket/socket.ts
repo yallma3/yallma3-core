@@ -37,8 +37,8 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             consoleMessage = {
               id: crypto.randomUUID(),
               timestamp: Date.now(),
-              type: "info",
-              message: "Starting workspace runtime",
+              type: "system",
+              message: "Starting workspace runtime...",
             };
 
             ws.send(
@@ -48,7 +48,6 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 timestamp: new Date().toISOString(),
               })
             );
-            console.log("Project Data:", data.data);
 
             handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
             break;
