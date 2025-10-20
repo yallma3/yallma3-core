@@ -19,14 +19,7 @@ import type {
   NodeMetadata,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
-
-export interface ConsoleEvent {
-  id: string;
-  timestamp: number;
-  type: "info" | "warning" | "error" | "success";
-  message: string;
-  details?: string;
-}
+import type { ConsoleEvent } from "../../Models/Workspace";
 
 let globalConsoleEvents: ConsoleEvent[] = [];
 
@@ -108,7 +101,7 @@ export function register(nodeRegistry: NodeRegistry): void {
       {
         parameterName: "Timeout (seconds)",
         parameterType: "number",
-        defaultValue: 30,
+        defaultValue: 120,
         valueSource: "UserInput",
         UIConfigurable: true,
         description: "Maximum time to wait for input (0 = no timeout)",

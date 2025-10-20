@@ -25,3 +25,11 @@ export interface WorkspaceData {
   // Workflows
   workflows: Workflow[];
 }
+
+export interface ConsoleEvent {
+  id: string;
+  timestamp: number;
+  type: "info" | "warning" | "error" | "success";
+  message: string;
+  details?: string;
+}

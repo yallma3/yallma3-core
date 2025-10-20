@@ -1,9 +1,12 @@
 import type { Workflow } from "../Models/Workflow";
 import { buildExecutionLayers, hydrateWorkflowNodes } from "./utils/runtime";
 import { globalBroadcast } from "../Websocket/socket";
+import { WebSocket } from "ws";
+import type { NodeExecutionContext } from "./types/types";
 
 export const executeFlowRuntime = async (
   workflow: Workflow,
+  ws: WebSocket,
   context?: string
 ) => {
   try {
@@ -70,7 +73,12 @@ export const executeFlowRuntime = async (
           // run the node
           let output: any;
           if (node.process) {
-            output = await node.process({ inputs, node });
+            const execContext: NodeExecutionContext = {
+              node: node,
+              inputs: inputs,
+              ws,
+            };
+            output = await node.process(execContext);
           } else {
             // fallback: just echo nodeValue
             output = node.nodeValue ?? null;

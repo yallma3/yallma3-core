@@ -16,7 +16,7 @@ export async function workflowExecutor(
   const json: Workflow =
     typeof wrapper.data === "string" ? JSON.parse(wrapper.data) : wrapper.data;
 
-  const result = await executeFlowRuntime(json, input);
+  const result = await executeFlowRuntime(json, ws, input);
 
   return (result as any).finalResult;
 }

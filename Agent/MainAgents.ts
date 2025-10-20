@@ -1,5 +1,5 @@
 import { getLLMProvider, runLLM } from "../LLM/LLMRunner";
-import type { WorkspaceData } from "../Models/Workspace";
+import type { ConsoleEvent, WorkspaceData } from "../Models/Workspace";
 import { WebSocket } from "ws";
 import { AgentRuntime, Yallma3GenOneAgentRuntime } from "./Agent";
 import { executeFlowRuntime } from "../Workflow/runtime";
@@ -24,9 +24,7 @@ export function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
     const listener = (message: WebSocket.RawData) => {
       try {
         const data = JSON.parse(message.toString());
-        console.log(typeof data.data);
         const workflowJson = JSON.stringify(data.data);
-        console.log(typeof workflowJson);
         if (data.type === "workflow_json" && data.id === requestId) {
           ws.off("message", listener); // cleanup
           resolve(workflowJson); // return result to caller
@@ -244,7 +242,7 @@ export const BasicAgentRuntime = async (
           : wrapper.data;
 
       console.log("Parsed workflow:", json);
-      const result = await executeFlowRuntime(json);
+      const result = await executeFlowRuntime(json, ws);
       if (result && (result as any).finalResult) {
         prevResults.push((result as any).finalResult);
       }
@@ -347,18 +345,31 @@ export const yallma3GenSeqential = async (
 
       if (finalResult) {
         results[task.id] = finalResult;
+
+        const consoleMessage: ConsoleEvent = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: "success",
+          message: `Task ${task.title} completed succesfully`,
+        };
         ws.send(
           JSON.stringify({
             type: "message",
-            data: `Task ${task.id} completed`,
+            data: consoleMessage,
             timestamp: new Date().toISOString(),
           })
         );
       } else {
+        const consoleMessage: ConsoleEvent = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: "error",
+          message: `Task ${task.title} failed`,
+        };
         ws.send(
           JSON.stringify({
             type: "message",
-            data: `Task ${task.id} failed`,
+            data: consoleMessage,
             timestamp: new Date().toISOString(),
           })
         );
@@ -410,18 +421,32 @@ export const yallma3GenSeqential = async (
       const result = await agentRuntime.run();
       if (result) {
         results[task.id] = result;
+        const consoleMessage: ConsoleEvent = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: "success",
+          message: `Task ${task.title} completed succesfully`,
+        };
+
         ws.send(
           JSON.stringify({
             type: "message",
-            data: `Task ${task.id} completed`,
+            data: consoleMessage,
             timestamp: new Date().toISOString(),
           })
         );
       } else {
+        const consoleMessage: ConsoleEvent = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: "error",
+          message: `Task ${task.title} failed`,
+        };
+
         ws.send(
           JSON.stringify({
             type: "message",
-            data: `Task ${task.id} failed`,
+            data: consoleMessage,
             timestamp: new Date().toISOString(),
           })
         );
@@ -453,10 +478,16 @@ ${layers.map((l) => {
     await writeFile(filepath, output, "utf8");
     console.log(`Results saved to: ${filepath}`);
 
+    const consoleMessage: ConsoleEvent = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: "success",
+      message: `Results saved to ${filepath}`,
+    };
     ws.send(
       JSON.stringify({
         type: "message",
-        data: `Results saved to ${filepath}`,
+        data: consoleMessage,
         timestamp: new Date().toISOString(),
       })
     );

@@ -1,10 +1,9 @@
 import type { LLMMessage, LLMProvider, LLMResponse } from "../Models/LLM";
-import type { LLMSpecTool, ToolExecutor } from "../Models/Tool";
+import type { LLMSpecTool } from "../Models/Tool";
 export class OpenAIProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
-  private toolExecutor?: ToolExecutor;
 
   supportsTools = true;
 
@@ -21,34 +20,11 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   /**
-   * Unified entry point for generating text or running tool calls automatically
+   * Execute tools and return tool messages
    */
-  async generateText(prompt: string): Promise<string> {
-    const messages: LLMMessage[] = [{ role: "user", content: prompt }];
-
-    // Call the LLM once
-    const response = await this.callLLM(messages);
-
-    // If there are tool calls, handle them automatically
-    if (response.toolCalls && response.toolCalls.length > 0) {
-      return await this.handleToolCalls(response, prompt);
-    }
-
-    // Otherwise return the plain text
-    return response.content || "";
-  }
-
-  /**
-   * Handles tool execution and final follow-up model call
-   */
-  async handleToolCalls(
-    response: LLMResponse,
-    prompt: string
-  ): Promise<string> {
-    const toolCalls = response.toolCalls!;
+  private async executeTools(toolCalls: any[]): Promise<any[]> {
     const toolMessages: any[] = [];
 
-    // Execute each tool
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name == call.name);
       if (!tool?.executor) continue;
@@ -61,26 +37,50 @@ export class OpenAIProvider implements LLMProvider {
       });
     }
 
-    // The correct follow-up structure (from OpenAI tool calling spec)
-    const followUpMessages = [
-      { role: "user", content: prompt },
-      {
-        role: "assistant",
-        content: null,
-        tool_calls: toolCalls.map((t) => ({
-          id: t.id,
-          type: "function",
-          function: {
-            name: t.name,
-            arguments: JSON.stringify(t.input),
-          },
-        })),
-      },
-      ...toolMessages,
-    ];
+    return toolMessages;
+  }
 
-    const followUpResponse = await this.callLLM(followUpMessages);
-    return followUpResponse.content || "";
+  /**
+   * Unified entry point for generating text or running tool calls automatically
+   */
+  async generateText(prompt: string): Promise<string> {
+    let messages: LLMMessage[] = [{ role: "user", content: prompt }];
+    let maxIterations = 10; // Prevent infinite loops
+    let iteration = 0;
+
+    while (iteration < maxIterations) {
+      const response = await this.callLLM(messages);
+
+      // If no tool calls, return the content
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        return response.content || "";
+      }
+
+      // Execute tools and prepare for next iteration
+      const toolMessages = await this.executeTools(response.toolCalls);
+
+      // Build conversation history for next call
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: response.toolCalls.map((t) => ({
+            id: t.id,
+            type: "function",
+            function: {
+              name: t.name,
+              arguments: JSON.stringify(t.input),
+            },
+          })),
+        } as any,
+        ...toolMessages,
+      ];
+
+      iteration++;
+    }
+
+    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
@@ -145,7 +145,6 @@ export class GroqProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
-  private toolExecutor?: ToolExecutor;
 
   supportsTools = true;
 
@@ -162,34 +161,11 @@ export class GroqProvider implements LLMProvider {
   }
 
   /**
-   * Unified entry point for generating text or running tool calls automatically
+   * Execute tools and return tool messages
    */
-  async generateText(prompt: string): Promise<string> {
-    const messages: LLMMessage[] = [{ role: "user", content: prompt }];
-
-    // Call the LLM once
-    const response = await this.callLLM(messages);
-
-    // If there are tool calls, handle them automatically
-    if (response.toolCalls && response.toolCalls.length > 0) {
-      return await this.handleToolCalls(response, prompt);
-    }
-
-    // Otherwise return the plain text
-    return response.content || "";
-  }
-
-  /**
-   * Handles tool execution and final follow-up model call
-   */
-  async handleToolCalls(
-    response: LLMResponse,
-    prompt: string
-  ): Promise<string> {
-    const toolCalls = response.toolCalls!;
+  private async executeTools(toolCalls: any[]): Promise<any[]> {
     const toolMessages: any[] = [];
 
-    // Execute each tool
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name == call.name);
       if (!tool?.executor) continue;
@@ -202,31 +178,50 @@ export class GroqProvider implements LLMProvider {
       });
     }
 
-    // Follow-up structure for Groq (OpenAI-compatible)
-    const followUpMessages = [
-      { role: "user", content: prompt },
-      {
-        role: "assistant",
-        content: null,
-        tool_calls: toolCalls.map((t) => ({
-          id: t.id,
-          type: "function",
-          function: {
-            name: t.name,
-            arguments: JSON.stringify(t.input),
-          },
-        })),
-      },
-      ...toolMessages,
-    ];
+    return toolMessages;
+  }
 
-    console.log(
-      "FOLLOW-UP MESSAGES:",
-      JSON.stringify(followUpMessages, null, 2)
-    );
+  /**
+   * Unified entry point for generating text or running tool calls automatically
+   */
+  async generateText(prompt: string): Promise<string> {
+    let messages: LLMMessage[] = [{ role: "user", content: prompt }];
+    let maxIterations = 10; // Prevent infinite loops
+    let iteration = 0;
 
-    const followUpResponse = await this.callLLM(followUpMessages);
-    return followUpResponse.content || "";
+    while (iteration < maxIterations) {
+      const response = await this.callLLM(messages);
+
+      // If no tool calls, return the content
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        return response.content || "";
+      }
+
+      // Execute tools and prepare for next iteration
+      const toolMessages = await this.executeTools(response.toolCalls);
+
+      // Build conversation history for next call
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: response.toolCalls.map((t) => ({
+            id: t.id,
+            type: "function",
+            function: {
+              name: t.name,
+              arguments: JSON.stringify(t.input),
+            },
+          })),
+        } as any,
+        ...toolMessages,
+      ];
+
+      iteration++;
+    }
+
+    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
@@ -310,34 +305,11 @@ export class OpenRouterProvider implements LLMProvider {
   }
 
   /**
-   * Unified entry point for generating text or running tool calls automatically
+   * Execute tools and return tool messages
    */
-  async generateText(prompt: string): Promise<string> {
-    const messages: LLMMessage[] = [{ role: "user", content: prompt }];
-
-    // Call the LLM once
-    const response = await this.callLLM(messages);
-
-    // If there are tool calls, handle them automatically
-    if (response.toolCalls && response.toolCalls.length > 0) {
-      return await this.handleToolCalls(response, prompt);
-    }
-
-    // Otherwise return the plain text
-    return response.content || "";
-  }
-
-  /**
-   * Handles tool execution and final follow-up model call
-   */
-  async handleToolCalls(
-    response: LLMResponse,
-    prompt: string
-  ): Promise<string> {
-    const toolCalls = response.toolCalls!;
+  private async executeTools(toolCalls: any[]): Promise<any[]> {
     const toolMessages: any[] = [];
 
-    // Execute each tool
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name == call.name);
       if (!tool?.executor) continue;
@@ -350,31 +322,50 @@ export class OpenRouterProvider implements LLMProvider {
       });
     }
 
-    // Follow-up structure for OpenRouter (OpenAI-compatible)
-    const followUpMessages = [
-      { role: "user", content: prompt },
-      {
-        role: "assistant",
-        content: null,
-        tool_calls: toolCalls.map((t) => ({
-          id: t.id,
-          type: "function",
-          function: {
-            name: t.name,
-            arguments: JSON.stringify(t.input),
-          },
-        })),
-      },
-      ...toolMessages,
-    ];
+    return toolMessages;
+  }
 
-    console.log(
-      "FOLLOW-UP MESSAGES:",
-      JSON.stringify(followUpMessages, null, 2)
-    );
+  /**
+   * Unified entry point for generating text or running tool calls automatically
+   */
+  async generateText(prompt: string): Promise<string> {
+    let messages: LLMMessage[] = [{ role: "user", content: prompt }];
+    let maxIterations = 10; // Prevent infinite loops
+    let iteration = 0;
 
-    const followUpResponse = await this.callLLM(followUpMessages);
-    return followUpResponse.content || "";
+    while (iteration < maxIterations) {
+      const response = await this.callLLM(messages);
+
+      // If no tool calls, return the content
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        return response.content || "";
+      }
+
+      // Execute tools and prepare for next iteration
+      const toolMessages = await this.executeTools(response.toolCalls);
+
+      // Build conversation history for next call
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: response.toolCalls.map((t) => ({
+            id: t.id,
+            type: "function",
+            function: {
+              name: t.name,
+              arguments: JSON.stringify(t.input),
+            },
+          })),
+        } as any,
+        ...toolMessages,
+      ];
+
+      iteration++;
+    }
+
+    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
@@ -438,7 +429,6 @@ export class GeminiProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
-  private toolExecutor?: ToolExecutor;
 
   supportsTools = true;
 
@@ -455,32 +445,11 @@ export class GeminiProvider implements LLMProvider {
   }
 
   /**
-   * Unified entry point for generating text or running tool calls automatically
+   * Execute tools and return tool results for Gemini format
    */
-  async generateText(prompt: string): Promise<string> {
-    const response = await this.callLLM([{ role: "user", content: prompt }]);
-    console.log("GEM RESPONL:", response);
-
-    // If the model requested a tool call, execute it automatically
-    if (response.toolCalls && response.toolCalls.length > 0) {
-      return await this.handleToolCalls(response, prompt);
-    }
-
-    // Otherwise return normal text
-    return response.content || "";
-  }
-
-  /**
-   * Handles Gemini function calls and makes a follow-up LLM request
-   */
-  async handleToolCalls(
-    response: LLMResponse,
-    prompt: string
-  ): Promise<string> {
-    const toolCalls = response.toolCalls!;
+  private async executeTools(toolCalls: any[]): Promise<any[]> {
     const toolResults: any[] = [];
 
-    // Execute each tool
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name == call.name);
       if (!tool?.executor) continue;
@@ -494,33 +463,53 @@ export class GeminiProvider implements LLMProvider {
       });
     }
 
-    // Create follow-up messages in LLMMessage format for callLLM
-    const followUpMessages: LLMMessage[] = [
-      { role: "user", content: prompt },
-      {
-        role: "assistant",
-        content: toolCalls
-          .map(
-            (call) =>
-              `Calling ${call.name} with args: ${JSON.stringify(call.input)}`
-          )
-          .join(", "),
-      },
-      {
-        role: "user",
-        content: `Tool results: ${JSON.stringify(
-          toolResults.map((r) => r.functionResponse)
-        )}`,
-      },
-    ];
+    return toolResults;
+  }
 
-    console.log(
-      "FOLLOW-UP MESSAGES:",
-      JSON.stringify(followUpMessages, null, 2)
-    );
+  /**
+   * Unified entry point for generating text or running tool calls automatically
+   */
+  async generateText(prompt: string): Promise<string> {
+    let messages: LLMMessage[] = [{ role: "user", content: prompt }];
+    let maxIterations = 10; // Prevent infinite loops
+    let iteration = 0;
 
-    const followUpResponse = await this.callLLM(followUpMessages);
-    return followUpResponse.content || "";
+    while (iteration < maxIterations) {
+      const response = await this.callLLM(messages);
+      console.log("GEM RESPONSE:", response);
+
+      // If no tool calls, return the content
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        return response.content || "";
+      }
+
+      // Execute tools and prepare for next iteration
+      const toolResults = await this.executeTools(response.toolCalls);
+
+      // Build conversation history for next call (Gemini format)
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: response.toolCalls
+            .map(
+              (call) =>
+                `Calling ${call.name} with args: ${JSON.stringify(call.input)}`
+            )
+            .join(", "),
+        },
+        {
+          role: "user",
+          content: `Tool results: ${JSON.stringify(
+            toolResults.map((r) => r.functionResponse)
+          )}`,
+        },
+      ];
+
+      iteration++;
+    }
+
+    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
@@ -601,7 +590,6 @@ export class ClaudeProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
-  private toolExecutor?: ToolExecutor;
 
   supportsTools = true;
 
@@ -618,34 +606,11 @@ export class ClaudeProvider implements LLMProvider {
   }
 
   /**
-   * Unified entry point for generating text or running tool calls automatically
+   * Execute tools and return tool messages for Claude format
    */
-  async generateText(prompt: string): Promise<string> {
-    const messages: LLMMessage[] = [{ role: "user", content: prompt }];
-
-    // Call the LLM once
-    const response = await this.callLLM(messages);
-
-    // If there are tool calls, handle them automatically
-    if (response.toolCalls && response.toolCalls.length > 0) {
-      return await this.handleToolCalls(response, prompt);
-    }
-
-    // Otherwise return the plain text
-    return response.content || "";
-  }
-
-  /**
-   * Handles tool execution and final follow-up model call
-   */
-  async handleToolCalls(
-    response: LLMResponse,
-    prompt: string
-  ): Promise<string> {
-    const toolCalls = response.toolCalls!;
+  private async executeTools(toolCalls: any[]): Promise<any[]> {
     const toolMessages: any[] = [];
 
-    // Execute each tool
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name == call.name);
       if (!tool?.executor) continue;
@@ -663,23 +628,47 @@ export class ClaudeProvider implements LLMProvider {
       });
     }
 
-    // Claude-specific follow-up structure
-    const followUpMessages = [
-      { role: "user", content: prompt },
-      {
-        role: "assistant",
-        content: toolCalls.map((call) => ({
-          type: "tool_use",
-          id: call.id,
-          name: call.name,
-          input: call.input,
-        })),
-      },
-      ...toolMessages,
-    ];
+    return toolMessages;
+  }
 
-    const followUpResponse = await this.callLLM(followUpMessages);
-    return followUpResponse.content || "";
+  /**
+   * Unified entry point for generating text or running tool calls automatically
+   */
+  async generateText(prompt: string): Promise<string> {
+    let messages: LLMMessage[] = [{ role: "user", content: prompt }];
+    let maxIterations = 10; // Prevent infinite loops
+    let iteration = 0;
+
+    while (iteration < maxIterations) {
+      const response = await this.callLLM(messages);
+
+      // If no tool calls, return the content
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        return response.content || "";
+      }
+
+      // Execute tools and prepare for next iteration
+      const toolMessages = await this.executeTools(response.toolCalls);
+
+      // Build conversation history for next call (Claude format)
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: response.toolCalls.map((call) => ({
+            type: "tool_use",
+            id: call.id,
+            name: call.name,
+            input: call.input,
+          })),
+        } as any,
+        ...toolMessages,
+      ];
+
+      iteration++;
+    }
+
+    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
