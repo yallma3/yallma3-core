@@ -32,6 +32,7 @@ const metadata: NodeMetadata = {
   title: "Text Chunking",
   nodeType: "Chunking",
   nodeValue: "Chunks: 0",
+  description: "Splits input text into smaller, overlapping chunks based on a maximum token count. Each chunk includes metadata such as token, character, and word counts.",
   sockets: [
     { title: "Input Text", type: "input", dataType: "string" },
     { title: "Chunks", type: "output", dataType: "json" },

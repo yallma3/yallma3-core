@@ -33,6 +33,7 @@ export function register(nodeRegistry: NodeRegistry): void {
     title: "Workflow Input",
     nodeType: "WorkflowInput",
     nodeValue: "WorkflowI Input",
+    description: "Defines the entry point for a workflow. This node takes the initial input provided to the workflow and passes it to its output socket for downstream processing.",
     sockets: [{ title: "Output", type: "output", dataType: "string" }],
     width: 380,
     height: 220,

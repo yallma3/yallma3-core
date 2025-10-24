@@ -76,7 +76,8 @@ const metadata: NodeMetadata = {
   category: "Data Generation",
   title: "Data Generation",
   nodeType: "DataGeneration",
-  nodeValue: null,
+  description: "Leverages the Google Gemini API to generate synthetic datasets from topics. It supports parallel processing, rate-limiting, and configurable options like the model and rows per topic, outputting the dataset and generation statistics.",
+  nodeValue:"",
   sockets: [
     { title: "Extracted Topics", type: "input", dataType: "json" },
     { title: "Query Metadata", type: "input", dataType: "json" },

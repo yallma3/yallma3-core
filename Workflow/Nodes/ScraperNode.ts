@@ -96,7 +96,8 @@ const metadata: NodeMetadata = {
   category: "Data Generation",
   title: "Scraper",
   nodeType: "Scraper",
-  nodeValue: null,
+   description: "A multi-stage data processing node that scrapes web pages from search results, chunks the content, and uses the Gemini API to extract relevant topics. It requires both ScraperAPI and Gemini API keys.",
+  nodeValue: "",
   sockets: [
     { title: "Search Results", type: "input", dataType: "json" },
     { title: "Query Metadata", type: "input", dataType: "json" },

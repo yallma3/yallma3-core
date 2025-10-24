@@ -31,6 +31,7 @@ const metadata: NodeMetadata = {
   category: "Chat",
   title: "Groq Chat",
   nodeType: "GroqChat",
+  description: "Integrates with the Groq API for high-speed chat completions. It sends a user prompt and an optional system prompt to a selected model, returning the generated response and token usage.",
   nodeValue: "llama-3.1-8b-instant",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },

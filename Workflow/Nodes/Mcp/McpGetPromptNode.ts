@@ -32,6 +32,7 @@ const metadata: NodeMetadata = {
   category: "MCP",
   title: "MCP Prompt",
   nodeType: "McpGetPrompt",
+   description: "Retrieves a specific prompt by name from a Master Control Program (MCP) server. This node supports both HTTP and Stdio transport mechanisms for communication.",
   nodeValue: "",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },

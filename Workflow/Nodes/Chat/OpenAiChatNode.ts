@@ -30,6 +30,7 @@ const metadata: NodeMetadata = {
   category: "Chat",
   title: "OpenAI Chat",
   nodeType: "OpenAIChat",
+  description: "Integrates with the OpenAI API for chat completions. It sends a user prompt and an optional system prompt to a selected GPT model, returning the generated response and token usage.",
   nodeValue: "gpt-4o-mini",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },

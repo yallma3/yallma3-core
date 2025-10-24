@@ -31,6 +31,7 @@ const metadata: NodeMetadata = {
   title: "Gemini Chat",
   nodeType: "GeminiChat",
   nodeValue: "gemini-2.5-flash",
+  description: "Integrates with the Google Gemini API for advanced chat completions. This node sends a user prompt and an optional system prompt to a selected Gemini model, returning the generated response and total token usage.",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
     { title: "System Prompt", type: "input", dataType: "string" },

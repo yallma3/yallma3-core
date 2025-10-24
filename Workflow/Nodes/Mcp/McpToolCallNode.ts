@@ -33,6 +33,7 @@ const metadata: NodeMetadata = {
   category: "MCP",
   title: "MCP Tool Call",
   nodeType: "McpToolCall",
+  description: "Executes a specific tool on a Master Control Program (MCP) server with a given set of parameters. It supports both HTTP and Stdio transport for communication.",
   nodeValue: "",
   sockets: [
     { title: "Tool Name", type: "input", dataType: "string" },

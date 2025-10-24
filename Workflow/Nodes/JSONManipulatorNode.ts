@@ -31,6 +31,7 @@ const metadata: NodeMetadata = {
   category: "Data Processing",
   title: "JSON Manipulator",
   nodeType: "JSONManipulator",
+  description: "A versatile node for processing JSON data. It can extract fields, filter arrays, transform structures, and count items based on configurable operations and field paths.",
   nodeValue: "JSON Processor",
   sockets: [
     { title: "JSON Input", type: "input", dataType: "string" },

@@ -32,6 +32,7 @@ const metadata: NodeMetadata = {
   category: "MCP",
   title: "MCP Resource",
   nodeType: "McpGetResource",
+  description: "Retrieves a specific resource by name from a Master Control Program (MCP) server. This node supports both HTTP and Stdio transport mechanisms for communication.",
   nodeValue: "",
   sockets: [
     { title: "Resource", type: "input", dataType: "string" },

@@ -17,6 +17,7 @@ const metadata: NodeMetadata = {
   nodeType: "UrlReference",
   category: "Data",
   title: "URL Reference",
+  description: "Creates a reference to a URL that can be passed to other nodes. The URL can be set directly in the configuration or provided dynamically via an input socket.",
   sockets: [
     { title: "URL", type: "input", dataType: "string" },
     { title: "URL Reference", type: "output", dataType: "url" }

@@ -33,6 +33,7 @@ const metadata: NodeMetadata = {
   category: "MCP",
   title: "MCP Discovery",
   nodeType: "McpDiscovery",
+   description: "Connects to a Master Control Program (MCP) server to discover its capabilities. This node can use either HTTP or Stdio transport to list available tools, prompts, and resources.",
   nodeValue: "",
   sockets: [
     { title: "Input", type: "input", dataType: "string" },

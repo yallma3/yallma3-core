@@ -30,6 +30,7 @@ const metadata: NodeMetadata = {
   category: "Logic",
   title: "Delay (ms)",
   nodeType: "Delay",
+  description: "How long to wait before passing the value through (in ms).",
   nodeValue: 1000,
   sockets: [
     { title: "Input", type: "input", dataType: "unknown" },

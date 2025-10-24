@@ -32,6 +32,7 @@ const metadata: NodeMetadata = {
   category: "Tools",
   title: "Pdf Downloader",
   nodeType: "PdfDownloader",
+   description: "Downloads PDF files from a URL or a JSON array of paper objects and saves them locally. Features configurable settings for file size limits, download delays, and custom save directories.",
   nodeValue: "",
   sockets: [
     { title: "PDF URL or Papers JSON", type: "input", dataType: "string" },

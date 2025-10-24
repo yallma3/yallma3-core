@@ -28,6 +28,7 @@ export function register(nodeRegistry: NodeRegistry): void {
     category: "Math",
     title: "Math Expression",
     nodeType: "MathExpression",
+     description: "Evaluates a mathematical expression using an input variable 'x'. The expression is configured in the node settings, and the node replaces 'x' with the value from the input socket before computing the result.",
     nodeValue: 0,
     sockets: [
       { title: "Input", type: "input", dataType: "string" },

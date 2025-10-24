@@ -32,6 +32,7 @@ export function register(nodeRegistry: NodeRegistry): void {
     category: "Text",
     title: "Join",
     nodeType: "Join",
+    description: "Combines two text inputs into a single string, using a configurable separator. Special characters like newlines are supported.",
     nodeValue: " ",
     sockets: [
       { title: "Input 1", type: "input", dataType: "unknown" },

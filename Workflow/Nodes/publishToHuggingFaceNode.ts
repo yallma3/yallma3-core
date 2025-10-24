@@ -55,7 +55,8 @@ const metadata: NodeMetadata = {
   category: "Data Generation",
   title: "HuggingFace Publisher",
   nodeType: "HuggingFacePublisher",
-  nodeValue: null,
+  description: "Publishes a generated dataset to the Hugging Face Hub. This node automates repository creation, dataset and README file uploads, and provides the final URL and publication metadata as output.",
+  nodeValue: "",
   sockets: [
     { title: "Dataset", type: "input", dataType: "json" },
     { title: "Statistics", type: "input", dataType: "json" },

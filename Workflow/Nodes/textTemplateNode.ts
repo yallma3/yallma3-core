@@ -49,6 +49,7 @@ export function register(nodeRegistry: NodeRegistry): void {
     category: "Text",
     title: "Text",
     nodeType: "Text",
+    description: "A versatile text node that processes a template string. It replaces the `{{input}}` placeholder with the value from its input socket, making it ideal for formatting and combining text dynamically.",
     nodeValue: "{{input}}",
     sockets: [
       { title: "Input", type: "input", dataType: "string" },

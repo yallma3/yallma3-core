@@ -28,6 +28,7 @@ const metadata: NodeMetadata = {
   category: "Chat",
   title: "Claude Chat",
   nodeType: "ClaudeChat",
+   description: "Integrates with Anthropic's Claude API for chat completions. It sends a user prompt and an optional system prompt to a selected model, returning the generated response and token usage.",
   nodeValue: "claude-3-haiku-20240307",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },

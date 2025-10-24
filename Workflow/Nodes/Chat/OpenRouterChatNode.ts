@@ -24,6 +24,7 @@ const metadata: NodeMetadata = {
   category: "Chat",
   title: "OpenRouter Chat",
   nodeType: "OpenRouterChat",
+   description: "Integrates with the OpenRouter API, providing access to a diverse range of models from different providers. It sends a prompt and returns the chat response and token usage.",
   nodeValue: "deepseek/deepseek-chat-v3.1:free",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },

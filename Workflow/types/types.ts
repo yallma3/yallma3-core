@@ -96,6 +96,7 @@ export interface NodeMetadata {
   title: string;
   nodeType: string;
   nodeValue?: NodeValue;
+  description?: string;
   sockets: Array<{
     title: string;
     type: "input" | "output";

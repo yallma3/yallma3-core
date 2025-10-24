@@ -31,6 +31,7 @@ const metadata: NodeMetadata = {
   category: "Input/Output",
   title: "Embedding",
   nodeType: "Embedding",
+  description: "Generates vector embeddings for text inputs using the Google Gemini Embedding API. It can process a single string or a JSON object containing multiple text chunks, making it suitable for both individual and batch embedding tasks.",
   nodeValue: "gemini-embedding-001",
   sockets: [
     { title: "Input JSON", type: "input", dataType: "string" },

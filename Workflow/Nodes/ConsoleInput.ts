@@ -23,12 +23,68 @@ import type { ConsoleEvent } from "../../Models/Workspace";
 
 let globalConsoleEvents: ConsoleEvent[] = [];
 
+// Track pending prompts with their associated node IDs
+interface PendingPrompt {
+  promptId: string;
+  nodeId: number;
+  timestamp: number;
+  resolved: boolean;
+  response?: string;
+}
+
+const pendingPrompts = new Map<string, PendingPrompt>();
+
 export const setConsoleEvents = (events: ConsoleEvent[]) => {
   globalConsoleEvents = [...events];
 };
 
 export const addConsoleEvent = (event: ConsoleEvent) => {
   globalConsoleEvents = [event, ...globalConsoleEvents].slice(0, 100);
+};
+
+// New: Get input for a specific prompt ID
+export const getInputForPrompt = (promptId: string): string | null => {
+  const prompt = pendingPrompts.get(promptId);
+  if (prompt && prompt.resolved && prompt.response) {
+    return prompt.response;
+  }
+  return null;
+};
+
+// New: Resolve a prompt with user input
+export const resolvePrompt = (promptId: string, response: string): boolean => {
+  const prompt = pendingPrompts.get(promptId);
+  if (prompt && !prompt.resolved) {
+    prompt.resolved = true;
+    prompt.response = response;
+    return true;
+  }
+  return false;
+};
+
+// New: Register a new pending prompt
+export const registerPrompt = (promptId: string, nodeId: number): void => {
+  pendingPrompts.set(promptId, {
+    promptId,
+    nodeId,
+    timestamp: Date.now(),
+    resolved: false,
+  });
+};
+
+// New: Clean up old/timed out prompts
+export const cleanupPrompts = (maxAge: number = 300000): void => {
+  const now = Date.now();
+  for (const [promptId, prompt] of pendingPrompts.entries()) {
+    if (now - prompt.timestamp > maxAge) {
+      pendingPrompts.delete(promptId);
+    }
+  }
+};
+
+// New: Get all pending (unresolved) prompts
+export const getPendingPrompts = (): PendingPrompt[] => {
+  return Array.from(pendingPrompts.values()).filter(p => !p.resolved);
 };
 
 export const getLastUserInputAfter = (
@@ -58,6 +114,19 @@ export const ConsoleInputUtils = {
   clearEvents: () => {
     globalConsoleEvents = [];
   },
+
+  // New utility methods
+  resolvePrompt: (promptId: string, response: string) => {
+    return resolvePrompt(promptId, response);
+  },
+
+  getPendingPrompts: () => {
+    return getPendingPrompts();
+  },
+
+  cleanupPrompts: (maxAge?: number) => {
+    cleanupPrompts(maxAge);
+  },
 };
 
 export interface ConsoleInputNode extends BaseNode {
@@ -71,6 +140,7 @@ export function register(nodeRegistry: NodeRegistry): void {
     category: "Input",
     title: "Console Input",
     nodeType: "ConsoleInput",
+    description: "An interactive node that prompts for user input in the console. Features include customizable and internationalized prompt messages, a configurable timeout, and a comprehensive event system to track the input lifecycle from request to resolution or timeout.",
     nodeValue: "",
     sockets: [
       { title: "Prompt", type: "input", dataType: "string" },
@@ -172,22 +242,31 @@ export function register(nodeRegistry: NodeRegistry): void {
         }
 
         const timeoutParam = n.getConfigParameter?.("Timeout (seconds)");
-
         const timeoutSeconds = (timeoutParam?.paramValue as number) || 30;
-
         const executionStartTime = Date.now();
 
+        // Generate unique prompt ID
+        const promptId = `prompt_${executionStartTime}_${Math.random().toString(36).slice(2, 9)}`;
+
+        // Register this prompt
+        registerPrompt(promptId, n.id);
+
         const promptEvent = {
-          id:
-            executionStartTime.toString() +
-            Math.random().toString(36).slice(2, 9),
+          id: promptId,
           timestamp: executionStartTime,
           type: "input" as const,
           message: prompt,
           details: "Waiting for user input",
+          nodeId: n.id,
+          nodeName: n.title,
+          promptId: promptId,
         };
 
-        addConsoleEvent(promptEvent);
+        // Only add to console if not already added
+        const existingEvent = globalConsoleEvents.find(e => e.id === promptId);
+        if (!existingEvent) {
+          addConsoleEvent(promptEvent);
+        }
 
         if (context.ws) {
           context.ws.send(
@@ -201,19 +280,22 @@ export function register(nodeRegistry: NodeRegistry): void {
 
         return new Promise<string>((resolve, reject) => {
           const checkInterval = setInterval(() => {
+            // Check for timeout
             if (timeoutSeconds > 0) {
               const elapsed = (Date.now() - executionStartTime) / 1000;
               if (elapsed >= timeoutSeconds) {
                 clearInterval(checkInterval);
+                
+                // Clean up prompt
+                pendingPrompts.delete(promptId);
 
                 const timeoutEvent = {
-                  id:
-                    Date.now().toString() +
-                    Math.random().toString(36).slice(2, 9),
+                  id: Date.now().toString() + Math.random().toString(36).slice(2, 9),
                   timestamp: Date.now(),
                   type: "error" as const,
                   message: `Input timeout after ${timeoutSeconds} seconds`,
-                  details: `Node ${n.id} timed out`,
+                  details: `Node ${n.id} - ${n.title} timed out`,
+                  promptId: promptId,
                 };
 
                 addConsoleEvent(timeoutEvent);
@@ -228,25 +310,26 @@ export function register(nodeRegistry: NodeRegistry): void {
                   );
                 }
 
-                reject(
-                  new Error(`Input timeout after ${timeoutSeconds} seconds`)
-                );
+                reject(new Error(`Input timeout after ${timeoutSeconds} seconds`));
                 return;
               }
             }
 
-            const newInput = getLastUserInputAfter(executionStartTime);
-            if (newInput) {
+            // Check if this specific prompt has been resolved
+            const response = getInputForPrompt(promptId);
+            if (response) {
               clearInterval(checkInterval);
+              
+              // Clean up prompt
+              pendingPrompts.delete(promptId);
 
               const successEvent = {
-                id:
-                  Date.now().toString() +
-                  Math.random().toString(36).substr(2, 9),
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                 timestamp: Date.now(),
                 type: "success" as const,
-                message: `Input received: "${newInput}"`,
+                message: `Input received: "${response}"`,
                 details: `Node ${n.id} - ${n.title}`,
+                promptId: promptId,
               };
 
               addConsoleEvent(successEvent);
@@ -261,7 +344,7 @@ export function register(nodeRegistry: NodeRegistry): void {
                 );
               }
 
-              resolve(newInput);
+              resolve(response);
             }
           }, 500);
         });

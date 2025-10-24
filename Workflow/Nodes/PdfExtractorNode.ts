@@ -33,6 +33,7 @@ const metadata: NodeMetadata = {
   category: "Tools",
   title: "PDF Text Extractor",
   nodeType: "PDFTextExtractor",
+  description: "Maximum number of pages to extract per PDF",
   nodeValue: "",
   sockets: [
     { title: "Download Results JSON", type: "input", dataType: "string" },

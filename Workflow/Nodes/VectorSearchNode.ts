@@ -48,6 +48,7 @@ export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
     category: "VectorDatabase",
     title: "Vector Search",
+    description: "Performs a similarity search on a vector index. It takes an embedding vector as input and retrieves the top 'k' most similar items, returning their metadata and scores.",
     nodeType: "PineconeSearch",
     nodeValue: "",
     sockets: [

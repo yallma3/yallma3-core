@@ -27,6 +27,7 @@ interface IfElseNode extends BaseNode {
 
 const metadata: NodeMetadata = {
   nodeType: "IfElse",
+  description: "A conditional logic gate that evaluates an input. If the condition is met, it outputs the 'True' value; otherwise, it outputs the 'False' value. Supports both strict boolean evaluation and general truthiness.",
   category: "Logic",
   title: "If/Else",
   sockets: [

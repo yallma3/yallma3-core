@@ -33,6 +33,7 @@ const metadata: NodeMetadata = {
   category: "Communication",
   title: "Send Email",
   nodeType: "SendMail",
+  description: "Sends an email using the provided SMTP configuration. This node requires SMTP credentials and supports TLS encryption, making it a secure way to integrate email notifications into your workflows.",
   nodeValue: "Email Sender",
   sockets: [
     { title: "Email Title", type: "input", dataType: "string" },

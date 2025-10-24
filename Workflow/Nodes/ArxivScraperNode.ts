@@ -31,6 +31,7 @@ const metadata: NodeMetadata = {
   title: "Arxiv Scraper",
   nodeType: "ArxivScraper",
   nodeValue: "cs.AI",
+  description: "Scrapes the latest papers from Arxiv for a given category, with a configurable maximum number of results.",
   sockets: [
     { title: "Category", type: "input", dataType: "string" },
     { title: "Results", type: "output", dataType: "string" },

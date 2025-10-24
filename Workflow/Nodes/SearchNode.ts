@@ -81,7 +81,8 @@ const metadata: NodeMetadata = {
   category: "Data Generation",
   title: "Search",
   nodeType: "Search",
-  nodeValue: null,
+  description: "Initiates the data generation pipeline by analyzing a user query, refining it into multiple search queries, and executing them via the Tavily API. It uses the Gemini API for query parsing and requires API keys for both services.",
+  nodeValue: "",
   sockets: [
     { title: "User Query", type: "input", dataType: "string" },
     { title: "Search Results", type: "output", dataType: "json" },
