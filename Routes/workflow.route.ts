@@ -18,7 +18,6 @@ const router = express.Router();
 
 // Get all registered node types
 router.get("/nodes", async (req, res) => {
-  console.log("TRIGGEREDD");
   try {
     const data = nodeRegistry.getAllNodeDetails();
     res.json({

@@ -37,14 +37,26 @@ import { register as registerIfElseNode } from "./Nodes/ifElseNode";
 import { register as registerDelayNode } from "./Nodes/DelayNode";
 import { register as registerEmbeddingNode } from "./Nodes/EmbeddingNode";
 
-export async function initFlowSystem() {
-  console.log("Registering built in nodes");
+import { register as registerWorkflowInputNode } from "./Nodes/WorkflowInputNode";
+import { register as registerMailNode } from "./Nodes/SendMailNode";
+import { register as registerJSONManipulatorNode } from "./Nodes/JSONManipulatorNode";
 
+import { register as registerVectorSearchNode } from "./Nodes/VectorSearchNode";
+import { register as registerVectorStoreNode } from "./Nodes/VectorStoreNode";
+import { register as registerConsoleInputNode } from "./Nodes/ConsoleInput";
+import { register as registerSearchNode } from "./Nodes/SearchNode";
+import { register as registerScraperNode } from "./Nodes/ScraperNode";
+import { register as registerDataGenerationNode } from "./Nodes/DataGenerationNode";
+import { register as registerPublishToHuggingFaceNode } from "./Nodes/publishToHuggingFaceNode";
+
+export async function initFlowSystem() {
   registerMathNode(nodeRegistry);
   registerTextNode(nodeRegistry);
   registerJoinNode(nodeRegistry);
   registerClaudeChatNode(nodeRegistry);
   registerGeminiChatNode(nodeRegistry);
+
+  registerConsoleInputNode(nodeRegistry);
 
   registerOpenRouterChatNode(nodeRegistry);
   registerOpenAIChatNode(nodeRegistry);
@@ -59,13 +71,25 @@ export async function initFlowSystem() {
   registerPdfDownloaderNode(nodeRegistry);
   registerPdfExtractorNode(nodeRegistry);
   registerChunkingNode(nodeRegistry);
-  
+
+  registerVectorSearchNode(nodeRegistry);
+  registerVectorStoreNode(nodeRegistry);
+
+  registerSearchNode(nodeRegistry);
+  registerScraperNode(nodeRegistry);
+  registerDataGenerationNode(nodeRegistry);
+  registerPublishToHuggingFaceNode(nodeRegistry);
+
   registerHashNode(nodeRegistry);
   registerHttpCallNode();
   registerUrlReferenceNode();
   registerIfElseNode();
   registerDelayNode(nodeRegistry);
   registerEmbeddingNode(nodeRegistry);
+
+  registerWorkflowInputNode(nodeRegistry);
+  registerMailNode(nodeRegistry);
+  registerJSONManipulatorNode(nodeRegistry);
 }
 
 export async function loadModule(name: string) {

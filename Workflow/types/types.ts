@@ -1,3 +1,5 @@
+import { WebSocket } from "ws";
+
 // Define possible value types for nodes
 export type NodeValue =
   | string
@@ -11,6 +13,7 @@ export type NodeValue =
 export type NodeExecutionContext = {
   node: NodeType;
   inputs: Record<string, any>;
+  ws?: WebSocket;
 };
 
 export type ConfigParameterType = {

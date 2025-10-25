@@ -134,7 +134,7 @@ export function createChunkingNode(
       // Get input text
       const inputValue = await context.inputs[n.id * 100 + 1];
       const inputText = String(inputValue || "");
-      
+
       if (!inputText.trim()) {
         return {
           [n.id * 100 + 2]: JSON.stringify([]),
@@ -148,7 +148,9 @@ export function createChunkingNode(
       const maxTokens = Number(maxTokensConfig?.paramValue) || 200;
       const overlap = Number(overlapConfig?.paramValue) || 50;
 
-      console.log(`🔤 Chunking text with max tokens: ${maxTokens}, overlap: ${overlap}`);
+      console.log(
+        `🔤 Chunking text with max tokens: ${maxTokens}, overlap: ${overlap}`
+      );
 
       // Perform chunking
       const chunks = chunkByTokens(inputText, maxTokens, overlap);
@@ -159,7 +161,7 @@ export function createChunkingNode(
         text: chunk,
         tokenCount: simpleTokenize(chunk).length,
         characterCount: chunk.length,
-        wordCount: chunk.split(/\s+/).filter(word => word.length > 0).length,
+        wordCount: chunk.split(/\s+/).filter((word) => word.length > 0).length,
       }));
 
       // Update node value
@@ -192,7 +194,6 @@ export function createChunkingNode(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering Text Chunking Node");
   nodeRegistry.registerNodeType(
     metadata.nodeType,
     createChunkingNode,
@@ -201,8 +202,4 @@ export function register(nodeRegistry: NodeRegistry): void {
 }
 
 // Export utility functions for external use
-export {
-  simpleTokenize,
-  simpleDetokenize,
-  chunkByTokens,
-};
+export { simpleTokenize, simpleDetokenize, chunkByTokens };

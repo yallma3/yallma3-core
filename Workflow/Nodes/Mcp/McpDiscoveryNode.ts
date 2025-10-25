@@ -248,7 +248,6 @@ export function createNMcpDiscoveryNode(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering MCP Discovery Node");
   nodeRegistry.registerNodeType(
     "McpDiscovery",
     createNMcpDiscoveryNode,

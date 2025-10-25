@@ -1,8 +1,14 @@
 import type { Workflow } from "../Models/Workflow";
-import type { BaseNode, NodeValue } from "./types/types";
 import { buildExecutionLayers, hydrateWorkflowNodes } from "./utils/runtime";
+import { globalBroadcast } from "../Websocket/socket";
+import { WebSocket } from "ws";
+import type { NodeExecutionContext } from "./types/types";
 
-export const executeFlowRuntime = async (workflow: Workflow) => {
+export const executeFlowRuntime = async (
+  workflow: Workflow,
+  ws: WebSocket,
+  context?: string
+) => {
   try {
     const connections = workflow.connections;
     const nodes = hydrateWorkflowNodes(workflow);
@@ -36,6 +42,12 @@ export const executeFlowRuntime = async (workflow: Workflow) => {
 
           // gather inputs for this node
           const inputs: Record<string, any> = {};
+
+          // Add context to WorkflowInput Node
+          if (node.nodeType == "WorkflowInput") {
+            inputs[0] = context;
+          }
+
           for (const socketId of inputSockets[nodeId] ?? []) {
             const fromSocket = inputConnections[socketId];
             if (fromSocket !== undefined) {
@@ -61,7 +73,12 @@ export const executeFlowRuntime = async (workflow: Workflow) => {
           // run the node
           let output: any;
           if (node.process) {
-            output = await node.process({ inputs, node });
+            const execContext: NodeExecutionContext = {
+              node: node,
+              inputs: inputs,
+              ws,
+            };
+            output = await node.process(execContext);
           } else {
             // fallback: just echo nodeValue
             output = node.nodeValue ?? null;
@@ -72,6 +89,16 @@ export const executeFlowRuntime = async (workflow: Workflow) => {
             `Node ${nodeId} executed. Output:`,
             String(output).substring(0, 30)
           );
+          globalBroadcast?.({
+            type: "workflow_output",
+            data: {
+              id: Date.now().toString(),
+              timestamp: Date.now(),
+              type: "info",
+              message: `Node ${node.title || nodeId} executed.`,
+              details: JSON.stringify(output, null, 2),
+            },
+          });
         })
       );
     }

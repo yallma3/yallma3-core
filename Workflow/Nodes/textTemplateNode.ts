@@ -117,11 +117,13 @@ export function register(nodeRegistry: NodeRegistry): void {
         const n = context.node as TextNode;
 
         if (typeof n.nodeValue === "string") {
-          return processTextTemplate(
-            n.nodeValue,
-            context.inputs[n.id * 100 + 1],
-            n.id
-          );
+          let input = "";
+          if (typeof context.inputs[n.id * 100 + 1] != "string") {
+            input = JSON.stringify(context.inputs[n.id * 100 + 1], null, 2);
+          } else {
+            input = context.inputs[n.id * 100 + 1];
+          }
+          return processTextTemplate(n.nodeValue, input, n.id);
         }
         return n.nodeValue;
       },

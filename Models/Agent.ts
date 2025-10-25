@@ -1,4 +1,5 @@
 import type { LLMOption } from "./LLM";
+import type { LLMSpecTool, Tool } from "./Tool";
 
 // Interfaces for workspace data structure
 export interface Agent {
@@ -8,17 +9,10 @@ export interface Agent {
   objective: string;
   background: string;
   capabilities: string;
-  tools: ToolConfig[];
+  tools: Tool[];
   llm: LLMOption; // ID of the LLM to use for this agent
   apiKey: string;
   variables?: Record<string, string>; // Variables for templating in background and other fields
-}
-
-export interface ToolConfig {
-  name: string;
-  isInputChannel: boolean;
-  isOutputProducer: boolean;
-  isJudge: boolean;
 }
 
 export interface ReviewResult {

@@ -79,7 +79,7 @@ export function hydrateWorkflowNodes(workflow: Workflow): BaseNode[] {
 
     // create base node
     return {
-      ...factory(nodeData.id, { x: nodeData.x, y: nodeData.y }),
+      ...factory(nodeData.id, { x: nodeData.x ?? 0, y: nodeData.y ?? 0 }),
       ...nodeData,
     };
   });

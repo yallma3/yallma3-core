@@ -3,6 +3,10 @@ import { IncomingMessage } from "http";
 import { handleRunWorkspace } from "../Utils/Runtime";
 import { executeFlowRuntime } from "../Workflow/runtime";
 
+import { ConsoleInputUtils } from "../Workflow/Nodes/ConsoleInput";
+import type { ConsoleEvent } from "../Models/Workspace";
+export let globalBroadcast: ((message: unknown) => void) | null = null;
+
 export function setupWebSocketServer(wss: WebSocketServer) {
   const clients = new Set<WebSocket>();
 
@@ -16,9 +20,9 @@ export function setupWebSocketServer(wss: WebSocketServer) {
     // Handle incoming messages from frontend
     ws.on("message", async (message: WebSocket.RawData) => {
       try {
-        console.log("Client Count:", clients.size);
         const data = JSON.parse(message.toString());
-        // console.log("Received message from yaLLMa3 Studio:", data);
+        console.log("Client Count:", clients.size, "Message: ", data.type);
+        let consoleMessage: ConsoleEvent | null = null;
 
         switch (data.type) {
           case "ping":
@@ -30,26 +34,42 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             );
             break;
           case "run_workspace":
+            consoleMessage = {
+              id: crypto.randomUUID(),
+              timestamp: Date.now(),
+              type: "system",
+              message: "Starting workspace runtime...",
+            };
+
             ws.send(
               JSON.stringify({
                 type: "message",
-                data: "Starting workspace runtime",
+                data: consoleMessage,
                 timestamp: new Date().toISOString(),
               })
             );
 
-            handleRunWorkspace(data.data, "basic_agent", ws);
+            handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
             break;
           case "run_workflow":
+            consoleMessage = {
+              id: crypto.randomUUID(),
+              timestamp: Date.now(),
+              type: "info",
+              message: "Starting workflow runtime",
+            };
+
             ws.send(
               JSON.stringify({
                 type: "message",
-                data: "Starting workflow runtime",
+                data: consoleMessage,
                 timestamp: new Date().toISOString(),
               })
             );
+
             const workflow = JSON.parse(data.data);
-            const result = await executeFlowRuntime(workflow);
+            const result = await executeFlowRuntime(workflow, ws);
+
             ws.send(
               JSON.stringify({
                 id: workflow.id,
@@ -58,7 +78,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 timestamp: new Date().toISOString(),
               })
             );
-            console.log("Workflow  result:", result);
+            // console.log("Workflow  result:", result);
 
             break;
           case "workflow_json":
@@ -70,6 +90,22 @@ export function setupWebSocketServer(wss: WebSocketServer) {
           case "command_status_update":
             console.log("Command status update:", data.payload);
             break;
+
+          case "console_input":
+            console.log("Received console input:", data.data);
+            if (data.data && typeof data.data === "object") {
+              const event = data.data;
+              ConsoleInputUtils.addEvent(event);
+            }
+
+            // Broadcast to all clients
+            broadcast({
+              type: "console_input",
+              data: data.data,
+              timestamp: new Date().toISOString(),
+            });
+            break;
+
           default:
             console.log("Unknown message type:", data.type);
         }

@@ -230,6 +230,5 @@ export function creatOpenAIChatNode(id: number, position: Position): ChatNode {
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering OpenAI Chat Node");
   nodeRegistry.registerNodeType("OpenAIChat", creatOpenAIChatNode, metadata);
 }

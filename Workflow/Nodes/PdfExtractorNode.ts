@@ -416,8 +416,14 @@ function parsePageRange(rangeStr: string, maxPages: number): number[] {
       const rangeParts = part.split("-").map((s) => parseInt(s.trim()));
       const start = rangeParts[0];
       const end = rangeParts[1];
-      
-      if (start !== undefined && end !== undefined && !isNaN(start) && !isNaN(end) && start <= end) {
+
+      if (
+        start !== undefined &&
+        end !== undefined &&
+        !isNaN(start) &&
+        !isNaN(end) &&
+        start <= end
+      ) {
         for (let i = start; i <= Math.min(end, maxPages); i++) {
           pages.add(i);
         }
@@ -465,7 +471,9 @@ async function extractTextFromPDFFileWithRange(
       };
     }
 
-    console.log(`📄 Extracted text from all ${pdfData.numpages} pages (page range feature not supported with pdf-parse)`);
+    console.log(
+      `📄 Extracted text from all ${pdfData.numpages} pages (page range feature not supported with pdf-parse)`
+    );
 
     const processedText = cleanText ? cleanExtractedText(fullText) : fullText;
     const wordCount = processedText
@@ -547,7 +555,6 @@ async function batchExtractTextFromFiles(
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  console.log("Registering PDF Text Extractor Node with File System Support");
   nodeRegistry.registerNodeType(
     metadata.nodeType,
     createPDFTextExtractorNode,

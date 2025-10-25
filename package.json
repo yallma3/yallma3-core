@@ -10,7 +10,9 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/cors": "^2.8.19",
+    "@types/crypto-js": "^4.2.2",
     "@types/express": "^5.0.3",
+    "@types/nodemailer": "^6.4.19",
     "@types/pdf-parse": "^1.1.5",
     "@types/ws": "^8.18.1"
   },
@@ -18,10 +20,13 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@huggingface/hub": "^2.6.12",
     "@modelcontextprotocol/sdk": "^1.18.0",
     "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
     "express": "^5.1.0",
     "http": "^0.0.1-security",
+    "nodemailer": "^6.10.1",
     "pdf-parse": "^1.1.1",
     "ws": "^8.18.3"
   }
