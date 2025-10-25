@@ -614,7 +614,7 @@ export const yallma3GenSeqential = async (
     await mkdir(outputDir, { recursive: true });
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const workspaceName = workspaceData.name.replace(" ", "_");
+    const workspaceName = workspaceData.name.replace(/\s+/g, "_");
     const filename = `${workspaceName}_${timestamp}.txt`;
     const filepath = join(outputDir, filename);
 

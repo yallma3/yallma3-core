@@ -48,8 +48,8 @@ function getCollection(collectionString: string): {
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
     category: "VectorDatabase",
-    title: "Vector Store",
-    nodeType: "PineconeStore",
+    title: "Pinecone Vector Store",
+    nodeType: "PineconeSearch",
     nodeValue: "",
     sockets: [
       { title: "Vector", type: "input", dataType: "embedding" },
@@ -227,7 +227,7 @@ export function register(nodeRegistry: NodeRegistry): void {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "api-key": apiKey,
+              "Api-Key": apiKey,
             },
             body: JSON.stringify({
               vectors: [
