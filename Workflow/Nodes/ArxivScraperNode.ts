@@ -27,7 +27,7 @@ export interface ArxivScraperNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Other",
+  category: "Data",
   title: "Arxiv Scraper",
   nodeType: "ArxivScraper",
   nodeValue: "cs.AI",

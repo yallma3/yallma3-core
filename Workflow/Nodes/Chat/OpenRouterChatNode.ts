@@ -21,7 +21,7 @@ export interface ChatNode extends BaseNode {
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "OpenRouter Chat",
   nodeType: "OpenRouterChat",
    description: "Integrates with the OpenRouter API, providing access to a diverse range of models from different providers. It sends a prompt and returns the chat response and token usage.",

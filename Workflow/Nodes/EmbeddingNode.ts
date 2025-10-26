@@ -28,7 +28,7 @@ export interface EmbeddingNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Input/Output",
+  category: "AI",
   title: "Embedding",
   nodeType: "Embedding",
   description: "Generates vector embeddings for text inputs using the Google Gemini Embedding API. It can process a single string or a JSON object containing multiple text chunks, making it suitable for both individual and batch embedding tasks.",

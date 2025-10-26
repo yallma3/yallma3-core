@@ -93,7 +93,7 @@ export interface ScraperNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Generation",
+  category: "Data",
   title: "Scraper",
   nodeType: "Scraper",
    description: "A multi-stage data processing node that scrapes web pages from search results, chunks the content, and uses the Gemini API to extract relevant topics. It requires both ScraperAPI and Gemini API keys.",

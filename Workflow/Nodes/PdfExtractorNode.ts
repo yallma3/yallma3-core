@@ -30,7 +30,7 @@ export interface PDFTextExtractorNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Tools",
+  category: "Text",
   title: "PDF Text Extractor",
   nodeType: "PDFTextExtractor",
   description: "Maximum number of pages to extract per PDF",

@@ -27,7 +27,7 @@ export interface ChatNode extends BaseNode {
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "Gemini Chat",
   nodeType: "GeminiChat",
   nodeValue: "gemini-2.5-flash",

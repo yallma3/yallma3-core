@@ -28,7 +28,7 @@ export interface ChatNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "Groq Chat",
   nodeType: "GroqChat",
   description: "Integrates with the Groq API for high-speed chat completions. It sends a user prompt and an optional system prompt to a selected model, returning the generated response and token usage.",

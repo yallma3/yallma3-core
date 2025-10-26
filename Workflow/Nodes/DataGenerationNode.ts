@@ -73,7 +73,7 @@ export interface DataGenerationNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Generation",
+  category: "Data",
   title: "Data Generation",
   nodeType: "DataGeneration",
   description: "Leverages the Google Gemini API to generate synthetic datasets from topics. It supports parallel processing, rate-limiting, and configurable options like the model and rows per topic, outputting the dataset and generation statistics.",

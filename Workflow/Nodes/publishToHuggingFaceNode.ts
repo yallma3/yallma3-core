@@ -52,7 +52,7 @@ export interface HuggingFacePublisherNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Generation",
+  category: "Tools",
   title: "HuggingFace Publisher",
   nodeType: "HuggingFacePublisher",
   description: "Publishes a generated dataset to the Hugging Face Hub. This node automates repository creation, dataset and README file uploads, and provides the final URL and publication metadata as output.",

@@ -25,7 +25,7 @@ export interface MathExpressionNode extends BaseNode {
 
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
-    category: "Math",
+    category: "Logic",
     title: "Math Expression",
     nodeType: "MathExpression",
      description: "Evaluates a mathematical expression using an input variable 'x'. The expression is configured in the node settings, and the node replaces 'x' with the value from the input socket before computing the result.",

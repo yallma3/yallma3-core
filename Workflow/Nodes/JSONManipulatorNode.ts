@@ -28,7 +28,7 @@ export interface JSONManipulatorNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Processing",
+  category: "Text",
   title: "JSON Manipulator",
   nodeType: "JSONManipulator",
   description: "A versatile node for processing JSON data. It can extract fields, filter arrays, transform structures, and count items based on configurable operations and field paths.",

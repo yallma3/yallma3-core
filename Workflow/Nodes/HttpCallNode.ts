@@ -15,7 +15,7 @@ interface HttpCallNode extends BaseNode {
 const metadata: NodeMetadata = {
   nodeType: "HttpCall",
   description: "Performs a customizable HTTP request, supporting various methods, headers, and body content. Includes configurable options for request timeout and handling of redirects.",
-  category: "Network",
+  category: "Tools",
   title: "HTTP Call",
   sockets: [
     { title: "URL", type: "input", dataType: "string" },

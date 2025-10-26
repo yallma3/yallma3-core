@@ -32,7 +32,7 @@ export interface HashNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data",
+  category: "Text",
   title: "Hash",
   nodeType: "Hash",
    description: "Computes a cryptographic hash of an input string using a selected algorithm (MD5, SHA1, SHA256, or SHA512). The algorithm is configurable via node settings.",

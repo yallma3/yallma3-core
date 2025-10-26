@@ -78,7 +78,7 @@ export interface SearchNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Generation",
+  category: "Data",
   title: "Search",
   nodeType: "Search",
   description: "Initiates the data generation pipeline by analyzing a user query, refining it into multiple search queries, and executing them via the Tavily API. It uses the Gemini API for query parsing and requires API keys for both services.",

@@ -27,7 +27,7 @@ export interface ChatNode extends BaseNode {
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "OpenAI Chat",
   nodeType: "OpenAIChat",
   description: "Integrates with the OpenAI API for chat completions. It sends a user prompt and an optional system prompt to a selected GPT model, returning the generated response and token usage.",

@@ -137,7 +137,7 @@ export interface ConsoleInputNode extends BaseNode {
 
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
-    category: "Input",
+    category: "Input/Output",
     title: "Console Input",
     nodeType: "ConsoleInput",
     description: "An interactive node that prompts for user input in the console. Features include customizable and internationalized prompt messages, a configurable timeout, and a comprehensive event system to track the input lifecycle from request to resolution or timeout.",

@@ -47,7 +47,7 @@ function getCollection(collectionString: string): {
 
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
-    category: "VectorDatabase",
+    category: "Input/Output",
     title: "Vector Store",
     nodeType: "PineconeStore",
     description: "Stores (upserts) a vector embedding and its associated metadata into a specified Pinecone index. It generates a deterministic ID for each vector to ensure content addressability.",
