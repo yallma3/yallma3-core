@@ -3,6 +3,11 @@ import { sendWorkflow } from "../MainAgents";
 import type { Workflow } from "../../Models/Workflow";
 import { executeFlowRuntime } from "../../Workflow/runtime";
 import type { LLMSpecTool, Tool } from "../../Models/Tool";
+import {
+  connectToMultipleMcpServers,
+  executeMcpTool,
+  normalizeTool,
+} from "./McpUtils";
 
 export async function workflowExecutor(
   ws: WebSocket,
@@ -24,8 +29,52 @@ export async function workflowExecutor(
 export const toolExecutorAttacher = async (ws: WebSocket, tools: Tool[]) => {
   let attachedTools: LLMSpecTool[] = [];
 
-  tools.map((tool) => {
+  // Handle MCP tools separately
+  const mcpTools = tools.filter((tool) => tool.type === "mcp");
+  const otherTools = tools.filter((tool) => tool.type !== "mcp");
+
+  // Connect to MCP servers and get their tools
+  if (mcpTools.length > 0) {
+    const mcpServerTools = await connectToMultipleMcpServers(mcpTools);
+
+    // Convert MCP tools to LLMSpecTool format
+    for (const mcpTool of mcpServerTools) {
+      const normalizedTool = normalizeTool(mcpTool);
+
+      const llmTool: LLMSpecTool = {
+        type: "function",
+        name: normalizedTool.name,
+        description: normalizedTool.description || "",
+        parameters: normalizedTool.inputSchema || {
+          type: "object",
+          properties: {},
+          additionalProperties: true,
+        },
+        executor: async (args: Record<string, any>) => {
+          try {
+            const result = await executeMcpTool(
+              mcpTool.serverName,
+              normalizedTool.name,
+              args
+            );
+            return result;
+          } catch (error) {
+            console.error(
+              `Error executing MCP tool ${normalizedTool.name}:`,
+              error
+            );
+            throw error;
+          }
+        },
+      };
+      attachedTools.push(llmTool);
+    }
+  }
+
+  // Handle other tool types
+  otherTools.map((tool) => {
     if (tool.type == "workflow") {
+      const workflowID = tool.parameters["workflowId"];
       const workflowTool: LLMSpecTool = {
         type: "function",
         name: tool.name,
@@ -33,19 +82,12 @@ export const toolExecutorAttacher = async (ws: WebSocket, tools: Tool[]) => {
         parameters: {
           type: "object",
           properties: {
-            workflowId: { type: "string" },
             workflowInput: { type: "string" },
           },
-          required: ["workflowId", "workflowInput"],
+          required: ["workflowInput"],
         },
-        executor: async ({
-          workflowId,
-          workflowInput,
-        }: {
-          workflowId: string;
-          workflowInput: string;
-        }) => {
-          const result = await workflowExecutor(ws, workflowId, workflowInput);
+        executor: async ({ workflowInput }: { workflowInput: string }) => {
+          const result = await workflowExecutor(ws, workflowID, workflowInput);
           return result;
         },
       };

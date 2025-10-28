@@ -23,7 +23,6 @@ export class McpSTDIOClient {
   }
 
   async init() {
-    console.log("initializing");
     try {
       const transport = new StdioClientTransport({
         command: this.serverConfig.command,
@@ -33,6 +32,24 @@ export class McpSTDIOClient {
       console.log("connected");
     } catch (err) {
       throw err;
+    }
+  }
+
+  async test() {
+    try {
+      const transport = new StdioClientTransport({
+        command: this.serverConfig.command,
+        args: this.serverConfig.args || [],
+      });
+
+      await this.client.connect(transport);
+      console.log("Connected to MCP STDIO server successfully");
+
+      this.client.close();
+      return true;
+    } catch (err) {
+      console.error("STDIO MCP connection failed:", err);
+      return false;
     }
   }
 

@@ -7,6 +7,7 @@ import { WebSocketServer } from "ws";
 import workflowRoute from "./Routes/workflow.route";
 import { setupWebSocketServer } from "./Websocket/socket";
 import { initFlowSystem } from "./Workflow/initFlowSystem";
+import mcpRoutes from "./Routes/Mcp.route";
 
 const app = express();
 const PORT = 3001;
@@ -21,7 +22,8 @@ app.get("/health", (req, res) => {
 });
 
 // MCP routes
-// app.use("/mcp", mcpRoutes);
+app.use("/mcp", mcpRoutes);
+// Workflow routes
 app.use("/workflow", workflowRoute);
 
 // Create an HTTP server from Express

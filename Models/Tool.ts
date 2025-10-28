@@ -2,6 +2,7 @@ import type WebSocket from "ws";
 import { workflowExecutor } from "../Agent/Utls/ToolCallingHelper";
 
 export type Tool = {
+  id?: string;
   type: "function" | "workflow" | "mcp" | "basic";
   name: string;
   description: string;

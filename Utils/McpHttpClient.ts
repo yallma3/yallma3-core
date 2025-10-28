@@ -35,6 +35,37 @@ export class McpHttpClient {
     }
   }
 
+  async test(): Promise<boolean> {
+    const url = new URL(this.serverUrl);
+
+    // Try Streamable HTTP first
+    try {
+      const transport = new StreamableHTTPClientTransport(url);
+      await this.client.connect(transport);
+      console.log(
+        "[MCP HTTP] Connected successfully via Streamable HTTP transport."
+      );
+      this.client.close();
+      return true;
+    } catch (err1) {
+      console.warn("[MCP HTTP] Streamable transport failed:", err1);
+
+      // Fallback: try SSE
+      try {
+        const sseTransport = new SSEClientTransport(url);
+        await this.client.connect(sseTransport);
+        console.log("[MCP HTTP] Connected successfully via SSE transport.");
+        this.client.close();
+        return true;
+      } catch (err2) {
+        console.error("[MCP HTTP] SSE transport also failed:", err2);
+        throw new Error(
+          `Failed to connect to MCP HTTP server via both transports.\nStreamable error: ${err1}\nSSE error: ${err2}`
+        );
+      }
+    }
+  }
+
   async listTools() {
     try {
       const response = await getTools(this.client);

@@ -4,6 +4,7 @@ import { getLLMProvider } from "../LLM/LLMRunner";
 import type { LLMProvider, LLMOption } from "../Models/LLM";
 import type WebSocket from "ws";
 import { toolExecutorAttacher } from "../Agent/Utls/ToolCallingHelper";
+import { closeMcpConnections } from "./Utls/McpUtils";
 
 export class AgentRuntime {
   private agent: Agent;
@@ -274,6 +275,9 @@ export class Yallma3GenOneAgentRuntime {
       console.warn("⚠️ Max iterations reached, returning last output.");
     }
 
+    // Clean up MCP connections
+    await this.cleanup();
+
     return output;
   }
 
@@ -389,6 +393,11 @@ export class Yallma3GenOneAgentRuntime {
     "reason": "string",              // explain why it is acceptable or why it needs more work
     "next_action": "deliver" | "revise" // "deliver" if accept=true, "revise" if accept=false
   }`;
+  }
+
+  async cleanup() {
+    // Close MCP connections when agent finishes
+    await closeMcpConnections();
   }
 
   agentProfile(): string {
