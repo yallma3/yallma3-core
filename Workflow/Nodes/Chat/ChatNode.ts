@@ -20,22 +20,44 @@ import type {
   Position,
 } from "../../types/types";
 import { NodeRegistry } from "../../NodeRegistry";
+import { AvailableLLMs, type LLMModel } from "../../../LLM/config";
+import type { LLMMessage, LLMOption } from "../../../Models/LLM";
+import { getLLMProvider } from "../../../LLM/LLMRunner";
 export interface ChatNode extends BaseNode {
   nodeType: string;
   nodeValue?: NodeValue;
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 
+// Generate model source list from all providers with provider info
+const modelSourceList = Object.entries(AvailableLLMs).flatMap(
+  ([provider, models]) =>
+    (models as LLMModel[]).map((model: LLMModel) => ({
+      key: model.id,
+      label: `${provider}: ${model.name}`,
+    }))
+);
+
+// Helper function to find provider by model ID
+function findProviderByModelId(modelId: string): string | null {
+  for (const [provider, models] of Object.entries(AvailableLLMs)) {
+    if ((models as LLMModel[]).some((model) => model.id === modelId)) {
+      return provider;
+    }
+  }
+  return null;
+}
+
 const metadata: NodeMetadata = {
   category: "Chat",
-  title: "Groq Chat",
-  nodeType: "GroqChat",
-  nodeValue: "llama-3.1-8b-instant",
+  title: "LLM Chat",
+  nodeType: "LLMChat",
+  nodeValue: "Groq",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
     { title: "System Prompt", type: "input", dataType: "string" },
     { title: "Response", type: "output", dataType: "string" },
-    { title: "Tokens", type: "output", dataType: "string" },
+    { title: "Tokens", type: "output", dataType: "number" },
   ],
   width: 380,
   height: 220,
@@ -46,30 +68,9 @@ const metadata: NodeMetadata = {
       defaultValue: "llama-3.1-8b-instant",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "Model name to use for the chat node",
+      description: "Model to use for the chat node",
       isNodeBodyContent: true,
-      sourceList: [
-        {
-          key: "llama-3.1-8b-instant",
-          label: "Llama 3.1 8b Instant",
-        },
-        {
-          key: "gemini-2.5-flash",
-          label: "Gemini 2.5 Flash",
-        },
-        {
-          key: "gemini-2.5-pro",
-          label: "Gemini 2.5 Pro",
-        },
-        {
-          key: "claude-3-opus-20240229",
-          label: "Claude 3 Opus",
-        },
-        {
-          key: "claude-3-5-sonnet-20240620",
-          label: "Claude 3.5 Sonnet",
-        },
-      ],
+      sourceList: modelSourceList,
     },
     {
       parameterName: "API Key",
@@ -77,13 +78,13 @@ const metadata: NodeMetadata = {
       defaultValue: "",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "API Key for the Claude service",
+      description: "API Key for the selected provider",
       isNodeBodyContent: false,
     },
   ],
 };
 
-export function createNGroqChatNode(id: number, position: Position): ChatNode {
+export function createLLMChatNode(id: number, position: Position): ChatNode {
   return {
     id,
     category: metadata.category,
@@ -128,7 +129,7 @@ export function createNGroqChatNode(id: number, position: Position): ChatNode {
     processing: false,
     process: async (context: NodeExecutionContext) => {
       const n = context.node as ChatNode;
-      // If we have a cached result for this node, use it
+
       const promptValue = await context.inputs[n.id * 100 + 1];
       const systemPrompt = await context.inputs[n.id * 100 + 2];
 
@@ -136,87 +137,87 @@ export function createNGroqChatNode(id: number, position: Position): ChatNode {
       const system = String(systemPrompt || "");
 
       if (!prompt && !system) {
-        return "No Prompt Nor System prompt provided";
+        return {
+          [n.id * 100 + 3]: "No Prompt Nor System prompt provided",
+          [n.id * 100 + 4]: 0,
+        };
       }
 
-      // Extract model name from node value
-      const modelMatch =
-        n.nodeValue?.toString().trim().toLowerCase().replace(/\s+/g, "-") || "";
-      console.log("n.nodeValue", n.nodeValue);
-      console.log("modelMatch", modelMatch);
-      const model = modelMatch ? modelMatch : "llama-3.1-8b-instant"; // Default fallback
-
       try {
-        // Get API key from .env using Vite's environment variable format
-        // const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+        // Get configuration parameters
+        const modelId =
+          (n.getConfigParameter?.("Model")?.paramValue as string) ||
+          "llama-3.1-8b-instant";
 
-        // if (!GROQ_API_KEY) {
-        //   throw new Error(
-        //     "GROQ API key not found. Please check your .env file and ensure it has VITE_GROQ_API_KEY defined."
-        //   );
-        // }
-        let GROQ_API_KEY = "";
-        if (n.getConfigParameter) {
-          GROQ_API_KEY =
-            (n.getConfigParameter("API Key")?.paramValue as string) || "";
-        } else {
-          throw new Error("API Key not found");
+        // Find provider based on model ID
+        let provider = findProviderByModelId(modelId) as
+          | "Groq"
+          | "OpenAI"
+          | "OpenRouter"
+          | "Gemini"
+          | "Anthropic"
+          | null;
+
+        if (!provider) {
+          // Fallback to Groq if provider not found
+          provider = "Groq";
         }
 
-        console.log("GROQ_API_KEY", GROQ_API_KEY ? "[set]" : "[missing]");
-        console.log(`Using model: ${model}`);
+        let model = AvailableLLMs[provider]?.find((m) => m.id === modelId);
+
+        const apiKey =
+          (n.getConfigParameter?.("API Key")?.paramValue as string) || "";
+
+        if (!apiKey) {
+          throw new Error(`API Key not found for provider: ${provider}`);
+        }
+
+        console.log(`Using provider: ${provider}, model: ${model}`);
         console.log(
           `Executing Chat node ${n.id} with prompt: "${prompt.substring(
             0,
             50
           )}..."`
         );
-        const messages = system
+
+        if (!model) {
+          // Fallback model
+          provider = "Groq";
+          model = { name: "Llama 3.1 8B", id: "llama-3.1-8b-instant" };
+        }
+        const llmOption: LLMOption = {
+          provider: provider,
+          model: model,
+        };
+        const llmProvider = getLLMProvider(llmOption, apiKey);
+
+        // Build messages array
+        const messages: LLMMessage[] = system
           ? [
               { role: "system", content: system },
               { role: "user", content: prompt },
             ]
           : [{ role: "user", content: prompt }];
-        const res = await fetch(
-          "https://api.groq.com/openai/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${GROQ_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model: model,
-              messages: messages,
-              max_tokens: 1000,
-              temperature: 0.7,
-              top_p: 1,
-              frequency_penalty: 0,
-              presence_penalty: 0,
-            }),
-          }
-        );
 
-        if (!res.ok) {
-          throw new Error(`Chat API returned status ${res.status}`);
+        // Use the provider's callLLM method for direct API call
+        if (!llmProvider.callLLM) {
+          throw new Error(
+            `Provider ${provider} does not support direct LLM calls`
+          );
         }
+        const response = await llmProvider.callLLM(messages);
 
-        const json = await res.json();
         console.log(
           `Chat node ${n.id} received response:`,
-          (json as any).choices[0].message.content.substring(0, 50) + "..."
+          response.content?.substring(0, 50) + "..."
         );
 
-        // Return an object with both values to support multiple outputs
         return {
-          // Socket id 3 is for Response content
-          [n.id * 100 + 3]: (json as any).choices[0].message.content,
-          // Socket id 4 is for Token count
-          [n.id * 100 + 4]: (json as any).usage?.total_tokens || 0,
+          [n.id * 100 + 3]: response.content || "",
+          [n.id * 100 + 4]: 0, // Token count not available in unified response
         };
       } catch (error) {
         console.error("Error in Chat node:", error);
-        // Return error in the response output
         return {
           [n.id * 100 + 3]: `Error: ${
             error instanceof Error ? error.message : String(error)
@@ -248,5 +249,5 @@ export function createNGroqChatNode(id: number, position: Position): ChatNode {
 }
 
 export function register(nodeRegistry: NodeRegistry): void {
-  nodeRegistry.registerNodeType("GroqChat", createNGroqChatNode, metadata);
+  nodeRegistry.registerNodeType("LLMChat", createLLMChatNode, metadata);
 }

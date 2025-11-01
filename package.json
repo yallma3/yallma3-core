@@ -5,7 +5,9 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "start": "bun run --watch index.ts"
+    "start": "bun run --watch index.ts",
+    "build": "bun build index.ts --compile --outfile server",
+    "serve": "./server"
   },
   "devDependencies": {
     "@types/bun": "latest",
