@@ -1,8 +1,6 @@
 import type {
   BaseNode,
   NodeMetadata,
-  Socket,
-  DataType,
   Position,
   NodeExecutionContext,
 } from "../types/types";
@@ -167,7 +165,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
           clearTimeout(timeoutId);
 
           // Get response data
-          let responseData: any;
+          let responseData: unknown;
           const contentType = response.headers.get("content-type");
 
           if (contentType && contentType.includes("application/json")) {
@@ -201,13 +199,13 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
           };
 
           return result;
-        } catch (fetchError: any) {
+        } catch (fetchError: unknown) {
           clearTimeout(timeoutId);
 
           const errorMessage =
-            fetchError.name === "AbortError"
+            fetchError instanceof Error && fetchError.name === "AbortError"
               ? `Request timeout after ${timeout}ms`
-              : `Network error: ${fetchError.message}`;
+              : `Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`;
 
           return {
             [n.id * 100 + 105]: {
@@ -220,7 +218,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
             [n.id * 100 + 107]: errorMessage,
           };
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         return {
           [n.id * 100 + 105]: {
             data: null,
@@ -229,7 +227,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
             redirected: false,
           },
           [n.id * 100 + 106]: 0,
-          [n.id * 100 + 107]: `HTTP Call error: ${error.message}`,
+          [n.id * 100 + 107]: `HTTP Call error: ${error instanceof Error ? error.message : String(error)}`,
         };
       }
     },

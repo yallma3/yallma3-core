@@ -29,7 +29,7 @@ export interface PineconeSearchNode extends BaseNode {
 
 function getCollection(collectionString: string): {
   host: string;
-  options: { [key: string]: any };
+  options: Record<string, unknown>;
 } {
   let url = collectionString;
   if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -37,7 +37,7 @@ function getCollection(collectionString: string): {
   }
   const u = new URL(url);
   const host = `${u.protocol}//${u.host}`;
-  const options: { [key: string]: any } = {};
+  const options: Record<string, unknown> = {};
   if (u.pathname !== "/") {
     options.namespace = u.pathname.slice(1);
   }
@@ -244,9 +244,9 @@ export function register(nodeRegistry: NodeRegistry): void {
               id: string;
               score: number;
               values?: number[];
-              metadata?: Record<string, any>;
+              metadata?: Record<string, unknown>;
             }>;
-            [key: string]: any;
+            [key: string]: unknown;
           };
           return {
             [n.id * 100 + 2]: result,
@@ -276,7 +276,7 @@ export function register(nodeRegistry: NodeRegistry): void {
           (param) => param.parameterName === parameterName
         );
       },
-      setConfigParameter(parameterName: string, value: any): void {
+      setConfigParameter(parameterName: string, value: string | number | boolean | undefined): void {
         const parameter = (this.configParameters ?? []).find(
           (param) => param.parameterName === parameterName
         );

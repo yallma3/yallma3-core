@@ -115,8 +115,8 @@ export function createJSONManipulatorNode(
         console.log(`Executing JSONManipulator node ${id}`);
 
         // Validate required inputs
-        if (!jsonInput) {
-          throw new Error("JSON input is required");
+        if (!jsonInput || typeof jsonInput !== 'string') {
+          throw new Error("JSON input is required and must be a string");
         }
 
         // Get configuration parameters
@@ -137,7 +137,7 @@ export function createJSONManipulatorNode(
         );
 
         // Parse JSON input
-        let jsonData: any;
+        let jsonData: unknown;
         try {
           jsonData = JSON.parse(jsonInput);
         } catch (parseError) {
@@ -151,7 +151,7 @@ export function createJSONManipulatorNode(
         }
 
         // Process based on operation
-        let result: any;
+        let result: unknown;
 
         switch (operation.toLowerCase()) {
           case "extract_field":
@@ -244,7 +244,7 @@ export function createJSONManipulatorNode(
 
 // Helper functions for JSON manipulation
 
-function extractField(data: any, fieldPath: string): any {
+function extractField(data: unknown, fieldPath: string): unknown {
   if (Array.isArray(data)) {
     return data
       .map((item) => getNestedValue(item, fieldPath))
@@ -254,15 +254,15 @@ function extractField(data: any, fieldPath: string): any {
   }
 }
 
-function extractArrayField(data: any, fieldPath: string): any[] {
+function extractArrayField(data: unknown, fieldPath: string): unknown[] {
   const result = extractField(data, fieldPath);
   return Array.isArray(result)
     ? result
     : [result].filter((val) => val !== undefined);
 }
 
-function getNestedValue(obj: any, path: string): any {
-  return path.split(".").reduce((current, key) => {
+function getNestedValue(obj: unknown, path: string): unknown {
+  return path.split(".").reduce((current: unknown, key) => {
     if (current === null || current === undefined) return undefined;
 
     // Handle array notation like items[0]
@@ -270,15 +270,21 @@ function getNestedValue(obj: any, path: string): any {
     if (arrayMatch && arrayMatch[1] && arrayMatch[2]) {
       const arrayKey = arrayMatch[1];
       const index = arrayMatch[2];
-      const array = current[arrayKey];
-      return Array.isArray(array) ? array[parseInt(index, 10)] : undefined;
+      if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
+        const array = (current as Record<string, unknown>)[arrayKey];
+        return Array.isArray(array) ? array[parseInt(index, 10)] : undefined;
+      }
+      return undefined;
     }
 
-    return current[key];
+    if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
+      return (current as Record<string, unknown>)[key];
+    }
+    return undefined;
   }, obj);
 }
 
-function filterData(data: any, condition: string): any {
+function filterData(data: unknown, condition: string): unknown {
   if (!condition.trim()) return data;
 
   if (Array.isArray(data)) {
@@ -288,7 +294,7 @@ function filterData(data: any, condition: string): any {
   }
 }
 
-function evaluateCondition(item: any, condition: string): boolean {
+function evaluateCondition(item: unknown, condition: string): boolean {
   try {
     // Simple condition evaluation (extend as needed)
     // Supports: field > value, field < value, field == value, field contains "text"
@@ -342,7 +348,7 @@ function evaluateCondition(item: any, condition: string): boolean {
   }
 }
 
-function transformData(data: any, fieldPath: string): any {
+function transformData(data: unknown, fieldPath: string): unknown {
   // Simple transformation - can be extended
   if (Array.isArray(data)) {
     return data.map((item) => {
@@ -355,7 +361,7 @@ function transformData(data: any, fieldPath: string): any {
   }
 }
 
-function countItems(data: any, fieldPath?: string): number {
+function countItems(data: unknown, fieldPath?: string): number {
   if (fieldPath) {
     const extracted = extractField(data, fieldPath);
     return Array.isArray(extracted)

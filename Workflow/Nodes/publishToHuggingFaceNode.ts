@@ -23,7 +23,7 @@ import { NodeRegistry } from "../NodeRegistry";
 import { uploadFile } from "@huggingface/hub";
 
 interface DatasetInput {
-  dataset: Array<Record<string, any>>;
+  dataset: Array<Record<string, unknown>>;
   metadata: {
     domain_type: string;
     data_type: string;

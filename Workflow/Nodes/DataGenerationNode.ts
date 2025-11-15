@@ -47,7 +47,7 @@ interface QueryMetadata {
 }
 
 interface SyntheticDataPoint {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface GeminiCandidate {

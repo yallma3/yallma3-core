@@ -170,7 +170,7 @@ export function createNGeminiChatNode(
           )}..." | System: "${system.substring(0, 50)}..."`
         );
 
-        const body: any = {
+        const body: Record<string, unknown> = {
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
@@ -201,7 +201,7 @@ export function createNGeminiChatNode(
 
         const json = await res.json();
         const output =
-          (json as any)?.candidates?.[0]?.content?.parts?.[0]?.text ||
+          (json as { candidates?: { content: { parts: { text: string }[] } }[] }).candidates?.[0]?.content?.parts?.[0]?.text ||
           "No response from Gemini";
 
         console.log(
@@ -210,7 +210,7 @@ export function createNGeminiChatNode(
 
         return {
           [n.id * 100 + 3]: output,
-          [n.id * 100 + 4]: (json as any)?.usageMetadata?.totalTokens || 0,
+          [n.id * 100 + 4]: (json as { usageMetadata?: { totalTokens: number } }).usageMetadata?.totalTokens || 0,
         };
       } catch (error) {
         console.error("Error in Gemini Chat node:", error);

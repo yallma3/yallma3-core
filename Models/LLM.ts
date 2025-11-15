@@ -14,12 +14,106 @@ export interface LLMMessage {
   role: "system" | "user" | "assistant" | "tool" | "function";
   content: string | null;
   tool_call_id?: string;
-  tool_calls?: Record<string, any>;
+  tool_calls?: unknown[];
 }
 
 export interface LLMResponse {
   content: string;
   toolCalls?: ToolCall[] | null;
+}
+
+// API Response Types
+export interface OpenAIToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+export interface OpenAIMessage {
+  role: "assistant";
+  content: string | null;
+  tool_calls?: OpenAIToolCall[];
+}
+
+export interface OpenAIChoice {
+  index: number;
+  message: OpenAIMessage;
+  finish_reason: string;
+}
+
+export interface OpenAIResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: OpenAIChoice[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+export interface ClaudeToolUse {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface ClaudeContentItem {
+  type: "text" | "tool_use";
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+}
+
+export interface ClaudeResponse {
+  id: string;
+  type: string;
+  role: string;
+  content: ClaudeContentItem[];
+  model: string;
+  stop_reason: string | null;
+  stop_sequence: string | null;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+  };
+}
+
+export interface GeminiFunctionCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface GeminiPart {
+  text?: string;
+  functionCall?: GeminiFunctionCall;
+}
+
+export interface GeminiContent {
+  role: string;
+  parts: GeminiPart[];
+}
+
+export interface GeminiCandidate {
+  content: GeminiContent;
+  finishReason: string;
+  index: number;
+}
+
+export interface GeminiResponse {
+  candidates: GeminiCandidate[];
+  usageMetadata?: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
 }
 
 export interface LLMProvider {
@@ -45,7 +139,7 @@ export interface LLMProvider {
 
   /**
    * Low-level internal helper: given a response with tool calls,
-   * executes tools and returns the model’s final completion.
+   * executes tools and returns the model's final completion.
    * Normally handled *inside* generateText().
    */
   handleToolCalls?(response: LLMResponse, prompt: string): Promise<string>;

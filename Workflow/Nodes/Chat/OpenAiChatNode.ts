@@ -13,13 +13,14 @@
 
 import type {
   BaseNode,
+  Position,
   ConfigParameterType,
   NodeValue,
   NodeExecutionContext,
   NodeMetadata,
-  Position,
 } from "../../types/types";
 import { NodeRegistry } from "../../NodeRegistry";
+import type { OpenAIResponse } from "../../../Models/LLM";
 
 export interface ChatNode extends BaseNode {
   nodeType: string;
@@ -189,15 +190,15 @@ export function creatOpenAIChatNode(id: number, position: Position): ChatNode {
           throw new Error(`OpenAI API returned status ${res.status}`);
         }
 
-        const json = await res.json();
+        const json = await res.json() as OpenAIResponse;
         console.log(
           `Chat node ${n.id} received response:`,
-          (json as any).choices[0].message.content.substring(0, 50) + "..."
+          json.choices[0]?.message.content?.substring(0, 50) + "..."
         );
 
         return {
-          [n.id * 100 + 3]: (json as any).choices[0].message.content,
-          [n.id * 100 + 4]: (json as any).usage?.total_tokens || 0,
+          [n.id * 100 + 3]: json.choices[0]?.message.content || "",
+          [n.id * 100 + 4]: json.usage?.total_tokens || 0,
         };
       } catch (error) {
         console.error("Error in OpenAI Chat node:", error);

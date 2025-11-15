@@ -12,7 +12,7 @@ export type NodeValue =
 // Define a type for the context used in node processing
 export type NodeExecutionContext = {
   node: NodeType;
-  inputs: Record<string, any>;
+  inputs: Record<string, unknown>;
   ws?: WebSocket;
 };
 

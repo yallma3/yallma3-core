@@ -138,7 +138,7 @@ export function createEmbeddingNode(
               console.log("Processing JSON input as a single string");
             }
           }
-        } catch (parseError) {
+        } catch {
           // If JSON parsing fails, treat as a single string
           chunks = [inputString];
           isSingleString = true;

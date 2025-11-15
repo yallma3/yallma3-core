@@ -29,8 +29,7 @@ export interface TextNode extends BaseNode {
 // Template processing utility function - shared across multiple node types
 const processTextTemplate = async (
   template: string,
-  input: string,
-  nodeId: number
+  input: string
 ): Promise<string> => {
   // Handle {{input}} variable
   const inputRegex = /\{\{input\}\}/g;
@@ -117,13 +116,14 @@ export function register(nodeRegistry: NodeRegistry): void {
         const n = context.node as TextNode;
 
         if (typeof n.nodeValue === "string") {
+          const inputValue = context.inputs[n.id * 100 + 1];
           let input = "";
-          if (typeof context.inputs[n.id * 100 + 1] != "string") {
-            input = JSON.stringify(context.inputs[n.id * 100 + 1], null, 2);
+          if (typeof inputValue !== "string") {
+            input = JSON.stringify(inputValue, null, 2);
           } else {
-            input = context.inputs[n.id * 100 + 1];
+            input = inputValue;
           }
-          return processTextTemplate(n.nodeValue, input, n.id);
+          return processTextTemplate(n.nodeValue, input);
         }
         return n.nodeValue;
       },

@@ -15,8 +15,8 @@ import type {
   NodeMetadata,
   Position,
   ConfigParameterType,
-  NodeValue,
   NodeExecutionContext,
+  NodeValue,
   DataType,
 } from "../types/types";
 import { nodeRegistry } from "../NodeRegistry";
@@ -81,14 +81,14 @@ function createIfElseNode(id: number, position: Position): IfElseNode {
       const strictParam = n.getConfigParameter?.("Strict Mode");
       const strictMode = strictParam?.paramValue ?? false;
 
-      let result: any;
+      let result: unknown;
 
       if (strictMode) {
         // only accept exact booleans
         result = condition === true ? trueValue : falseValue;
       } else {
         // general truthiness
-        const isTruthy = (val: any): boolean => {
+        const isTruthy = (val: unknown): boolean => {
           if (val === undefined || val === null) return false;
           if (typeof val === "boolean") return val;
           if (typeof val === "string") return val.length > 0;
@@ -99,7 +99,7 @@ function createIfElseNode(id: number, position: Position): IfElseNode {
         result = isTruthy(condition) ? trueValue : falseValue;
       }
 
-      n.nodeValue = result;
+      n.nodeValue = result as NodeValue;
 
       return {
         [n.id * 100 + 4]: result,

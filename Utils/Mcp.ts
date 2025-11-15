@@ -12,6 +12,7 @@ export const getTools = async (client: Client) => {
     }));
     return mcpTools;
   } catch (err) {
+    console.error("[MCP] Failed to get tools:", err);
     throw err;
   }
 };
@@ -30,6 +31,7 @@ export const callTool = async (client: Client, toolCall: ToolCall) => {
 
     return response;
   } catch (err) {
+    console.error("[MCP] Failed to call tool:", toolCall.tool, err);
     throw err;
   }
 };
@@ -45,6 +47,7 @@ export const getPrompts = async (client: Client) => {
     }));
     return mcpPrompts;
   } catch (err) {
+    console.error("[MCP] Failed to get prompts:", err);
     throw err;
   }
 };
@@ -61,6 +64,7 @@ export const getPrompt = async (client: Client, getPrompt: string) => {
 
     return mcpPrompt;
   } catch (err) {
+    console.error("[MCP] Failed to get prompt:", getPrompt, err);
     throw err;
   }
 };
@@ -75,6 +79,7 @@ export const getResources = async (client: Client) => {
     }));
     return mcpResources;
   } catch (err) {
+    console.error("[MCP] Failed to get resources:", err);
     throw err;
   }
 };
@@ -90,6 +95,7 @@ export const getResource = async (client: Client, getResource: string) => {
 
     return mcpResource;
   } catch (err) {
+    console.error("[MCP] Failed to get resource:", getResource, err);
     throw err;
   }
 };

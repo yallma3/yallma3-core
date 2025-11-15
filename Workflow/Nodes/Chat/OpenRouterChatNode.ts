@@ -7,13 +7,14 @@
 
 import type {
   BaseNode,
+  Position,
   ConfigParameterType,
   NodeValue,
   NodeExecutionContext,
   NodeMetadata,
-  Position,
 } from "../../types/types";
 import { NodeRegistry } from "../../NodeRegistry";
+import type { OpenAIResponse } from "../../../Models/LLM";
 
 export interface ChatNode extends BaseNode {
   nodeType: string;
@@ -180,12 +181,12 @@ export function createNOpenRouterChatNode(
           throw new Error(`OpenRouter API returned status ${res.status}`);
         }
 
-        const json = await res.json();
-        const content = (json as any)?.choices?.[0]?.message?.content || "";
+        const json = await res.json() as OpenAIResponse;
+        const content = json.choices?.[0]?.message?.content || "";
 
         return {
           [n.id * 100 + 3]: content,
-          [n.id * 100 + 4]: (json as any).usage?.total_tokens || 0,
+          [n.id * 100 + 4]: json.usage?.total_tokens || 0,
         };
       } catch (error) {
         console.error("Error in OpenRouter Chat node:", error);

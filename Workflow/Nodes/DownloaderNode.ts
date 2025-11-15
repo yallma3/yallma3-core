@@ -129,7 +129,7 @@ export function createPDFDownloaderNode(
         } else {
           throw new Error("Not an array");
         }
-      } catch (parseError) {
+      } catch {
         papers = [
           { pdfUrl: urlOrJson, title: "Direct URL", arxivId: "direct" },
         ];
@@ -290,18 +290,18 @@ async function initializeDownloadsDirectory(): Promise<string> {
   }
 }
 
-function generateCleanFilename(paper: any): string {
+function generateCleanFilename(paper: Record<string, unknown>): string {
   let filename = "";
 
   if (paper.arxivId && paper.arxivId !== "direct") {
-    filename = paper.arxivId.replace(/[\/\\:*?"<>|]/g, "_");
+    filename = String(paper.arxivId).replace(/[/\\:*?"<>|]/g, "_");
   } else if (
     paper.title &&
     paper.title !== "Unknown" &&
     paper.title !== "Direct URL"
   ) {
-    filename = paper.title
-      .replace(/[\/\\:*?"<>|]/g, "_")
+    filename = String(paper.title)
+      .replace(/[/\\:*?"<>|]/g, "_")
       .replace(/\s+/g, "_")
       .substring(0, 100);
   } else {
@@ -330,7 +330,7 @@ async function getUniqueFilename(
 async function downloadPDFToDirectory(
   url: string,
   targetDir: string,
-  paper: any,
+  paper: Record<string, unknown>,
   maxSizeMB: number = 50
 ) {
   try {

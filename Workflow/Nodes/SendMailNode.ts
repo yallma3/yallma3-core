@@ -127,14 +127,14 @@ export function createSendMailNode(
         console.log(`Executing SendMail node ${id}`);
 
         // Validate required inputs
-        if (!emailTitle) {
-          throw new Error("Email title is required");
+        if (!emailTitle || typeof emailTitle !== 'string') {
+          throw new Error("Email title is required and must be a string");
         }
-        if (!emailBody) {
-          throw new Error("Email body is required");
+        if (!emailBody || typeof emailBody !== 'string') {
+          throw new Error("Email body is required and must be a string");
         }
-        if (!toEmail) {
-          throw new Error("Recipient email address is required");
+        if (!toEmail || typeof toEmail !== 'string') {
+          throw new Error("Recipient email address is required and must be a string");
         }
 
         // Get configuration parameters
@@ -232,8 +232,24 @@ export function createSendMailNode(
   };
 }
 
+interface EmailConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  auth: { user: string; pass: string };
+  tls?: { rejectUnauthorized: boolean };
+}
+
+interface EmailMessage {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}
+
 // Real email sending function using nodemailer
-async function sendEmail(config: any, message: any) {
+async function sendEmail(config: EmailConfig, message: EmailMessage) {
   const transporter: Transporter = nodemailer.createTransport({
     host: config.host,
     port: config.port,

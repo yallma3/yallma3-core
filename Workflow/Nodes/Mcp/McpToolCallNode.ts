@@ -217,7 +217,7 @@ export function createNMcpToolCallNode(
             try {
               console.log(input);
               inputRecord = JSON.parse(input);
-            } catch (e) {
+            } catch {
               throw new Error(
                 'Input must be a valid JSON string representing an object, e.g. \'{"param1": "value1"}\''
               );

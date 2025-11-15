@@ -106,7 +106,7 @@ export function createDelayNode(id: number, position: Position): DelayNode {
       );
     },
 
-    setConfigParameter(parameterName: string, value: any): void {
+    setConfigParameter(parameterName: string, value: string | number | boolean | undefined): void {
       const parameter = (this.configParameters ?? []).find(
         (param: ConfigParameterType) => param.parameterName === parameterName
       );

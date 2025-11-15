@@ -1,5 +1,5 @@
 import type { LLMOption } from "./LLM";
-import type { LLMSpecTool, Tool } from "./Tool";
+import type { Tool } from "./Tool";
 
 // Interfaces for workspace data structure
 export interface Agent {

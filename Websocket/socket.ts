@@ -51,7 +51,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
             handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
             break;
-          case "run_workflow":
+          case "run_workflow": {
             consoleMessage = {
               id: crypto.randomUUID(),
               timestamp: Date.now(),
@@ -81,6 +81,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             // console.log("Workflow  result:", result);
 
             break;
+          }
           case "workflow_json":
             // console.log(data.data);
             break;

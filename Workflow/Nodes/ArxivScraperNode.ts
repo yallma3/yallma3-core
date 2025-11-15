@@ -111,7 +111,7 @@ export function createArxivScraperNode(
 
       // Local XML parser (regex-based, no DOMParser)
       function parseArxivXML(xmlText: string) {
-        const papers: any[] = [];
+        const papers: { arxivId: string; version: number; title: string; pdfUrl: string; submittedDate: string; abstract: string }[] = [];
         const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
         let match;
 
@@ -133,7 +133,7 @@ export function createArxivScraperNode(
           const pdfMatch = entry?.match(
             /<link[^>]+title="pdf"[^>]+href="([^"]+)"/i
           );
-          const pdfUrl = pdfMatch ? pdfMatch[1] : "";
+          const pdfUrl = pdfMatch?.[1] ?? "";
 
           // Format date
           let submittedDate = "";
@@ -143,7 +143,7 @@ export function createArxivScraperNode(
           }
 
           if (id && title) {
-            const cleanArxivId = id.split("/").pop()?.split("v")[0] || id;
+            const cleanArxivId = id.split("/").pop()?.split("v")[0] ?? id;
             papers.push({
               arxivId: cleanArxivId,
               version: 1,
@@ -242,8 +242,7 @@ export function createArxivScraperNode(
 }
 
 export function register(
-  nodeRegistry: NodeRegistry,
-  category: string = "Tools"
+  nodeRegistry: NodeRegistry
 ): void {
   nodeRegistry.registerNodeType(
     "ArxivScraper",

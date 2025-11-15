@@ -3,12 +3,19 @@ import type { Tool } from "../../Models/Tool";
 import { McpHttpClient } from "../../Utils/McpHttpClient";
 import { McpSTDIOClient } from "../../Utils/McpStdioClient";
 
+interface McpConfig {
+  type?: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+}
+
 // Store active MCP clients for tool execution
 const mcpClients = new Map<string, McpSTDIOClient | McpHttpClient>();
 
 export const connectToMcpTools = async (mcpTool: Tool) => {
   try {
-    const mcpConfig = mcpTool.parameters;
+    const mcpConfig = mcpTool.parameters as McpConfig;
 
     let tools: unknown = [];
     let client: McpSTDIOClient | McpHttpClient;
@@ -20,7 +27,7 @@ export const connectToMcpTools = async (mcpTool: Tool) => {
     if (connectionType === "STDIO") {
       console.log("STDIO");
       const serverConfig: ServerConfig = {
-        command: mcpConfig.command,
+        command: mcpConfig.command as string,
         args: mcpConfig.args,
       };
       client = new McpSTDIOClient(serverConfig);
@@ -28,7 +35,7 @@ export const connectToMcpTools = async (mcpTool: Tool) => {
       tools = await client.listTools();
     } else if (connectionType === "HTTP") {
       console.log("HTTP");
-      const serverUrl = mcpConfig.url;
+      const serverUrl = mcpConfig.url as string;
       client = new McpHttpClient(serverUrl);
       await client.init();
       tools = await client.listTools();
@@ -47,15 +54,15 @@ export const connectToMcpTools = async (mcpTool: Tool) => {
 };
 
 export const connectToMultipleMcpServers = async (mcpTools: Tool[]) => {
-  const allMcpTools: any[] = [];
+  const allMcpTools: unknown[] = [];
 
   for (const mcpTool of mcpTools) {
     try {
       const tools = await connectToMcpTools(mcpTool);
       if (tools && Array.isArray(tools)) {
         // Add server info to each tool for execution routing
-        const toolsWithServer = tools.map((tool: any) => ({
-          ...tool,
+        const toolsWithServer = tools.map((tool: unknown) => ({
+          ...(tool as Record<string, unknown>),
           serverName: mcpTool.name,
           serverId: mcpTool.id || mcpTool.name,
         }));
@@ -72,7 +79,7 @@ export const connectToMultipleMcpServers = async (mcpTools: Tool[]) => {
 export const executeMcpTool = async (
   serverName: string,
   toolName: string,
-  args: Record<string, any>
+  args: Record<string, unknown>
 ) => {
   console.log("CALLING MCP TOOL", toolName);
   try {
@@ -113,37 +120,40 @@ export const closeMcpConnections = async () => {
   mcpClients.clear();
 };
 
-export function normalizeTool(tool: any) {
-  function cleanSchema(schema: any): any {
+export function normalizeTool(tool: unknown) {
+  const t = tool as Record<string, unknown>;
+  function cleanSchema(schema: unknown): unknown {
     if (Array.isArray(schema)) return schema.slice(); // ✅ preserve arrays
     if (typeof schema !== "object" || schema === null) return schema;
 
+    const s = schema as Record<string, unknown>;
     const allowedKeys = ["type", "properties", "required", "items"];
-    const result: any = {};
+    const result: Record<string, unknown> = {};
 
     for (const key of allowedKeys) {
-      if (key in schema) {
+      if (key in s) {
         if (key === "properties") {
           result.properties = {};
-          for (const [prop, value] of Object.entries(schema.properties)) {
-            result.properties[prop] = cleanSchema(value);
+          const props = s.properties as Record<string, unknown>;
+          for (const [prop, value] of Object.entries(props)) {
+            (result.properties as Record<string, unknown>)[prop] = cleanSchema(value);
           }
         } else {
-          result[key] = cleanSchema(schema[key]);
+          result[key] = cleanSchema(s[key]);
         }
       }
     }
 
-    if (schema.type && typeof schema.type === "string") {
-      result.type = schema.type;
+    if (s.type && typeof s.type === "string") {
+      result.type = s.type;
     }
 
     return result;
   }
 
   return {
-    name: tool.name,
-    description: tool.description,
-    inputSchema: cleanSchema(tool.inputSchema || {}),
+    name: t.name,
+    description: t.description,
+    inputSchema: cleanSchema(t.inputSchema || {}),
   };
 }

@@ -1,6 +1,6 @@
 export interface ToolCall {
   tool: string;
-  input: Record<string, any>;
+  input: Record<string, unknown>;
 }
 
 export interface ServerConfig {

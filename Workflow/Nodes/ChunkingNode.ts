@@ -182,7 +182,7 @@ export function createChunkingNode(
         (param) => param.parameterName === parameterName
       );
     },
-    setConfigParameter(parameterName: string, value: any): void {
+    setConfigParameter(parameterName: string, value: string | number | boolean | undefined): void {
       const parameter = (this.configParameters ?? []).find(
         (param) => param.parameterName === parameterName
       );
