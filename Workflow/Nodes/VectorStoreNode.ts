@@ -242,7 +242,7 @@ export function register(nodeRegistry: NodeRegistry): void {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "api-key": apiKey,
+              "Api-Key": apiKey,
             },
             body: JSON.stringify({
               vectors: [

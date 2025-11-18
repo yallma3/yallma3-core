@@ -49,8 +49,8 @@ export async function interpretExecutionGraph(
           "executorId": "string or null",
         },
         "context": {
-          "inputs": ["id1", "id2], // ids of tasks that their input is needed to complete task
-          "external": "websearch"  // any external tool needed to be called to get some context to help in the task INCLUDE ONLY IF NECCESSARY
+          "inputs": ["id1", "id2"], // ids of tasks that their input is needed to complete task
+          "external": "websearch"   // any external tool needed to be called to get some context to help in the task INCLUDE ONLY IF NECCESSARY
         },
         "classification": "simple | one_tool_call | complex",
         "formatForNext": "string (optional)", // if some formatting is needed for the next task that it feeds into
@@ -64,9 +64,14 @@ export async function interpretExecutionGraph(
   ${JSON.stringify(graph, null, 2)}
   `;
 
-  const response = await runLLM(llm, prompt);
-
-  return JSON.parse(response) as InterpretationResult;
+  const response = (await runLLM(llm, prompt)).trim();
+  try {
+    return JSON.parse(response) as InterpretationResult;
+  } catch {
+    const match = response.match(/(\{[\s\S]*\})/);
+    if (match) return JSON.parse(match[1] ?? "") as InterpretationResult;
+    throw new Error("Failed to parse InterpretationResult: " + response);
+  }
 }
 
 export async function analyzeTaskCore(

@@ -43,7 +43,7 @@ export const executeFlowRuntime = async (
           // gather inputs for this node
           const inputs: Record<number, unknown> = {};
 
-          // Add context to WoflowInput Node
+          // Add context to WorkflowInput Node
           if (node.nodeType == "WorkflowInput") {
             inputs[0] = context;
           }

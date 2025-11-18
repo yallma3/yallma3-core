@@ -37,15 +37,40 @@ export class OpenAIProvider implements LLMProvider {
     const toolMessages: LLMMessage[] = [];
 
     for (const call of toolCalls) {
-      const tool = this.tools.find((t) => t.name == call.name);
-      if (!tool?.executor) continue;
-      const result = await tool.executor(call.input);
+      const tool = this.tools.find((t) => t.name === call.name);
+      if (!tool?.executor) {
+        console.warn(`Tool ${call.name} not found or has no executor`);
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: `Tool ${call.name} not found` }),
+        });
+        continue;
+      }
 
-      toolMessages.push({
-        role: "tool",
-        tool_call_id: call.id,
-        content: JSON.stringify(result),
-      });
+      try {
+        // Add timeout protection
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Tool execution timeout")), 30000)
+        );
+        const result = await Promise.race([
+          tool.executor(call.input),
+          timeoutPromise,
+        ]);
+
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+      } catch (error) {
+        console.error(`Tool ${call.name} execution failed:`, error);
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: String(error) }),
+        });
+      }
     }
 
     return toolMessages;
@@ -178,7 +203,7 @@ export class GroqProvider implements LLMProvider {
     const toolMessages: LLMMessage[] = [];
 
     for (const call of toolCalls) {
-      const tool = this.tools.find((t) => t.name == call.name);
+      const tool = this.tools.find((t) => t.name === call.name);
       if (!tool?.executor) continue;
       const result = await tool.executor(call.input);
 
@@ -322,7 +347,7 @@ export class OpenRouterProvider implements LLMProvider {
     const toolMessages: LLMMessage[] = [];
 
     for (const call of toolCalls) {
-      const tool = this.tools.find((t) => t.name == call.name);
+      const tool = this.tools.find((t) => t.name === call.name);
       if (!tool?.executor) continue;
       const result = await tool.executor(call.input);
 
@@ -462,7 +487,7 @@ export class GeminiProvider implements LLMProvider {
     const toolResults: Record<string, unknown>[] = [];
 
     for (const call of toolCalls) {
-      const tool = this.tools.find((t) => t.name == call.name);
+      const tool = this.tools.find((t) => t.name === call.name);
       if (!tool?.executor) continue;
       const result = await tool.executor(call.input);
 
@@ -623,7 +648,7 @@ export class ClaudeProvider implements LLMProvider {
     const toolMessages: LLMMessage[] = [];
 
     for (const call of toolCalls) {
-      const tool = this.tools.find((t) => t.name == call.name);
+      const tool = this.tools.find((t) => t.name === call.name);
       if (!tool?.executor) continue;
       const result = await tool.executor(call.input);
 
