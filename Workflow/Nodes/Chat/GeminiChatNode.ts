@@ -27,10 +27,11 @@ export interface ChatNode extends BaseNode {
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "Gemini Chat",
   nodeType: "GeminiChat",
   nodeValue: "gemini-2.5-flash",
+  description: "Integrates with the Google Gemini API for advanced chat completions. This node sends a user prompt and an optional system prompt to a selected Gemini model, returning the generated response and total token usage.",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
     { title: "System Prompt", type: "input", dataType: "string" },
@@ -66,6 +67,20 @@ const metadata: NodeMetadata = {
           label: "Claude 3.5 Sonnet",
         },
       ],
+      i18n: {
+        en: {
+          "Model": {
+            Name: "Model",
+            Description: "Model name to use for the chat node",
+          },
+        },
+        ar: {
+          "Model": {
+            Name: "النموذج",
+            Description: "اسم النموذج المراد استخدامه لعقدة المحادثة",
+          },
+        },
+      },
     },
     {
       parameterName: "API Key",
@@ -73,10 +88,38 @@ const metadata: NodeMetadata = {
       defaultValue: "",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "API Key for the Claude service",
+      description: "API Key for the Gemini service",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "API Key": {
+            Name: "API Key",
+            Description: "API Key for the Gemini service",
+          },
+        },
+        ar: {
+          "API Key": {
+            Name: "مفتاح API",
+            Description: "مفتاح API لخدمة Gemini",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "AI",
+      title: "Gemini Chat",
+      nodeType: "Gemini Chat",
+      description: "Integrates with the Google Gemini API for advanced chat completions. This node sends a user prompt and an optional system prompt to a selected Gemini model, returning the generated response and total token usage.",
+    },
+    ar: {
+      category: "ذكاء اصطناعي",
+      title: "محادثة Gemini",
+      nodeType: "محادثة Gemini",
+      description: "يتكامل مع Google Gemini API لإتمام المحادثات المتقدمة. ترسل هذه العقدة طلب المستخدم وطلب نظام اختياري إلى نموذج Gemini محدد، مُعيدةً الاستجابة المُولدة وإجمالي استخدام الرموز.",
+    },
+  },
 };
 
 export function createNGeminiChatNode(

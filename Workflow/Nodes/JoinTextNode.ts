@@ -32,6 +32,7 @@ export function register(nodeRegistry: NodeRegistry): void {
     category: "Text",
     title: "Join",
     nodeType: "Join",
+    description: "Combines two text inputs into a single string, using a configurable separator. Special characters like newlines are supported.",
     nodeValue: " ",
     sockets: [
       { title: "Input 1", type: "input", dataType: "unknown" },
@@ -65,6 +66,20 @@ export function register(nodeRegistry: NodeRegistry): void {
         },
       },
     ],
+    i18n: {
+      en: {
+        category: "Text",
+        title: "Join",
+        nodeType: "Join",
+        description: "Combines two text inputs into a single string, using a configurable separator. Special characters like newlines are supported.",
+      },
+      ar: {
+        category: "نص",
+        title: "دمج",
+        nodeType: "دمج",
+        description: "يدمج إدخالين نصيين في سلسلة واحدة باستخدام فاصل قابل للتكوين. يدعم الأحرف الخاصة مثل السطر الجديد.",
+      },
+    },
   };
 
   function createJoinNode(id: number, position: Position): JoinNode {
@@ -113,7 +128,7 @@ export function register(nodeRegistry: NodeRegistry): void {
           .replace(/\(new line\)/g, "\n") // Replace (new line) with actual newline
           .replace(/\\n/g, "\n"); // Also support \n for newlines
 
-        // Count input sockets to determine how many inputs to process
+          // Count input sockets to determine how many inputs to process
         // const inputSockets = n.sockets.filter((s) => s.type === "input");
 
         // Collect all input values
@@ -126,7 +141,7 @@ export function register(nodeRegistry: NodeRegistry): void {
         const result = Object.values(context.inputs)
           .filter((val) => typeof val === "string" && val !== "")
           .join(separator);
-
+          
         // Join all non-empty values with the separator
         return result;
       },

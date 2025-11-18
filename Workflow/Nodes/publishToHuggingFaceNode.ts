@@ -52,10 +52,11 @@ export interface HuggingFacePublisherNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Generation",
+  category: "Tools",
   title: "HuggingFace Publisher",
   nodeType: "HuggingFacePublisher",
-  nodeValue: null,
+  description: "Publishes a generated dataset to the Hugging Face Hub. This node automates repository creation, dataset and README file uploads, and provides the final URL and publication metadata as output.",
+  nodeValue: "",
   sockets: [
     { title: "Dataset", type: "input", dataType: "json" },
     { title: "Statistics", type: "input", dataType: "json" },
@@ -72,9 +73,22 @@ const metadata: NodeMetadata = {
       defaultValue: "",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description:
-        "HuggingFace write access token (get from hf.co/settings/tokens)",
+      description: "HuggingFace write access token (get from hf.co/settings/tokens)",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "HuggingFace Token": {
+            Name: "HuggingFace Token",
+            Description: "HuggingFace write access token (get from hf.co/settings/tokens)",
+          },
+        },
+        ar: {
+          "HuggingFace Token": {
+            Name: "رمز HuggingFace",
+            Description: "رمز الوصول بصلاحيات الكتابة لـ HuggingFace (احصل عليه من hf.co/settings/tokens)",
+          },
+        },
+      },
     },
     {
       parameterName: "Repository Name",
@@ -84,6 +98,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Dataset repository name (e.g., username/dataset-name)",
       isNodeBodyContent: true,
+      i18n: {
+        en: {
+          "Repository Name": {
+            Name: "Repository Name",
+            Description: "Dataset repository name (e.g., username/dataset-name)",
+          },
+        },
+        ar: {
+          "Repository Name": {
+            Name: "اسم المستودع",
+            Description: "اسم مستودع مجموعة البيانات (مثال: اسم المستخدم/اسم-مجموعة-البيانات)",
+          },
+        },
+      },
     },
     {
       parameterName: "Dataset Description",
@@ -93,6 +121,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Description of the dataset",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Dataset Description": {
+            Name: "Dataset Description",
+            Description: "Description of the dataset",
+          },
+        },
+        ar: {
+          "Dataset Description": {
+            Name: "وصف مجموعة البيانات",
+            Description: "وصف مجموعة البيانات",
+          },
+        },
+      },
     },
     {
       parameterName: "Private Dataset",
@@ -102,6 +144,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Make dataset private (requires Pro subscription)",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Private Dataset": {
+            Name: "Private Dataset",
+            Description: "Make dataset private (requires Pro subscription)",
+          },
+        },
+        ar: {
+          "Private Dataset": {
+            Name: "مجموعة بيانات خاصة",
+            Description: "اجعل مجموعة البيانات خاصة (يتطلب اشتراك Pro)",
+          },
+        },
+      },
     },
     {
       parameterName: "Auto Generate README",
@@ -111,8 +167,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Automatically generate README with dataset information",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Auto Generate README": {
+            Name: "Auto Generate README",
+            Description: "Automatically generate README with dataset information",
+          },
+        },
+        ar: {
+          "Auto Generate README": {
+            Name: "توليد README تلقائياً",
+            Description: "إنشاء README تلقائياً مع معلومات مجموعة البيانات",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Tools",
+      title: "HuggingFace Publisher",
+      nodeType: "HuggingFace Publisher",
+      description: "Publishes a generated dataset to the Hugging Face Hub. This node automates repository creation, dataset and README file uploads, and provides the final URL and publication metadata as output.",
+    },
+    ar: {
+      category: "أدوات",
+      title: "ناشر HuggingFace",
+      nodeType: "ناشر HuggingFace",
+      description: "ينشر مجموعة بيانات مُنشأة على Hugging Face Hub. تقوم هذه العقدة بأتمتة إنشاء المستودع وتحميل ملفات مجموعة البيانات و README، وتوفير عنوان URL النهائي وبيانات وصفية للنشر كمخرجات.",
+    },
+  },
 };
 
 function getStringConfig(param: ConfigParameterType | undefined): string {
@@ -371,82 +455,82 @@ function generateReadme(
     : "No data fields available";
 
   return `---
-  language:
-  - ${metadata.iso_language}
-  task_categories:
-  - question-answering
-  - text-classification
-  size_categories:
-  - ${
-    metadata.total_rows < 1000
-      ? "n<1K"
-      : metadata.total_rows < 10000
-      ? "1K<n<10K"
-      : "10K<n<100K"
-  }
-  tags:
-  - synthetic
-  - ${metadata.domain_type}
-  - generated
-  ---
-  
-  # ${repoName.split("/")[1]}
-  
-  ## Dataset Description
-  
-  This is a synthetic dataset generated using the yaLLMa3 pipeline for ${
+language:
+- ${metadata.iso_language}
+task_categories:
+- question-answering
+- text-classification
+size_categories:
+- ${
+  metadata.total_rows < 1000
+    ? "n<1K"
+    : metadata.total_rows < 10000
+    ? "1K<n<10K"
+    : "10K<n<100K"
+}
+tags:
+- synthetic
+- ${metadata.domain_type}
+- generated
+---
+
+# ${repoName.split("/")[1]}
+
+## Dataset Description
+
+This is a synthetic dataset generated using the yaLLMa3 pipeline for ${
     metadata.data_type
   } tasks in ${metadata.language}.
-  
-  ### Dataset Summary
-  
-  - **Domain**: ${metadata.domain_type}
-  - **Data Type**: ${metadata.data_type}
-  - **Language**: ${metadata.language} (${metadata.iso_language})
-  - **Total Rows**: ${metadata.total_rows}
-  - **Generated**: ${new Date(metadata.generation_date).toLocaleDateString()}
-  
-  ${
-    statistics
-      ? `
-  ### Generation Statistics
-  
-  - **Topics Processed**: ${statistics.topics_processed}
-  - **Success Rate**: ${statistics.success_rate}%
-  - **Generation Time**: ${statistics.generation_time_seconds.toFixed(2)}s
-  - **Rows Per Topic**: ${statistics.rows_per_topic}
-  `
-      : ""
-  }
-  
-  ## Dataset Structure
-  
-  ### Data Fields
-  
-  ${dataFields}
-  
-  ### Data Samples
-  
-  \`\`\`json
-  ${JSON.stringify(sampleData, null, 2)}
-  \`\`\`
-  
-  ## Usage
-  
-  \`\`\`python
-  from datasets import load_dataset
-  
-  dataset = load_dataset("${repoName}")
-  \`\`\`
-  
-  ## Citation
-  
-  This dataset was generated using yaLLMa3 synthetic data generation pipeline.
-  
-  ## License
-  
-  Please check the repository settings for license information.
-  `;
+
+### Dataset Summary
+
+- **Domain**: ${metadata.domain_type}
+- **Data Type**: ${metadata.data_type}
+- **Language**: ${metadata.language} (${metadata.iso_language})
+- **Total Rows**: ${metadata.total_rows}
+- **Generated**: ${new Date(metadata.generation_date).toLocaleDateString()}
+
+${
+  statistics
+    ? `
+### Generation Statistics
+
+- **Topics Processed**: ${statistics.topics_processed}
+- **Success Rate**: ${statistics.success_rate}%
+- **Generation Time**: ${statistics.generation_time_seconds.toFixed(2)}s
+- **Rows Per Topic**: ${statistics.rows_per_topic}
+`
+    : ""
+}
+
+## Dataset Structure
+
+### Data Fields
+
+${dataFields}
+
+### Data Samples
+
+\`\`\`json
+${JSON.stringify(sampleData, null, 2)}
+\`\`\`
+
+## Usage
+
+\`\`\`python
+from datasets import load_dataset
+
+dataset = load_dataset("${repoName}")
+\`\`\`
+
+## Citation
+
+This dataset was generated using yaLLMa3 synthetic data generation pipeline.
+
+## License
+
+Please check the repository settings for license information.
+`;
 }
 
 async function uploadDatasetFiles(

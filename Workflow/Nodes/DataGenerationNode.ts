@@ -73,10 +73,11 @@ export interface DataGenerationNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Generation",
+  category: "Data",
   title: "Data Generation",
   nodeType: "DataGeneration",
-  nodeValue: null,
+  description: "Leverages the Google Gemini API to generate synthetic datasets from topics. It supports sequential processing with configurable options like the model and rows per topic, outputting the dataset and generation statistics.",
+  nodeValue: "",
   sockets: [
     { title: "Extracted Topics", type: "input", dataType: "json" },
     { title: "Query Metadata", type: "input", dataType: "json" },
@@ -95,6 +96,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Google Gemini API key for synthetic data generation",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Gemini API Key": {
+            Name: "Gemini API Key",
+            Description: "Google Gemini API key for synthetic data generation",
+          },
+        },
+        ar: {
+          "Gemini API Key": {
+            Name: "مفتاح Google Gemini API",
+            Description: "مفتاح Google Gemini API لتوليد البيانات الاصطناعية",
+          },
+        },
+      },
     },
     {
       parameterName: "Gemini Model",
@@ -109,15 +124,20 @@ const metadata: NodeMetadata = {
         { key: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
         { key: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
       ],
-    },
-    {
-      parameterName: "Parallel Agents",
-      parameterType: "number",
-      defaultValue: 3,
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description: "Number of concurrent generation agents (1-5)",
-      isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Gemini Model": {
+            Name: "Gemini Model",
+            Description: "Gemini model for data generation",
+          },
+        },
+        ar: {
+          "Gemini Model": {
+            Name: "نموذج Gemini",
+            Description: "نموذج Gemini لتوليد البيانات",
+          },
+        },
+      },
     },
     {
       parameterName: "Rows Per Topic",
@@ -127,6 +147,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Data points generated per topic",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Rows Per Topic": {
+            Name: "Rows Per Topic",
+            Description: "Data points generated per topic",
+          },
+        },
+        ar: {
+          "Rows Per Topic": {
+            Name: "الصفوف لكل موضوع",
+            Description: "نقاط البيانات المُولدة لكل موضوع",
+          },
+        },
+      },
     },
     {
       parameterName: "Rate Limit Delay (seconds)",
@@ -136,8 +170,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Delay between API requests (free tier: 3s for 5 RPM)",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Rate Limit Delay (seconds)": {
+            Name: "Rate Limit Delay (seconds)",
+            Description: "Delay between API requests (free tier: 3s for 5 RPM)",
+          },
+        },
+        ar: {
+          "Rate Limit Delay (seconds)": {
+            Name: "تأخير حد المعدل (ثانية)",
+            Description: "التأخير بين طلبات API (المستوى المجاني: 3 ثانية لـ 5 RPM)",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Data",
+      title: "Data Generation",
+      nodeType: "Data Generation",
+      description: "Leverages the Google Gemini API to generate synthetic datasets from topics. It supports sequential processing with configurable options like the model and rows per topic, outputting the dataset and generation statistics.",
+    },
+    ar: {
+      category: "بيانات",
+      title: "توليد البيانات",
+      nodeType: "توليد البيانات",
+      description: "يستفيد من Google Gemini API لتوليد مجموعات بيانات اصطناعية من الموضوعات. يدعم المعالجة المتسلسلة مع خيارات قابلة للتكوين مثل النموذج وعدد الصفوف لكل موضوع، مع إخراج مجموعة البيانات وإحصائيات التوليد.",
+    },
+  },
 };
 
 function getStringConfig(param: ConfigParameterType | undefined): string {
@@ -228,13 +290,6 @@ export function createDataGenerationNode(
             )
           ) || "gemini-2.5-flash";
 
-        const parallelAgents =
-          getNumberConfig(
-            context.node.configParameters?.find(
-              (p) => p.parameterName === "Parallel Agents"
-            )
-          ) || 3;
-
         const rowsPerTopic =
           getNumberConfig(
             context.node.configParameters?.find(
@@ -250,69 +305,82 @@ export function createDataGenerationNode(
           ) || 3;
 
         console.log(
-          `[Data Generation Node ${id}] Config: Model=${geminiModel}, ParallelAgents=${parallelAgents}, RowsPerTopic=${rowsPerTopic}`
+          `[Data Generation Node ${id}] Config: Model=${geminiModel}, RowsPerTopic=${rowsPerTopic}, RateLimitDelay=${rateLimitDelay}s`
         );
 
         console.log(
-          `[Data Generation Node ${id}] Distributing ${topics.length} topics across ${parallelAgents} agents...`
+          `[Data Generation Node ${id}] Starting sequential data generation for ${topics.length} topics...`
         );
-
-        const topicBatches: string[][] = [];
-        for (let i = 0; i < parallelAgents; i++) {
-          topicBatches.push([]);
-        }
-        topics.forEach((topic, index) => {
-          topicBatches[index % parallelAgents]?.push(topic);
-        });
-        console.log(
-          `[Data Generation Node ${id}] Agent distribution:`,
-          topicBatches.map(
-            (batch, i) => `Agent ${i + 1}: ${batch.length} topics`
-          )
-        );
-        console.log(
-          `[Data Generation Node ${id}] Starting parallel data generation...`
-        );
-
-        const generationPromises = topicBatches.map((batch, agentIndex) =>
-          generateDataForTopics(
-            batch,
-            agentIndex + 1,
-            queryMetadata.parsed_query.data_type,
-            queryMetadata.parsed_query.language,
-            queryMetadata.parsed_query.description,
-            rowsPerTopic,
-            geminiApiKey,
-            geminiModel,
-            rateLimitDelay
-          )
-        );
-
-        const agentResults = await Promise.allSettled(generationPromises);
 
         const allData: SyntheticDataPoint[] = [];
-        let successfulTopics = 0;
-        let failedTopics = 0;
+        let successful = 0;
+        let failed = 0;
 
-        for (let i = 0; i < agentResults.length; i++) {
-          const result = agentResults[i];
+        for (let i = 0; i < topics.length; i++) {
+          const topic = topics[i];
 
-          if (!result) {
-            failedTopics += topicBatches[i]?.length || 0;
+          if (!topic || typeof topic !== "string") {
+            console.warn(
+              `[Data Generation Node ${id}] Skipping invalid topic at index ${i}`
+            );
+            failed++;
             continue;
           }
-          if (result.status === "fulfilled") {
-            if (result.value) {
-              allData.push(...result.value.data);
-              successfulTopics += result.value.successful;
-              failedTopics += result.value.failed;
-            }
-          } else {
-            console.warn(
-              `[Data Generation Node ${id}] Agent ${i + 1} failed:`,
-              result.reason
+
+          try {
+            console.log(
+              `[Data Generation Node ${id}] Generating data (${i + 1}/${
+                topics.length
+              }): "${topic}"`
             );
-            failedTopics += topicBatches[i]?.length || 0;
+
+            const generatedItems = await generateSyntheticData(
+              topic,
+              queryMetadata.parsed_query.data_type,
+              queryMetadata.parsed_query.language,
+              queryMetadata.parsed_query.description,
+              rowsPerTopic,
+              geminiApiKey,
+              geminiModel
+            );
+
+            if (generatedItems && generatedItems.length > 0) {
+              allData.push(...generatedItems);
+              successful++;
+              console.log(
+                `[Data Generation Node ${id}] ✓ Generated ${generatedItems.length} items for "${topic}"`
+              );
+            } else {
+              failed++;
+              console.warn(
+                `[Data Generation Node ${id}] ✗ No data generated for "${topic}"`
+              );
+            }
+
+            if (i < topics.length - 1) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, rateLimitDelay * 1000)
+              );
+            }
+          } catch (error) {
+            failed++;
+            console.error(
+              `[Data Generation Node ${id}] ✗ Error generating data for "${topic}":`,
+              error
+            );
+
+            const errorMessage =
+              error instanceof Error ? error.message.toLowerCase() : "";
+            if (
+              errorMessage.includes("quota") ||
+              errorMessage.includes("rate limit") ||
+              errorMessage.includes("exhausted")
+            ) {
+              console.error(
+                `[Data Generation Node ${id}] 🛑 API quota exhausted. Stopping generation.`
+              );
+              break;
+            }
           }
         }
 
@@ -322,20 +390,20 @@ export function createDataGenerationNode(
           `[Data Generation Node ${id}] ✅ Generation completed in ${executionTime}s`
         );
         console.log(
-          `[Data Generation Node ${id}] Generated ${allData.length} data points from ${successfulTopics} topics`
+          `[Data Generation Node ${id}] Generated ${allData.length} data points from ${successful} topics`
         );
+
         const statistics = {
           total_generated: allData.length,
           requested_count: queryMetadata.parsed_query.sample_count,
-          topics_processed: successfulTopics,
-          topics_failed: failedTopics,
+          topics_processed: successful,
+          topics_failed: failed,
           success_rate:
             topics.length > 0
-              ? ((successfulTopics / topics.length) * 100).toFixed(1)
+              ? ((successful / topics.length) * 100).toFixed(1)
               : "0.0",
           generation_time_seconds: parseFloat(executionTime),
           rows_per_topic: rowsPerTopic,
-          parallel_agents: parallelAgents,
         };
 
         const datasetOutput = {
@@ -354,7 +422,7 @@ export function createDataGenerationNode(
           [id * 100 + 3]: JSON.stringify(datasetOutput, null, 2),
           [id * 100 + 4]: JSON.stringify(statistics, null, 2),
           [id * 100 +
-          5]: `Success: Generated ${allData.length} data points from ${successfulTopics}/${topics.length} topics (${statistics.success_rate}% success rate) in ${executionTime}s`,
+          5]: `Success: Generated ${allData.length} data points from ${successful}/${topics.length} topics (${statistics.success_rate}% success rate) in ${executionTime}s`,
         };
       } catch (error) {
         console.error(`[Data Generation Node ${id}] ❌ Error:`, error);
@@ -407,100 +475,6 @@ export function createDataGenerationNode(
       }
     },
   };
-}
-
-async function generateDataForTopics(
-  topics: string[],
-  agentIndex: number,
-  dataType: string,
-  language: string,
-  description: string | undefined,
-  rowsPerTopic: number,
-  apiKey: string,
-  model: string,
-  rateLimitDelay: number
-): Promise<{ data: SyntheticDataPoint[]; successful: number; failed: number }> {
-  console.log(
-    `  [Agent ${agentIndex}] Starting generation for ${topics.length} topics`
-  );
-
-  const allData: SyntheticDataPoint[] = [];
-  let successful = 0;
-  let failed = 0;
-
-  for (let i = 0; i < topics.length; i++) {
-    const topic = topics[i];
-
-    if (!topic || typeof topic !== "string") {
-      console.warn(
-        `  [Agent ${agentIndex}] Skipping invalid topic at index ${i}`
-      );
-      failed++;
-      continue;
-    }
-
-    try {
-      console.log(
-        `  [Agent ${agentIndex}] Generating data (${i + 1}/${
-          topics.length
-        }): "${topic}"`
-      );
-
-      const generatedItems = await generateSyntheticData(
-        topic,
-        dataType,
-        language,
-        description,
-        rowsPerTopic,
-        apiKey,
-        model
-      );
-
-      if (generatedItems && generatedItems.length > 0) {
-        allData.push(...generatedItems);
-        successful++;
-        console.log(
-          `  [Agent ${agentIndex}] ✓ Generated ${generatedItems.length} items for "${topic}"`
-        );
-      } else {
-        failed++;
-        console.warn(
-          `  [Agent ${agentIndex}] ✗ No data generated for "${topic}"`
-        );
-      }
-
-      if (i < topics.length - 1) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, rateLimitDelay * 1000)
-        );
-      }
-    } catch (error) {
-      failed++;
-      console.error(
-        `  [Agent ${agentIndex}] ✗ Error generating data for "${topic}":`,
-        error
-      );
-
-      const errorMessage =
-        error instanceof Error ? error.message.toLowerCase() : "";
-      if (
-        errorMessage.includes("quota") ||
-        errorMessage.includes("rate limit") ||
-        errorMessage.includes("exhausted")
-      ) {
-        console.error(
-          `  [Agent ${agentIndex}] 🛑 API quota exhausted. Stopping generation.`
-        );
-        break;
-      }
-    }
-  }
-
-  console.log(
-    `  [Agent ${agentIndex}] Finished: ${successful} successful, ${failed} failed, ${allData.length} total data points`
-  );
-
-  return { data: allData, successful, failed };
 }
 
 async function generateSyntheticData(
@@ -579,7 +553,6 @@ ${descriptionPrompt}
     const data = (await response.json()) as GeminiResponse;
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    // Extract JSON array from response
     const jsonStart = generatedText.indexOf("[");
     if (jsonStart === -1) {
       console.warn("No JSON array found in Gemini response");

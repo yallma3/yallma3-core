@@ -28,9 +28,10 @@ export interface ChatNode extends BaseNode {
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "OpenAI Chat",
   nodeType: "OpenAIChat",
+  description: "Integrates with the OpenAI API for chat completions. It sends a user prompt and an optional system prompt to a selected GPT model, returning the generated response and token usage.",
   nodeValue: "gpt-4o-mini",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
@@ -71,6 +72,20 @@ const metadata: NodeMetadata = {
           label: "Claude 3.5 Sonnet",
         },
       ],
+      i18n: {
+        en: {
+          "Model": {
+            Name: "Model",
+            Description: "Model name to use for the chat node",
+          },
+        },
+        ar: {
+          "Model": {
+            Name: "النموذج",
+            Description: "اسم النموذج المراد استخدامه لعقدة المحادثة",
+          },
+        },
+      },
     },
     {
       parameterName: "API Key",
@@ -80,8 +95,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "API Key for the OpenAI service",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "API Key": {
+            Name: "API Key",
+            Description: "API Key for the OpenAI service",
+          },
+        },
+        ar: {
+          "API Key": {
+            Name: "مفتاح API",
+            Description: "مفتاح API لخدمة OpenAI",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "AI",
+      title: "OpenAI Chat",
+      nodeType: "OpenAI Chat",
+      description: "Integrates with the OpenAI API for chat completions. It sends a user prompt and an optional system prompt to a selected GPT model, returning the generated response and token usage.",
+    },
+    ar: {
+      category: "ذكاء اصطناعي",
+      title: "محادثة OpenAI",
+      nodeType: "محادثة OpenAI",
+      description: "يتكامل مع OpenAI API لإتمام المحادثات. يرسل طلب المستخدم وطلب نظام اختياري إلى نموذج GPT محدد، مُعيداً الاستجابة المُولدة واستخدام الرموز.",
+    },
+  },
 };
 
 export function creatOpenAIChatNode(id: number, position: Position): ChatNode {

@@ -28,9 +28,10 @@ export interface JSONManipulatorNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Processing",
+  category: "Text",
   title: "JSON Manipulator",
   nodeType: "JSONManipulator",
+  description: "A versatile node for processing JSON data. It can extract fields, filter arrays, transform structures, and count items based on configurable operations and field paths.",
   nodeValue: "JSON Processor",
   sockets: [
     { title: "JSON Input", type: "input", dataType: "string" },
@@ -49,6 +50,20 @@ const metadata: NodeMetadata = {
       description:
         "Operation: extract_field, extract_array, filter, transform, count",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Operation": {
+            Name: "Operation",
+            Description: "Operation: extract_field, extract_array, filter, transform, count",
+          },
+        },
+        ar: {
+          "Operation": {
+            Name: "العملية",
+            Description: "العملية: استخراج الحقل، استخراج المصفوفة، تصفية، تحويل، عد",
+          },
+        },
+      },
     },
     {
       parameterName: "Field Path",
@@ -59,6 +74,20 @@ const metadata: NodeMetadata = {
       description:
         "Field path to extract (e.g., 'title', 'data.name', 'items[0].id')",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Field Path": {
+            Name: "Field Path",
+            Description: "Field path to extract (e.g., 'title', 'data.name', 'items[0].id')",
+          },
+        },
+        ar: {
+          "Field Path": {
+            Name: "مسار الحقل",
+            Description: "مسار الحقل للاستخراج (مثال: 'title', 'data.name', 'items[0].id')",
+          },
+        },
+      },
     },
     {
       parameterName: "Filter Condition",
@@ -69,6 +98,20 @@ const metadata: NodeMetadata = {
       description:
         "Filter condition (e.g., 'version > 1', 'title contains \"test\"')",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Filter Condition": {
+            Name: "Filter Condition",
+            Description: "Filter condition (e.g., 'version > 1', 'title contains \"test\"')",
+          },
+        },
+        ar: {
+          "Filter Condition": {
+            Name: "شرط التصفية",
+            Description: "شرط التصفية (مثال: 'version > 1', 'title contains \"test\"')",
+          },
+        },
+      },
     },
     {
       parameterName: "Output Format",
@@ -78,8 +121,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Output format: array, object, string, count",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Output Format": {
+            Name: "Output Format",
+            Description: "Output format: array, object, string, count",
+          },
+        },
+        ar: {
+          "Output Format": {
+            Name: "صيغة الإخراج",
+            Description: "صيغة الإخراج: مصفوفة، كائن، نص، عد",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Text",
+      title: "JSON Manipulator",
+      nodeType: "JSON Manipulator",
+      description: "A versatile node for processing JSON data. It can extract fields, filter arrays, transform structures, and count items based on configurable operations and field paths.",
+    },
+    ar: {
+      category: "نص",
+      title: "معالج JSON",
+      nodeType: "معالج JSON",
+      description: "عقدة متعددة الاستخدامات لمعالجة بيانات JSON. يمكنها استخراج الحقول، وتصفية المصفوفات، وتحويل الهياكل، وعد العناصر بناءً على عمليات قابلة للتكوين ومسارات الحقول.",
+    },
+  },
 };
 
 export function createJSONManipulatorNode(
@@ -150,7 +221,7 @@ export function createJSONManipulatorNode(
           );
         }
 
-        // Process based on operation
+       // Process based on operation
         let result: unknown;
 
         switch (operation.toLowerCase()) {
@@ -173,7 +244,7 @@ export function createJSONManipulatorNode(
             throw new Error(`Unsupported operation: ${operation}`);
         }
 
-        // Format output
+       // Format output
         let formattedResult: string;
         switch (outputFormat.toLowerCase()) {
           case "array":
@@ -201,7 +272,7 @@ export function createJSONManipulatorNode(
         console.log(`JSON manipulation completed successfully`);
 
         return {
-          // Socket id 2 is for Result output
+         // Socket id 2 is for Result output
           [id * 100 + 2]: formattedResult,
           // Socket id 3 is for Status
           [id * 100 + 3]: `Success: ${operation} operation completed`,

@@ -25,9 +25,10 @@ export interface MathExpressionNode extends BaseNode {
 
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
-    category: "Math",
+    category: "Logic",
     title: "Math Expression",
     nodeType: "MathExpression",
+    description: "Evaluates a mathematical expression using an input variable 'x'. The expression is configured in the node settings, and the node replaces 'x' with the value from the input socket before computing the result.",
     nodeValue: 0,
     sockets: [
       { title: "Input", type: "input", dataType: "string" },
@@ -39,13 +40,41 @@ export function register(nodeRegistry: NodeRegistry): void {
       {
         parameterName: "Expression",
         parameterType: "number",
-        defaultValue: false,
+        defaultValue: "x",
         valueSource: "UserInput",
         UIConfigurable: true,
-        description: "Default Number output",
+        description: "Mathematical expression (use 'x' for input variable)",
         isNodeBodyContent: true,
+        i18n: {
+          en: {
+            "Expression": {
+              Name: "Expression",
+              Description: "Mathematical expression (use 'x' for input variable)",
+            },
+          },
+          ar: {
+            "Expression": {
+              Name: "التعبير",
+              Description: "تعبير رياضي (استخدم 'x' للمتغير المدخل)",
+            },
+          },
+        },
       },
     ],
+    i18n: {
+      en: {
+        category: "Logic",
+        title: "Math Expression",
+        nodeType: "Math Expression",
+        description: "Evaluates a mathematical expression using an input variable 'x'. The expression is configured in the node settings, and the node replaces 'x' with the value from the input socket before computing the result.",
+      },
+      ar: {
+        category: "منطق",
+        title: "تعبير رياضي",
+        nodeType: "تعبير رياضي",
+        description: "يُقيّم تعبيراً رياضياً باستخدام متغير الإدخال 'x'. يتم تكوين التعبير في إعدادات العقدة، وتستبدل العقدة 'x' بالقيمة من مقبس الإدخال قبل حساب النتيجة.",
+      },
+    },
   };
   function createMathExpressionNode(
     id: number,

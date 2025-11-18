@@ -19,7 +19,7 @@ describe('HashNode', () => {
       expect(node.id).toBe(1);
       expect(node.nodeType).toBe('Hash');
       expect(node.title).toBe('Hash');
-      expect(node.category).toBe('Data');
+      expect(node.category).toBe('Text');
       expect(node.nodeValue).toBe('SHA256');
       expect(node.algorithm).toBe('SHA256');
       expect(node.sockets).toHaveLength(2);

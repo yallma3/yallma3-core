@@ -1,11 +1,29 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { setConsoleEvents, addConsoleEvent, getLastUserInputAfter, ConsoleInputUtils } from '../../../Workflow/Nodes/ConsoleInput';
+import { 
+  setConsoleEvents, 
+  addConsoleEvent, 
+  getLastUserInputAfter, 
+  ConsoleInputUtils,
+  registerPrompt,
+  resolvePrompt,
+  getInputForPrompt,
+  getPendingPrompts,
+  cleanupPrompts
+} from '../../../Workflow/Nodes/ConsoleInput';
 import type { ConsoleEvent } from '../../../Models/Workspace';
 
 describe('ConsoleInput Utilities', () => {
   beforeEach(() => {
     // Reset global state before each test
     ConsoleInputUtils.clearEvents();
+    // Clear any pending prompts from previous tests
+    const pending = getPendingPrompts();
+    pending.forEach(p => {
+      if (p) {
+        resolvePrompt(p.promptId, 'cleanup');
+      }
+    });
+    ConsoleInputUtils.cleanupPrompts(0); // Clean up all prompts
   });
 
   describe('setConsoleEvents', () => {
@@ -51,8 +69,11 @@ describe('ConsoleInput Utilities', () => {
       });
 
       // The global events should not be affected by changes to the original array
-      expect(ConsoleInputUtils.getCurrentEvents()).toHaveLength(1);
-      expect(ConsoleInputUtils.getCurrentEvents()[0].id).toBe('1');
+      const currentEvents = ConsoleInputUtils.getCurrentEvents();
+      expect(currentEvents).toHaveLength(1);
+      const firstEvent = currentEvents[0];
+      expect(firstEvent).toBeDefined();
+      expect(firstEvent?.id).toBe('1');
     });
   });
 
@@ -95,8 +116,133 @@ describe('ConsoleInput Utilities', () => {
       const currentEvents = ConsoleInputUtils.getCurrentEvents();
       expect(currentEvents).toHaveLength(100);
       // The most recent 100 events should be kept
-      expect(currentEvents[0].id).toBe('101');
-      expect(currentEvents[99].id).toBe('2');
+      const firstEvent = currentEvents[0];
+      const lastEvent = currentEvents[99];
+      expect(firstEvent).toBeDefined();
+      expect(lastEvent).toBeDefined();
+      expect(firstEvent?.id).toBe('101');
+      expect(lastEvent?.id).toBe('2');
+    });
+  });
+
+  describe('Prompt Management', () => {
+    describe('registerPrompt', () => {
+      it('should register a new prompt', () => {
+        const promptId = 'test_prompt_1';
+        const nodeId = 123;
+
+        registerPrompt(promptId, nodeId);
+
+        const pending = getPendingPrompts();
+        expect(pending).toHaveLength(1);
+        const firstPrompt = pending[0];
+        expect(firstPrompt).toBeDefined();
+        expect(firstPrompt?.promptId).toBe(promptId);
+        expect(firstPrompt?.nodeId).toBe(nodeId);
+        expect(firstPrompt?.resolved).toBe(false);
+      });
+    });
+
+    describe('resolvePrompt', () => {
+      it('should resolve a registered prompt', () => {
+        const promptId = 'test_prompt_2';
+        registerPrompt(promptId, 123);
+
+        const resolved = resolvePrompt(promptId, 'user response');
+
+        expect(resolved).toBe(true);
+        expect(getInputForPrompt(promptId)).toBe('user response');
+      });
+
+      it('should not resolve an already resolved prompt', () => {
+        const promptId = 'test_prompt_3';
+        registerPrompt(promptId, 123);
+        resolvePrompt(promptId, 'first response');
+
+        const resolved = resolvePrompt(promptId, 'second response');
+
+        expect(resolved).toBe(false);
+        expect(getInputForPrompt(promptId)).toBe('first response');
+      });
+
+      it('should return false for non-existent prompt', () => {
+        const resolved = resolvePrompt('non_existent', 'response');
+        expect(resolved).toBe(false);
+      });
+    });
+
+    describe('getInputForPrompt', () => {
+      it('should return null for unresolved prompt', () => {
+        const promptId = 'test_prompt_4';
+        registerPrompt(promptId, 123);
+
+        expect(getInputForPrompt(promptId)).toBe(null);
+      });
+
+      it('should return response for resolved prompt', () => {
+        const promptId = 'test_prompt_5';
+        registerPrompt(promptId, 123);
+        resolvePrompt(promptId, 'test response');
+
+        expect(getInputForPrompt(promptId)).toBe('test response');
+      });
+
+      it('should return null for non-existent prompt', () => {
+        expect(getInputForPrompt('non_existent')).toBe(null);
+      });
+    });
+
+    describe('getPendingPrompts', () => {
+      it('should return only unresolved prompts', () => {
+        registerPrompt('prompt1', 1);
+        registerPrompt('prompt2', 2);
+        registerPrompt('prompt3', 3);
+
+        resolvePrompt('prompt2', 'resolved');
+
+        const pending = getPendingPrompts();
+        expect(pending).toHaveLength(2);
+        const promptIds = pending.map(p => p?.promptId).filter((id): id is string => !!id);
+        expect(promptIds).toContain('prompt1');
+        expect(promptIds).toContain('prompt3');
+        expect(promptIds).not.toContain('prompt2');
+      });
+
+      it('should return empty array when no prompts exist', () => {
+        expect(getPendingPrompts()).toHaveLength(0);
+      });
+    });
+
+    describe('cleanupPrompts', () => {
+      it('should remove prompts older than maxAge', async () => {
+        registerPrompt('old_prompt', 1);
+        
+        // Wait a bit then register a new prompt
+        await new Promise<void>((resolve) => {
+          setTimeout(() => {
+            registerPrompt('new_prompt', 2);
+            
+            // Clean up prompts older than 50ms
+            cleanupPrompts(50);
+            
+            const pending = getPendingPrompts();
+            expect(pending).toHaveLength(1);
+            const firstPrompt = pending[0];
+            expect(firstPrompt).toBeDefined();
+            expect(firstPrompt?.promptId).toBe('new_prompt');
+            resolve();
+          }, 100);
+        });
+      });
+
+      it('should use default maxAge of 300000ms', () => {
+        registerPrompt('recent_prompt', 1);
+        
+        cleanupPrompts(); // No maxAge specified
+        
+        // Should not be cleaned up as it's recent
+        expect(getPendingPrompts()).toHaveLength(1);
+      });
     });
   });
 
@@ -257,6 +403,42 @@ describe('ConsoleInput Utilities', () => {
         ConsoleInputUtils.clearEvents();
 
         expect(ConsoleInputUtils.getCurrentEvents()).toHaveLength(0);
+      });
+    });
+
+    describe('resolvePrompt via Utils', () => {
+      it('should resolve prompt through ConsoleInputUtils', () => {
+        registerPrompt('test_prompt', 1);
+        
+        const resolved = ConsoleInputUtils.resolvePrompt('test_prompt', 'response');
+        
+        expect(resolved).toBe(true);
+        expect(getInputForPrompt('test_prompt')).toBe('response');
+      });
+    });
+
+    describe('getPendingPrompts via Utils', () => {
+      it('should get pending prompts through ConsoleInputUtils', () => {
+        registerPrompt('prompt1', 1);
+        registerPrompt('prompt2', 2);
+        
+        const pending = ConsoleInputUtils.getPendingPrompts();
+        
+        expect(pending).toHaveLength(2);
+      });
+    });
+
+    describe('cleanupPrompts via Utils', () => {
+      it('should cleanup prompts through ConsoleInputUtils', async () => {
+        registerPrompt('old_prompt', 1);
+        
+        // Wait a bit to ensure the prompt is old enough
+        await new Promise(resolve => setTimeout(resolve, 10));
+        
+        // Clean up prompts older than 5ms
+        ConsoleInputUtils.cleanupPrompts(5);
+        
+        expect(getPendingPrompts()).toHaveLength(0);
       });
     });
   });

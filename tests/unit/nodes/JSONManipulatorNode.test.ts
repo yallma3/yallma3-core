@@ -19,7 +19,7 @@ describe('JSONManipulatorNode', () => {
       expect(node.id).toBe(1);
       expect(node.nodeType).toBe('JSONManipulator');
       expect(node.title).toBe('JSON Manipulator');
-      expect(node.category).toBe('Data Processing');
+      expect(node.category).toBe('Text');
       expect(node.nodeValue).toBe('JSON Processor');
       expect(node.sockets).toHaveLength(3);
       expect(node.configParameters?.length).toBe(4);

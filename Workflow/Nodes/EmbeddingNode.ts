@@ -28,9 +28,10 @@ export interface EmbeddingNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Input/Output",
+  category: "AI",
   title: "Embedding",
   nodeType: "Embedding",
+  description: "Generates vector embeddings for text inputs using the Google Gemini Embedding API. It can process a single string or a JSON object containing multiple text chunks, making it suitable for both individual and batch embedding tasks.",
   nodeValue: "gemini-embedding-001",
   sockets: [
     { title: "Input JSON", type: "input", dataType: "string" },
@@ -54,6 +55,20 @@ const metadata: NodeMetadata = {
           label: "Gemini Embedding 001",
         },
       ],
+      i18n: {
+        en: {
+          "Model": {
+            Name: "Model",
+            Description: "Google Gemini embedding model to use",
+          },
+        },
+        ar: {
+          "Model": {
+            Name: "النموذج",
+            Description: "نموذج تضمين Google Gemini المراد استخدامه",
+          },
+        },
+      },
     },
     {
       parameterName: "Google API Key",
@@ -63,8 +78,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Google API Key for Gemini embedding service",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Google API Key": {
+            Name: "Google API Key",
+            Description: "Google API Key for Gemini embedding service",
+          },
+        },
+        ar: {
+          "Google API Key": {
+            Name: "مفتاح Google API",
+            Description: "مفتاح Google API لخدمة تضمين Gemini",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "AI",
+      title: "Embedding",
+      nodeType: "Embedding",
+      description: "Generates vector embeddings for text inputs using the Google Gemini Embedding API. It can process a single string or a JSON object containing multiple text chunks, making it suitable for both individual and batch embedding tasks.",
+    },
+    ar: {
+      category: "ذكاء اصطناعي",
+      title: "تضمين متجه",
+      nodeType: "تضمين متجه",
+      description: "يُولّد تضمينات متجهة لمدخلات النص باستخدام Google Gemini Embedding API. يمكنه معالجة سلسلة واحدة أو كائن JSON يحتوي على أجزاء نصية متعددة، مما يجعله مناسباً لمهام التضمين الفردية والدفعية.",
+    },
+  },
 };
 
 export function createEmbeddingNode(
@@ -138,7 +181,7 @@ export function createEmbeddingNode(
               console.log("Processing JSON input as a single string");
             }
           }
-        } catch {
+         } catch {
           // If JSON parsing fails, treat as a single string
           chunks = [inputString];
           isSingleString = true;

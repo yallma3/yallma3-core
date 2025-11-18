@@ -30,6 +30,7 @@ const metadata: NodeMetadata = {
   category: "Logic",
   title: "Delay (ms)",
   nodeType: "Delay",
+  description: "How long to wait before passing the value through (in ms).",
   nodeValue: 1000,
   sockets: [
     { title: "Input", type: "input", dataType: "unknown" },
@@ -46,8 +47,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "How long to wait before passing the value through (in ms).",
       isNodeBodyContent: true,
+      i18n: {
+        en: {
+          "Delay (ms)": {
+            Name: "Delay (ms)",
+            Description: "How long to wait before passing the value through (in ms).",
+          },
+        },
+        ar: {
+          "Delay (ms)": {
+            Name: "التأخير (مللي ثانية)",
+            Description: "المدة الزمنية للانتظار قبل تمرير القيمة (بالمللي ثانية).",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Logic",
+      title: "Delay (ms)",
+      nodeType: "Delay",
+      description: "How long to wait before passing the value through (in ms).",
+    },
+    ar: {
+      category: "منطق",
+      title: "تأخير (مللي ثانية)",
+      nodeType: "تأخير",
+      description: "المدة الزمنية للانتظار قبل تمرير القيمة (بالمللي ثانية).",
+    },
+  },
 };
 
 export function createDelayNode(id: number, position: Position): DelayNode {

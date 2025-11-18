@@ -32,9 +32,10 @@ export interface HashNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data",
+  category: "Text",
   title: "Hash",
   nodeType: "Hash",
+  description: "Computes a cryptographic hash of an input string using a selected algorithm (MD5, SHA1, SHA256, or SHA512). The algorithm is configurable via node settings.",
   nodeValue: "SHA256",
   sockets: [
     { title: "Input", type: "input", dataType: "string" },
@@ -57,8 +58,36 @@ const metadata: NodeMetadata = {
         { key: "SHA256", label: "SHA256" },
         { key: "SHA512", label: "SHA512" },
       ],
+      i18n: {
+        en: {
+          "Algorithm": {
+            Name: "Algorithm",
+            Description: "Hashing algorithm to use (MD5, SHA1, SHA256, SHA512)",
+          },
+        },
+        ar: {
+          "Algorithm": {
+            Name: "الخوارزمية",
+            Description: "خوارزمية التجزئة المراد استخدامها (MD5, SHA1, SHA256, SHA512)",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Text",
+      title: "Hash",
+      nodeType: "Hash",
+      description: "Computes a cryptographic hash of an input string using a selected algorithm (MD5, SHA1, SHA256, or SHA512). The algorithm is configurable via node settings.",
+    },
+    ar: {
+      category: "نص",
+      title: "تجزئة",
+      nodeType: "تجزئة",
+      description: "يحسب تجزئة تشفيرية لسلسلة الإدخال باستخدام خوارزمية محددة (MD5، SHA1، SHA256، أو SHA512). الخوارزمية قابلة للتكوين عبر إعدادات العقدة.",
+    },
+  },
 };
 
 export function createHashNode(id: number, position: Position): HashNode {

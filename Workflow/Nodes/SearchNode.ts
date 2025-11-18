@@ -78,10 +78,11 @@ export interface SearchNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Generation",
+  category: "Data",
   title: "Search",
   nodeType: "Search",
-  nodeValue: null,
+  description: "Initiates the data generation pipeline by analyzing a user query, refining it into multiple search queries, and executing them via the Tavily API. It uses the Gemini API for query parsing and requires API keys for both services.",
+  nodeValue: "",
   sockets: [
     { title: "User Query", type: "input", dataType: "string" },
     { title: "Search Results", type: "output", dataType: "json" },
@@ -99,6 +100,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Google Gemini API key for query analysis and refinement",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Gemini API Key": {
+            Name: "Gemini API Key",
+            Description: "Google Gemini API key for query analysis and refinement",
+          },
+        },
+        ar: {
+          "Gemini API Key": {
+            Name: "مفتاح Google Gemini API",
+            Description: "مفتاح Google Gemini API لتحليل واستكمال الاستعلام",
+          },
+        },
+      },
     },
     {
       parameterName: "Tavily API Key",
@@ -108,6 +123,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Tavily API key for web search execution",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Tavily API Key": {
+            Name: "Tavily API Key",
+            Description: "Tavily API key for web search execution",
+          },
+        },
+        ar: {
+          "Tavily API Key": {
+            Name: "مفتاح Tavily API",
+            Description: "مفتاح Tavily API لتنفيذ البحث عن الويب",
+          },
+        },
+      },
     },
     {
       parameterName: "Gemini Model",
@@ -122,6 +151,20 @@ const metadata: NodeMetadata = {
         { key: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
         { key: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
       ],
+      i18n: {
+        en: {
+          "Gemini Model": {
+            Name: "Gemini Model",
+            Description: "Gemini model for query processing",
+          },
+        },
+        ar: {
+          "Gemini Model": {
+            Name: "نموذج Gemini",
+            Description: "نموذج Gemini لمعالجة الاستعلام",
+          },
+        },
+      },
     },
     {
       parameterName: "Number of Search Queries",
@@ -131,6 +174,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "How many refined search queries to generate",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Number of Search Queries": {
+            Name: "Number of Search Queries",
+            Description: "How many refined search queries to generate",
+          },
+        },
+        ar: {
+          "Number of Search Queries": {
+            Name: "عدد استعلامات البحث",
+            Description: "عدد استعلامات البحث المحسّنة المراد إنشاؤها",
+          },
+        },
+      },
     },
     {
       parameterName: "Results Per Query",
@@ -140,8 +197,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Number of search results per query",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Results Per Query": {
+            Name: "Results Per Query",
+            Description: "Number of search results per query",
+          },
+        },
+        ar: {
+          "Results Per Query": {
+            Name: "النتائج لكل استعلام",
+            Description: "عدد نتائج البحث لكل استعلام",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Data",
+      title: "Search",
+      nodeType: "Search",
+      description: "Initiates the data generation pipeline by analyzing a user query, refining it into multiple search queries, and executing them via the Tavily API. It uses the Gemini API for query parsing and requires API keys for both services.",
+    },
+    ar: {
+      category: "بيانات",
+      title: "بحث",
+      nodeType: "بحث",
+      description: "يبدأ خط أنابيب توليد البيانات بتحليل استعلام المستخدم وتحسينه إلى استعلامات بحث متعددة وتنفيذها عبر Tavily API. يستخدم Gemini API لتحليل الاستعلام ويتطلب مفاتيح API لكلا الخدمتين.",
+    },
+  },
 };
 
 export function createSearchNode(id: number, position: Position): SearchNode {
@@ -596,7 +681,7 @@ async function executeWebSearch(
         }),
       });
 
-      if (response.status === 402 || response.status === 432) {
+       if (response.status === 402 || response.status === 432) {
         console.warn(
           `  [Tavily]  Quota exhausted at query ${i + 1}. Stopping search.`
         );

@@ -49,10 +49,11 @@ function findProviderByModelId(modelId: string): string | null {
 }
 
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "LLM Chat",
   nodeType: "LLMChat",
   nodeValue: "Groq",
+  description: "Interfaces with various Large Language Model providers (Groq, OpenAI, Anthropic, Gemini, OpenRouter) to generate text responses. Accepts user prompts and optional system prompts to guide the model's behavior, and returns the generated response along with token usage information.",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
     { title: "System Prompt", type: "input", dataType: "string" },
@@ -71,6 +72,20 @@ const metadata: NodeMetadata = {
       description: "Model to use for the chat node",
       isNodeBodyContent: true,
       sourceList: modelSourceList,
+      i18n: {
+        en: {
+          "Model": {
+            Name: "Model",
+            Description: "Select the language model to use for generating responses",
+          },
+        },
+        ar: {
+          "Model": {
+            Name: "النموذج",
+            Description: "اختر نموذج اللغة المستخدم لتوليد الاستجابات",
+          },
+        },
+      },
     },
     {
       parameterName: "API Key",
@@ -80,8 +95,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "API Key for the selected provider",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "API Key": {
+            Name: "API Key",
+            Description: "Enter the API key for authenticating with the selected LLM provider",
+          },
+        },
+        ar: {
+          "API Key": {
+            Name: "مفتاح API",
+            Description: "أدخل مفتاح API للمصادقة مع مزود نموذج اللغة المحدد",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "AI",
+      title: "LLM Chat",
+      nodeType: "LLM Chat",
+      description: "Interfaces with various Large Language Model providers (Groq, OpenAI, Anthropic, Gemini, OpenRouter) to generate text responses. Accepts user prompts and optional system prompts to guide the model's behavior, and returns the generated response along with token usage information.",
+    },
+    ar: {
+      category: "الذكاء الاصطناعي",
+      title: "دردشة نموذج اللغة",
+      nodeType: "دردشة نموذج اللغة",
+      description: "يتواصل مع مزودي نماذج اللغة الكبيرة المختلفة (Groq، OpenAI، Anthropic، Gemini، OpenRouter) لتوليد استجابات نصية. يقبل مطالبات المستخدم ومطالبات النظام الاختيارية لتوجيه سلوك النموذج، ويعيد الاستجابة المُولدة مع معلومات استخدام الرموز.",
+    },
+  },
 };
 
 export function createLLMChatNode(id: number, position: Position): ChatNode {

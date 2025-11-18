@@ -15,8 +15,8 @@ import type {
   NodeMetadata,
   Position,
   ConfigParameterType,
-  NodeExecutionContext,
   NodeValue,
+  NodeExecutionContext,
   DataType,
 } from "../types/types";
 import { nodeRegistry } from "../NodeRegistry";
@@ -27,8 +27,10 @@ interface IfElseNode extends BaseNode {
 
 const metadata: NodeMetadata = {
   nodeType: "IfElse",
+  description: "A conditional logic gate that evaluates an input. If the condition is met, it outputs the 'True' value; otherwise, it outputs the 'False' value. Supports both strict boolean evaluation and general truthiness.",
   category: "Logic",
   title: "If/Else",
+  nodeValue:"",
   sockets: [
     { title: "Condition", type: "input", dataType: "boolean" },
     { title: "True", type: "input", dataType: "unknown" },
@@ -46,8 +48,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description:
         "If enabled, only exact `true` or `false` boolean values will be accepted as condition.",
+      i18n: {
+        en: {
+          "Strict Mode": {
+            Name: "Strict Mode",
+            Description: "If enabled, only exact `true` or `false` boolean values will be accepted as condition.",
+          },
+        },
+        ar: {
+          "Strict Mode": {
+            Name: "الوضع الصارم",
+            Description: "إذا تم تفعيله، سيتم قبول القيم المنطقية `true` أو `false` فقط كشرط.",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Logic",
+      title: "If/Else",
+      nodeType: "If/Else",
+      description: "A conditional logic gate that evaluates an input. If the condition is met, it outputs the 'True' value; otherwise, it outputs the 'False' value. Supports both strict boolean evaluation and general truthiness.",
+    },
+    ar: {
+      category: "منطق",
+      title: "إذا/وإلا",
+      nodeType: "إذا/وإلا",
+      description: "بوابة منطق شرطي تُقيّم إدخالاً. إذا تحقق الشرط، تُخرج القيمة 'صحيح'؛ وإلا تُخرج القيمة 'خطأ'. يدعم التقييم المنطقي الصارم والتقييم العام للصحة.",
+    },
+  },
 };
 
 function createIfElseNode(id: number, position: Position): IfElseNode {
@@ -88,7 +118,7 @@ function createIfElseNode(id: number, position: Position): IfElseNode {
         result = condition === true ? trueValue : falseValue;
       } else {
         // general truthiness
-        const isTruthy = (val: unknown): boolean => {
+       const isTruthy = (val: unknown): boolean => {
           if (val === undefined || val === null) return false;
           if (typeof val === "boolean") return val;
           if (typeof val === "string") return val.length > 0;
