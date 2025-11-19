@@ -10,10 +10,21 @@ vi.mock('../../../Workflow/runtime', () => ({
 
 vi.mock('../../../Task/TaskIntrepreter', () => ({
   planAgenticTask: vi.fn(),
+  analyzeTaskCore: vi.fn().mockResolvedValue({
+    taskId: 'test-task',
+    intent: 'Test intent',
+    classification: 'simple',
+    needsDecomposition: false,
+    userInput: null,
+  }),
 }));
 
-import { executeFlowRuntime } from '../../../Workflow/runtime';
+vi.mock('../../../Agent/Utls/ToolCallingHelper', () => ({
+  workflowExecutor: vi.fn(),
+}));
+
 import { planAgenticTask } from '../../../Task/TaskIntrepreter';
+import { workflowExecutor } from '../../../Agent/Utls/ToolCallingHelper';
 
 describe("WebSocket Server", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -366,25 +377,7 @@ describe("WebSocket Server", () => {
     const port = wss.address().port;
 
     // Mock the dependencies
-    const mockPlan = {
-      steps: [
-        {
-          type: 'workflow',
-          workflow: '{"id": "test-workflow", "nodes": [], "edges": []}',
-          task: 'test-task',
-          agent: 'test-agent'
-        }
-      ]
-    };
-    const mockFlowResult = {
-      layers: [],
-      results: {},
-      finalResult: 'test result'
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(planAgenticTask).mockResolvedValue(mockPlan as any);
-    vi.mocked(executeFlowRuntime).mockResolvedValue(mockFlowResult);
+    vi.mocked(workflowExecutor).mockResolvedValue('Test output');
 
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(`ws://localhost:${port}`);
@@ -400,17 +393,19 @@ describe("WebSocket Server", () => {
           ws.send(JSON.stringify({
             type: 'run_workspace',
             data: JSON.stringify({
+              name: 'Test Workspace',
+              description: 'A test workspace',
               apiKey: 'test-key',
               mainLLM: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } },
-              tasks: [{ id: 'test-task', title: 'Test Task', description: 'A test task', expectedOutput: 'Test output', type: 'test', executorId: 'test-executor', position: '0,0', selected: false, sockets: [] }],
+              tasks: [{ id: 'test-task', title: 'Test Task', description: 'A test task', expectedOutput: 'Test output', type: 'workflow', executorId: 'test-workflow', position: '0,0', selected: false, sockets: [] }],
               agents: [{ id: 'test-agent', name: 'Test Agent', role: 'Test Role', objective: 'Test objective', background: 'Test background', capabilities: 'Test capabilities', apiKey: 'test-key', llm: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } }, tools: [] }],
+              connections: [],
               intent: 'Test intent'
             })
           }));
-        } else if (message.type === 'message' && message.data === 'Step 1 completed') {
+        } else if (message.type === 'message' && message.data.message === '[1/1] Task \'Test Task\' completed successfully.') {
           // Workflow completed successfully
-          expect(messages.some(m => m.type === 'message' && m.data === 'Plan Created Successfully')).toBe(true);
-          expect(messages.some(m => m.type === 'message' && m.data === 'Executing Plan')).toBe(true);
+          expect(message.data.results).toBe('Test output');
           ws.close();
           resolve();
         }
@@ -441,7 +436,7 @@ describe("WebSocket Server", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(planAgenticTask).mockResolvedValue(mockPlan as any);
-    vi.mocked(executeFlowRuntime).mockResolvedValue(mockError);
+    vi.mocked(workflowExecutor).mockResolvedValue(mockError);
 
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(`ws://localhost:${port}`);
@@ -454,16 +449,19 @@ describe("WebSocket Server", () => {
           ws.send(JSON.stringify({
             type: 'run_workspace',
             data: JSON.stringify({
+              name: 'Test Workspace',
+              description: 'A test workspace',
               apiKey: 'test-key',
               mainLLM: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } },
-              tasks: [{ id: 'test-task', title: 'Test Task', description: 'A test task', expectedOutput: 'Test output', type: 'test', executorId: 'test-executor', position: '0,0', selected: false, sockets: [] }],
+              tasks: [{ id: 'test-task', title: 'Test Task', description: 'A test task', expectedOutput: 'Test output', type: 'workflow', executorId: 'test-workflow', position: '0,0', selected: false, sockets: [] }],
               agents: [{ id: 'test-agent', name: 'Test Agent', role: 'Test Role', objective: 'Test objective', background: 'Test background', capabilities: 'Test capabilities', apiKey: 'test-key', llm: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } }, tools: [] }],
+              connections: [],
               intent: 'Test intent'
             })
           }));
-        } else if (message.type === 'error' && message.data.includes('Workflow execution failed')) {
-          // Error message sent for workflow failure
-          expect(message.data).toContain('Workflow execution failed');
+        } else if (message.type === 'message' && message.data.message === '[1/1] Task \'Test Task\' completed successfully.') {
+          // Workflow completed with error
+          expect(message.data.type).toBe('success');
           ws.close();
           resolve();
         }
