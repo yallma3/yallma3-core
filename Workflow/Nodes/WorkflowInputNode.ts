@@ -32,11 +32,26 @@ export function register(nodeRegistry: NodeRegistry): void {
     category: "Input/Output",
     title: "Workflow Input",
     nodeType: "WorkflowInput",
-    nodeValue: "WorkflowI Input",
+    nodeValue: "Workflow Input",
+    description: "Defines the entry point for a workflow. This node takes the initial input provided to the workflow and passes it to its output socket for downstream processing.",
     sockets: [{ title: "Output", type: "output", dataType: "string" }],
     width: 380,
     height: 220,
     configParameters: [],
+    i18n: {
+      en: {
+        category: "Input/Output",
+        title: "Workflow Input",
+        nodeType: "WorkflowInput",
+        description: "Defines the entry point for a workflow. This node takes the initial input provided to the workflow and passes it to its output socket for downstream processing.",
+      },
+      ar: {
+        category: "إدخال/إخراج",
+        title: "إدخال سير العمل",
+        nodeType: "إدخال سير العمل",
+        description: "يُحدد نقطة الدخول لسير العمل. تأخذ هذه العقدة الإدخال الأولي المُقدم لسير العمل وتمرره إلى مقبس الإخراج للمعالجة اللاحقة.",
+      },
+    },
   };
 
   function createWorkflowInputNode(
@@ -65,9 +80,24 @@ export function register(nodeRegistry: NodeRegistry): void {
       selected: false,
       processing: false,
       process: async (context: NodeExecutionContext) => {
-        let output = "No Workflow Input";
         const input = context.inputs[0];
-        if (input) output = input;
+        let output: string;
+        
+        if (input !== undefined && input !== null) {
+          // Convert input to string based on its type
+          if (typeof input === 'string') {
+            output = input;
+          } else if (typeof input === 'number' || typeof input === 'boolean') {
+            output = String(input);
+          } else if (typeof input === 'object') {
+            output = JSON.stringify(input);
+          } else {
+            output = String(input);
+          }
+        } else {
+          output = "No Workflow Input";
+        }
+        
         console.log("Task Input:", output);
         return output;
       },

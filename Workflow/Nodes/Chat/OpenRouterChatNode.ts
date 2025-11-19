@@ -7,13 +7,14 @@
 
 import type {
   BaseNode,
+  Position,
   ConfigParameterType,
   NodeValue,
   NodeExecutionContext,
   NodeMetadata,
-  Position,
 } from "../../types/types";
 import { NodeRegistry } from "../../NodeRegistry";
+import type { OpenAIResponse } from "../../../Models/LLM";
 
 export interface ChatNode extends BaseNode {
   nodeType: string;
@@ -21,9 +22,10 @@ export interface ChatNode extends BaseNode {
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "OpenRouter Chat",
   nodeType: "OpenRouterChat",
+  description: "Integrates with the OpenRouter API, providing access to a diverse range of models from different providers. It sends a prompt and returns the chat response and token usage.",
   nodeValue: "deepseek/deepseek-chat-v3.1:free",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
@@ -68,6 +70,20 @@ const metadata: NodeMetadata = {
           label: "Claude 3.5 Sonnet",
         },
       ],
+      i18n: {
+        en: {
+          "Model": {
+            Name: "Model",
+            Description: "Model name to use for the chat node",
+          },
+        },
+        ar: {
+          "Model": {
+            Name: "النموذج",
+            Description: "اسم النموذج المراد استخدامه لعقدة المحادثة",
+          },
+        },
+      },
     },
     {
       parameterName: "API Key",
@@ -75,10 +91,38 @@ const metadata: NodeMetadata = {
       defaultValue: "",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "API Key for the OpenAI service",
+      description: "API Key for the OpenRouter service",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "API Key": {
+            Name: "API Key",
+            Description: "API Key for the OpenRouter service",
+          },
+        },
+        ar: {
+          "API Key": {
+            Name: "مفتاح API",
+            Description: "مفتاح API لخدمة OpenRouter",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "AI",
+      title: "OpenRouter Chat",
+      nodeType: "OpenRouter Chat",
+      description: "Integrates with the OpenRouter API, providing access to a diverse range of models from different providers. It sends a prompt and returns the chat response and token usage.",
+    },
+    ar: {
+      category: "ذكاء اصطناعي",
+      title: "محادثة OpenRouter",
+      nodeType: "محادثة OpenRouter",
+      description: "يتكامل مع OpenRouter API، موفراً الوصول إلى مجموعة متنوعة من النماذج من مزودين مختلفين. يرسل طلباً ويُعيد استجابة المحادثة واستخدام الرموز.",
+    },
+  },
 };
 
 export function createNOpenRouterChatNode(
@@ -180,12 +224,12 @@ export function createNOpenRouterChatNode(
           throw new Error(`OpenRouter API returned status ${res.status}`);
         }
 
-        const json = await res.json();
-        const content = (json as any)?.choices?.[0]?.message?.content || "";
+        const json = await res.json() as OpenAIResponse;
+        const content = json.choices?.[0]?.message?.content || "";
 
         return {
           [n.id * 100 + 3]: content,
-          [n.id * 100 + 4]: (json as any).usage?.total_tokens || 0,
+          [n.id * 100 + 4]: json.usage?.total_tokens || 0,
         };
       } catch (error) {
         console.error("Error in OpenRouter Chat node:", error);

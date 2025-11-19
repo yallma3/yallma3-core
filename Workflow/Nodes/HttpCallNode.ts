@@ -1,8 +1,6 @@
 import type {
   BaseNode,
   NodeMetadata,
-  Socket,
-  DataType,
   Position,
   NodeExecutionContext,
 } from "../types/types";
@@ -14,7 +12,8 @@ interface HttpCallNode extends BaseNode {
 
 const metadata: NodeMetadata = {
   nodeType: "HttpCall",
-  category: "Network",
+  description: "Performs a customizable HTTP request, supporting various methods, headers, and body content. Includes configurable options for request timeout and handling of redirects.",
+  category: "Tools",
   title: "HTTP Call",
   sockets: [
     { title: "URL", type: "input", dataType: "string" },
@@ -35,6 +34,20 @@ const metadata: NodeMetadata = {
       description: "Request timeout in milliseconds",
       valueSource: "UserInput",
       UIConfigurable: true,
+      i18n: {
+        en: {
+          "timeout": {
+            Name: "Timeout",
+            Description: "Request timeout in milliseconds",
+          },
+        },
+        ar: {
+          "timeout": {
+            Name: "المهلة الزمنية",
+            Description: "المهلة الزمنية للطلب بالملي ثانية",
+          },
+        },
+      },
     },
     {
       parameterName: "followRedirects",
@@ -43,8 +56,36 @@ const metadata: NodeMetadata = {
       description: "Follow HTTP redirects",
       valueSource: "UserInput",
       UIConfigurable: true,
+      i18n: {
+        en: {
+          "followRedirects": {
+            Name: "Follow Redirects",
+            Description: "Follow HTTP redirects",
+          },
+        },
+        ar: {
+          "followRedirects": {
+            Name: "متابعة إعادة التوجيه",
+            Description: "متابعة إعادات توجيه HTTP",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Tools",
+      title: "HTTP Call",
+      nodeType: "HTTP Call",
+      description: "Performs a customizable HTTP request, supporting various methods, headers, and body content. Includes configurable options for request timeout and handling of redirects.",
+    },
+    ar: {
+      category: "أدوات",
+      title: "استدعاء HTTP",
+      nodeType: "استدعاء HTTP",
+      description: "يُنفذ طلب HTTP قابل للتخصيص، يدعم طرقاً ورؤوساً ومحتوى نصي متنوع. يتضمن خيارات قابلة للتكوين للمهلة الزمنية للطلب ومعالجة إعادات التوجيه.",
+    },
+  },
 };
 
 function createHttpCallNode(id: number, position: Position): HttpCallNode {
@@ -158,7 +199,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
         }
 
         // Create AbortController for timeout
-        const controller = new AbortController();
+         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
         fetchOptions.signal = controller.signal;
 
@@ -167,7 +208,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
           clearTimeout(timeoutId);
 
           // Get response data
-          let responseData: any;
+          let responseData: unknown;
           const contentType = response.headers.get("content-type");
 
           if (contentType && contentType.includes("application/json")) {
@@ -201,13 +242,13 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
           };
 
           return result;
-        } catch (fetchError: any) {
+         } catch (fetchError: unknown) {
           clearTimeout(timeoutId);
 
           const errorMessage =
-            fetchError.name === "AbortError"
+            fetchError instanceof Error && fetchError.name === "AbortError"
               ? `Request timeout after ${timeout}ms`
-              : `Network error: ${fetchError.message}`;
+              : `Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`;
 
           return {
             [n.id * 100 + 105]: {
@@ -220,7 +261,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
             [n.id * 100 + 107]: errorMessage,
           };
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         return {
           [n.id * 100 + 105]: {
             data: null,
@@ -229,7 +270,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
             redirected: false,
           },
           [n.id * 100 + 106]: 0,
-          [n.id * 100 + 107]: `HTTP Call error: ${error.message}`,
+          [n.id * 100 + 107]: `HTTP Call error: ${error instanceof Error ? error.message : String(error)}`,
         };
       }
     },

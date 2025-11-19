@@ -32,6 +32,7 @@ const metadata: NodeMetadata = {
   category: "MCP",
   title: "MCP Resource",
   nodeType: "McpGetResource",
+  description: "Retrieves a specific resource by name from a Master Control Program (MCP) server. This node supports both HTTP and Stdio transport mechanisms for communication.",
   nodeValue: "",
   sockets: [
     { title: "Resource", type: "input", dataType: "string" },
@@ -52,6 +53,20 @@ const metadata: NodeMetadata = {
       ],
       description: "Transport mechanism to use for communication",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Transport Type": {
+            Name: "Transport Type",
+            Description: "Transport mechanism to use for communication",
+          },
+        },
+        ar: {
+          "Transport Type": {
+            Name: "نوع النقل",
+            Description: "آلية النقل المراد استخدامها للاتصال",
+          },
+        },
+      },
     },
     {
       parameterName: "MCP Server URL",
@@ -61,6 +76,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "URL of the MCP server to connect to",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "MCP Server URL": {
+            Name: "MCP Server URL",
+            Description: "URL of the MCP server to connect to",
+          },
+        },
+        ar: {
+          "MCP Server URL": {
+            Name: "رابط خادم MCP",
+            Description: "رابط خادم MCP المراد الاتصال به",
+          },
+        },
+      },
     },
     {
       parameterName: "Authentication Token",
@@ -70,6 +99,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Authentication token for the MCP server (if required)",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Authentication Token": {
+            Name: "Authentication Token",
+            Description: "Authentication token for the MCP server (if required)",
+          },
+        },
+        ar: {
+          "Authentication Token": {
+            Name: "رمز المصادقة",
+            Description: "رمز المصادقة لخادم MCP (إذا لزم الأمر)",
+          },
+        },
+      },
     },
     {
       parameterName: "Command",
@@ -79,6 +122,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Command to run MCP server",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Command": {
+            Name: "Command",
+            Description: "Command to run MCP server",
+          },
+        },
+        ar: {
+          "Command": {
+            Name: "الأمر",
+            Description: "الأمر لتشغيل خادم MCP",
+          },
+        },
+      },
     },
     {
       parameterName: "Args",
@@ -86,8 +143,22 @@ const metadata: NodeMetadata = {
       defaultValue: "",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "Command Args",
+      description: "Command arguments",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Args": {
+            Name: "Args",
+            Description: "Command arguments",
+          },
+        },
+        ar: {
+          "Args": {
+            Name: "المعاملات",
+            Description: "معاملات الأمر",
+          },
+        },
+      },
     },
     {
       parameterName: "Resource",
@@ -97,8 +168,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Resource to be returned",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Resource": {
+            Name: "Resource",
+            Description: "Resource to be returned",
+          },
+        },
+        ar: {
+          "Resource": {
+            Name: "المورد",
+            Description: "المورد المراد إرجاعه",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "MCP",
+      title: "MCP Resource",
+      nodeType: "MCP Resource",
+      description: "Retrieves a specific resource by name from a Master Control Program (MCP) server. This node supports both HTTP and Stdio transport mechanisms for communication.",
+    },
+    ar: {
+      category: "MCP",
+      title: "مورد MCP",
+      nodeType: "مورد MCP",
+      description: "يسترجع مورداً محدداً بالاسم من خادم برنامج التحكم الرئيسي (MCP). تدعم هذه العقدة آليات نقل HTTP وStdio للاتصال.",
+    },
+  },
 };
 
 export function createNMcpGetResourcelNode(

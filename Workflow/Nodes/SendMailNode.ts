@@ -30,9 +30,10 @@ export interface SendMailNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Communication",
+  category: "Input/Output",
   title: "Send Email",
   nodeType: "SendMail",
+  description: "Sends an email using the provided SMTP configuration. This node requires SMTP credentials and supports TLS encryption, making it a secure way to integrate email notifications into your workflows.",
   nodeValue: "Email Sender",
   sockets: [
     { title: "Email Title", type: "input", dataType: "string" },
@@ -52,6 +53,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "SMTP server hostname",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "SMTP Host": {
+            Name: "SMTP Host",
+            Description: "SMTP server hostname",
+          },
+        },
+        ar: {
+          "SMTP Host": {
+            Name: "خادم SMTP",
+            Description: "اسم مضيف خادم SMTP",
+          },
+        },
+      },
     },
     {
       parameterName: "SMTP Port",
@@ -61,6 +76,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "SMTP server port (587 for TLS, 465 for SSL)",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "SMTP Port": {
+            Name: "SMTP Port",
+            Description: "SMTP server port (587 for TLS, 465 for SSL)",
+          },
+        },
+        ar: {
+          "SMTP Port": {
+            Name: "منفذ SMTP",
+            Description: "منفذ خادم SMTP (587 لـ TLS، 465 لـ SSL)",
+          },
+        },
+      },
     },
     {
       parameterName: "From Email",
@@ -70,6 +99,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Sender email address",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "From Email": {
+            Name: "From Email",
+            Description: "Sender email address",
+          },
+        },
+        ar: {
+          "From Email": {
+            Name: "البريد المُرسِل",
+            Description: "عنوان البريد الإلكتروني للمُرسِل",
+          },
+        },
+      },
     },
     {
       parameterName: "Email Password",
@@ -79,6 +122,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Email password or app-specific password",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Email Password": {
+            Name: "Email Password",
+            Description: "Email password or app-specific password",
+          },
+        },
+        ar: {
+          "Email Password": {
+            Name: "كلمة مرور البريد",
+            Description: "كلمة مرور البريد الإلكتروني أو كلمة مرور خاصة بالتطبيق",
+          },
+        },
+      },
     },
     {
       parameterName: "Use TLS",
@@ -88,8 +145,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Enable TLS encryption",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Use TLS": {
+            Name: "Use TLS",
+            Description: "Enable TLS encryption",
+          },
+        },
+        ar: {
+          "Use TLS": {
+            Name: "استخدام TLS",
+            Description: "تفعيل تشفير TLS",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Input/Output",
+      title: "Send Email",
+      nodeType: "Send Email",
+      description: "Sends an email using the provided SMTP configuration. This node requires SMTP credentials and supports TLS encryption, making it a secure way to integrate email notifications into your workflows.",
+    },
+    ar: {
+      category: "إدخال/إخراج",
+      title: "إرسال بريد إلكتروني",
+      nodeType: "إرسال بريد إلكتروني",
+      description: "يُرسل بريداً إلكترونياً باستخدام إعدادات SMTP المقدمة. تتطلب هذه العقدة بيانات اعتماد SMTP وتدعم تشفير TLS، مما يجعلها طريقة آمنة لدمج إشعارات البريد الإلكتروني في سير العمل.",
+    },
+  },
 };
 
 export function createSendMailNode(
@@ -127,14 +212,14 @@ export function createSendMailNode(
         console.log(`Executing SendMail node ${id}`);
 
         // Validate required inputs
-        if (!emailTitle) {
-          throw new Error("Email title is required");
+        if (!emailTitle || typeof emailTitle !== 'string') {
+          throw new Error("Email title is required and must be a string");
         }
-        if (!emailBody) {
-          throw new Error("Email body is required");
+        if (!emailBody || typeof emailBody !== 'string') {
+          throw new Error("Email body is required and must be a string");
         }
-        if (!toEmail) {
-          throw new Error("Recipient email address is required");
+        if (!toEmail || typeof toEmail !== 'string') {
+          throw new Error("Recipient email address is required and must be a string");
         }
 
         // Get configuration parameters
@@ -232,8 +317,24 @@ export function createSendMailNode(
   };
 }
 
+interface EmailConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  auth: { user: string; pass: string };
+  tls?: { rejectUnauthorized: boolean };
+}
+
+interface EmailMessage {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}
+
 // Real email sending function using nodemailer
-async function sendEmail(config: any, message: any) {
+async function sendEmail(config: EmailConfig, message: EmailMessage) {
   const transporter: Transporter = nodemailer.createTransport({
     host: config.host,
     port: config.port,

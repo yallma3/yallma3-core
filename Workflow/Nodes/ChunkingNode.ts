@@ -32,6 +32,7 @@ const metadata: NodeMetadata = {
   title: "Text Chunking",
   nodeType: "Chunking",
   nodeValue: "Chunks: 0",
+  description: "Splits input text into smaller, overlapping chunks based on a maximum token count. Each chunk includes metadata such as token, character, and word counts.",
   sockets: [
     { title: "Input Text", type: "input", dataType: "string" },
     { title: "Chunks", type: "output", dataType: "json" },
@@ -47,6 +48,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Maximum number of tokens per chunk",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Max Tokens": {
+            Name: "Max Tokens",
+            Description: "Maximum number of tokens per chunk",
+          },
+        },
+        ar: {
+          "Max Tokens": {
+            Name: "الحد الأقصى للرموز",
+            Description: "الحد الأقصى لعدد الرموز لكل جزء",
+          },
+        },
+      },
     },
     {
       parameterName: "Overlap",
@@ -56,8 +71,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Number of overlapping tokens between chunks",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Overlap": {
+            Name: "Overlap",
+            Description: "Number of overlapping tokens between chunks",
+          },
+        },
+        ar: {
+          "Overlap": {
+            Name: "التداخل",
+            Description: "عدد الرموز المتداخلة بين الأجزاء",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Text",
+      title: "Text Chunking",
+      nodeType: "Text Chunking",
+      description: "Splits input text into smaller, overlapping chunks based on a maximum token count. Each chunk includes metadata such as token, character, and word counts.",
+    },
+    ar: {
+      category: "نص",
+      title: "تقسيم النص",
+      nodeType: "تقسيم النص",
+      description: "يقسم النص المُدخل إلى أجزاء أصغر متداخلة بناءً على الحد الأقصى لعدد الرموز. يتضمن كل جزء بيانات وصفية مثل عدد الرموز والأحرف والكلمات.",
+    },
+  },
 };
 
 // Simple tokenizer implementation for chunking
@@ -182,7 +225,7 @@ export function createChunkingNode(
         (param) => param.parameterName === parameterName
       );
     },
-    setConfigParameter(parameterName: string, value: any): void {
+       setConfigParameter(parameterName: string, value: string | number | boolean | undefined): void {
       const parameter = (this.configParameters ?? []).find(
         (param) => param.parameterName === parameterName
       );

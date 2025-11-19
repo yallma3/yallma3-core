@@ -93,10 +93,11 @@ export interface ScraperNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Generation",
+  category: "Data",
   title: "Scraper",
   nodeType: "Scraper",
-  nodeValue: null,
+  description: "A multi-stage data processing node that scrapes web pages from search results, chunks the content, and uses the Gemini API to extract relevant topics. It requires both ScraperAPI and Gemini API keys.",
+  nodeValue: "",
   sockets: [
     { title: "Search Results", type: "input", dataType: "json" },
     { title: "Query Metadata", type: "input", dataType: "json" },
@@ -115,6 +116,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "ScraperAPI key for web scraping",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "ScraperAPI Key": {
+            Name: "ScraperAPI Key",
+            Description: "ScraperAPI key for web scraping",
+          },
+        },
+        ar: {
+          "ScraperAPI Key": {
+            Name: "مفتاح ScraperAPI",
+            Description: "مفتاح ScraperAPI لكشط الويب",
+          },
+        },
+      },
     },
     {
       parameterName: "Gemini API Key",
@@ -124,6 +139,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Google Gemini API key for topic extraction",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Gemini API Key": {
+            Name: "Gemini API Key",
+            Description: "Google Gemini API key for topic extraction",
+          },
+        },
+        ar: {
+          "Gemini API Key": {
+            Name: "مفتاح Google Gemini API",
+            Description: "مفتاح Google Gemini API لاستخراج الموضوعات",
+          },
+        },
+      },
     },
     {
       parameterName: "Gemini Model",
@@ -138,25 +167,20 @@ const metadata: NodeMetadata = {
         { key: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
         { key: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
       ],
-    },
-    {
-      parameterName: "Concurrent Scrapes",
-      parameterType: "number",
-      defaultValue: 5,
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description:
-        "Parallel scraping threads (max 100 for ScraperAPI Business plan)",
-      isNodeBodyContent: false,
-    },
-    {
-      parameterName: "Topic Extraction Concurrency",
-      parameterType: "number",
-      defaultValue: 4,
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description: "Parallel topic extraction tasks",
-      isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Gemini Model": {
+            Name: "Gemini Model",
+            Description: "Gemini model for topic extraction",
+          },
+        },
+        ar: {
+          "Gemini Model": {
+            Name: "نموذج Gemini",
+            Description: "نموذج Gemini لاستخراج الموضوعات",
+          },
+        },
+      },
     },
     {
       parameterName: "Max Chunk Size",
@@ -164,11 +188,38 @@ const metadata: NodeMetadata = {
       defaultValue: 7000,
       valueSource: "UserInput",
       UIConfigurable: true,
-      description:
-        "Maximum characters per content chunk (for Gemini token limits)",
+      description: "Maximum characters per content chunk (for Gemini token limits)",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Max Chunk Size": {
+            Name: "Max Chunk Size",
+            Description: "Maximum characters per content chunk (for Gemini token limits)",
+          },
+        },
+        ar: {
+          "Max Chunk Size": {
+            Name: "الحد الأقصى لحجم الجزء",
+            Description: "الحد الأقصى للأحرف لكل جزء محتوى (لحدود رموز Gemini)",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Data",
+      title: "Scraper",
+      nodeType: "Scraper",
+      description: "A multi-stage data processing node that scrapes web pages from search results, chunks the content, and uses the Gemini API to extract relevant topics. It requires both ScraperAPI and Gemini API keys.",
+    },
+    ar: {
+      category: "بيانات",
+      title: "كاشط الويب",
+      nodeType: "كاشط الويب",
+      description: "عقدة معالجة بيانات متعددة المراحل تكشط صفحات الويب من نتائج البحث وتقسم المحتوى وتستخدم Gemini API لاستخراج الموضوعات ذات الصلة. يتطلب مفاتيح API لكل من ScraperAPI و Gemini.",
+    },
+  },
 };
 
 function getStringConfig(param: ConfigParameterType | undefined): string {
@@ -262,20 +313,6 @@ export function createScraperNode(id: number, position: Position): ScraperNode {
             )
           ) || "gemini-2.5-flash";
 
-        const concurrentScrapes =
-          getNumberConfig(
-            context.node.configParameters?.find(
-              (p) => p.parameterName === "Concurrent Scrapes"
-            )
-          ) || 5;
-
-        const topicConcurrency =
-          getNumberConfig(
-            context.node.configParameters?.find(
-              (p) => p.parameterName === "Topic Extraction Concurrency"
-            )
-          ) || 4;
-
         const maxChunkSize =
           getNumberConfig(
             context.node.configParameters?.find(
@@ -284,7 +321,7 @@ export function createScraperNode(id: number, position: Position): ScraperNode {
           ) || 7000;
 
         console.log(
-          `[Scraper Node ${id}] Config: Model=${geminiModel}, ConcurrentScrapes=${concurrentScrapes}, TopicConcurrency=${topicConcurrency}`
+          `[Scraper Node ${id}] Config: Model=${geminiModel}, MaxChunkSize=${maxChunkSize}`
         );
 
         console.log(
@@ -305,11 +342,7 @@ export function createScraperNode(id: number, position: Position): ScraperNode {
           `[Scraper Node ${id}] Step 2/4: Scraping ${filteredUrls.length} URLs...`
         );
 
-        const scrapedData = await scrapeUrls(
-          filteredUrls,
-          scraperApiKey,
-          concurrentScrapes
-        );
+        const scrapedData = await scrapeUrls(filteredUrls, scraperApiKey);
 
         const successfulScrapes = scrapedData.filter((d) => d.success).length;
         console.log(
@@ -340,8 +373,7 @@ export function createScraperNode(id: number, position: Position): ScraperNode {
           queryMetadata.parsed_query.domain_type,
           queryMetadata.required_topics,
           geminiApiKey,
-          geminiModel,
-          topicConcurrency
+          geminiModel
         );
 
         console.log(
@@ -365,7 +397,7 @@ export function createScraperNode(id: number, position: Position): ScraperNode {
         };
 
         console.log(
-          `[Scraper Node ${id}] Scraping and extraction completed successfully`
+          `[Scraper Node ${id}]  Scraping and extraction completed successfully`
         );
 
         return {
@@ -538,10 +570,10 @@ async function filterUrls(searchResults: SearchResult[]): Promise<string[]> {
 
 async function scrapeUrls(
   urls: string[],
-  apiKey: string,
-  concurrency: number
+  apiKey: string
 ): Promise<ScrapedContent[]> {
   const results: ScrapedContent[] = [];
+  const concurrency = 5;
   const batches: string[][] = [];
 
   for (let i = 0; i < urls.length; i += concurrency) {
@@ -715,12 +747,11 @@ async function extractTopics(
   domainType: string,
   requiredTopics: number,
   apiKey: string,
-  model: string,
-  concurrency: number
+  model: string
 ): Promise<string[]> {
   const allTopics: string[] = [];
   const seenTopics = new Set<string>();
-
+  const concurrency = 4;
   const batches: ContentChunk[][] = [];
   for (let i = 0; i < chunks.length; i += concurrency) {
     batches.push(chunks.slice(i, i + concurrency));

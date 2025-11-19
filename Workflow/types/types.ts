@@ -12,7 +12,7 @@ export type NodeValue =
 // Define a type for the context used in node processing
 export type NodeExecutionContext = {
   node: NodeType;
-  inputs: Record<string, any>;
+  inputs: Record<string, unknown>;
   ws?: WebSocket;
 };
 
@@ -96,6 +96,7 @@ export interface NodeMetadata {
   title: string;
   nodeType: string;
   nodeValue?: NodeValue;
+  description?: string;
   sockets: Array<{
     title: string;
     type: "input" | "output";
@@ -104,4 +105,10 @@ export interface NodeMetadata {
   width: number;
   height: number;
   configParameters: ConfigParameterType[];
+  i18n?: Record<string, {
+    category?: string;
+    title?: string;
+    description?: string;
+     nodeType?: string; 
+  }>; 
 }

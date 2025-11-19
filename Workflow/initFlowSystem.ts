@@ -16,6 +16,8 @@ import { nodeRegistry } from "./NodeRegistry";
 import { register as registerMathNode } from "./Nodes/mathExpressionNode";
 import { register as registerTextNode } from "./Nodes/textTemplateNode";
 import { register as registerJoinNode } from "./Nodes/JoinTextNode";
+
+import { register as registerChatNode } from "./Nodes/Chat/ChatNode";
 import { register as registerClaudeChatNode } from "./Nodes/Chat/ClaudeChatNode";
 import { register as registerGeminiChatNode } from "./Nodes/Chat/GeminiChatNode";
 import { register as registerGroqChatNode } from "./Nodes/Chat/GroqChatNode";
@@ -28,7 +30,7 @@ import { register as registerMcpToolCallNode } from "./Nodes/Mcp/McpToolCallNode
 import { register as registerMcpGetResourceNode } from "./Nodes/Mcp/McpGetResourceNode";
 import { register as registerMcpGeToolNode } from "./Nodes/Mcp/McpGetPromptNode";
 import { register as registerPdfDownloaderNode } from "./Nodes/DownloaderNode";
-import { register as registerPdfExtractorNode } from "./Nodes/PdfExtractorNode";
+// import { register as registerPdfExtractorNode } from "./Nodes/PdfExtractorNode";
 import { register as registerChunkingNode } from "./Nodes/ChunkingNode";
 import { register as registerHashNode } from "./Nodes/HashNode";
 import { register as registerHttpCallNode } from "./Nodes/HttpCallNode";
@@ -58,6 +60,7 @@ export async function initFlowSystem() {
 
   registerConsoleInputNode(nodeRegistry);
 
+  registerChatNode(nodeRegistry);
   registerOpenRouterChatNode(nodeRegistry);
   registerOpenAIChatNode(nodeRegistry);
   registerGroqChatNode(nodeRegistry);
@@ -69,7 +72,7 @@ export async function initFlowSystem() {
   registerMcpGeToolNode(nodeRegistry);
 
   registerPdfDownloaderNode(nodeRegistry);
-  registerPdfExtractorNode(nodeRegistry);
+  // registerPdfExtractorNode(nodeRegistry);
   registerChunkingNode(nodeRegistry);
 
   registerVectorSearchNode(nodeRegistry);

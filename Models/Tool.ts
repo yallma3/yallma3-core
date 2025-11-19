@@ -1,42 +1,42 @@
-import type WebSocket from "ws";
-import { workflowExecutor } from "../Agent/Utls/ToolCallingHelper";
+
 
 export type Tool = {
+  id?: string;
   type: "function" | "workflow" | "mcp" | "basic";
   name: string;
   description: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
 };
 
 export type ToolCall = {
   id: string;
   name: string;
-  input: Record<string, any>;
+  input: Record<string, unknown>;
 };
 
 export interface LLMSpecTool {
   type: "function";
   name: string;
   description: string;
-  parameters: Record<string, any>;
-  executor?: (args: any) => Promise<any> | any; // optional actual function
+  parameters: Record<string, unknown>;
+  executor?: (args: Record<string, unknown>) => Promise<unknown> | unknown; // optional actual function
 }
 
 export interface ToolExecutor {
-  execute(toolName: string, args: Record<string, any>): Promise<any>;
+  execute(toolName: string, args: Record<string, unknown>): Promise<unknown>;
 }
 
 export class ToolHandler implements ToolExecutor {
   private registry = new Map<
     string,
-    (input: Record<string, any>) => Promise<any>
+    (input: Record<string, unknown>) => Promise<unknown>
   >();
 
-  register(name: string, fn: (input: Record<string, any>) => Promise<any>) {
+  register(name: string, fn: (input: Record<string, unknown>) => Promise<unknown>) {
     this.registry.set(name, fn);
   }
 
-  async execute(toolName: string, input: Record<string, any>) {
+  async execute(toolName: string, input: Record<string, unknown>) {
     const fn = this.registry.get(toolName);
     if (!fn) throw new Error(`No tool registered with name ${toolName}`);
     return fn(input);

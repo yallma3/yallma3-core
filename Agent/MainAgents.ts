@@ -3,13 +3,11 @@ import type { ConsoleEvent, WorkspaceData } from "../Models/Workspace";
 import { WebSocket } from "ws";
 import { AgentRuntime, Yallma3GenOneAgentRuntime } from "./Agent";
 import { executeFlowRuntime } from "../Workflow/runtime";
-import { json } from "express";
 import type { Workflow } from "../Models/Workflow";
 import { getTaskExecutionOrderWithContext } from "../Task/TaskGraph";
-import type { AgentStep, SubTask, TaskGraph } from "../Models/Task";
+import type { AgentStep, TaskGraph } from "../Models/Task";
 import {
   analyzeTaskCore,
-  decomposeTask,
   planAgenticTask,
 } from "../Task/TaskIntrepreter";
 import { assignBestFit } from "./Utls/MainAgentHelper";
@@ -17,7 +15,13 @@ import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
 import { workflowExecutor } from "./Utls/ToolCallingHelper";
 
-export function sendWorkflow(ws: WebSocket, workflow: string): Promise<any> {
+interface FlowResult {
+  layers: unknown;
+  results: Record<number, unknown>;
+  finalResult: unknown;
+}
+
+export function sendWorkflow(ws: WebSocket, workflow: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
 
@@ -232,19 +236,24 @@ export const BasicAgentRuntime = async (
 
     const type = step.type;
     if (type == "workflow") {
-      const workflow = await sendWorkflow(ws, step.workflow);
-      const wrapper = JSON.parse(workflow);
-
-      // If workflow is already an object (not string), guard against double-parse
-      const json: Workflow =
-        typeof wrapper.data === "string"
-          ? JSON.parse(wrapper.data)
-          : wrapper.data;
+      const json: Workflow = JSON.parse(step.workflow);
 
       console.log("Parsed workflow:", json);
       const result = await executeFlowRuntime(json, ws);
-      if (result && (result as any).finalResult) {
-        prevResults.push((result as any).finalResult);
+      if (result && typeof result === 'object' && 'finalResult' in result) {
+        const flowResult = result as FlowResult;
+        if (flowResult.finalResult) {
+          prevResults.push(String(flowResult.finalResult));
+        }
+      } else {
+        console.error("Workflow execution failed:", result);
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            data: `Workflow execution failed: ${result}`,
+            timestamp: new Date().toISOString(),
+          })
+        );
       }
       ws.send(
         JSON.stringify({
@@ -460,7 +469,6 @@ export const yallma3GenSeqential = async (
         })
       );
 
-      let subtasks: SubTask[] | null = null;
       let agentPlan: AgentStep[] | null = null;
 
       // Complex task needs decomposition
@@ -506,11 +514,12 @@ export const yallma3GenSeqential = async (
           })
         );
       } catch (err) {
+        console.error("[MainAgent] Agent plan creation failed:", err);
         consoleMessage = {
           id: crypto.randomUUID(),
           timestamp: Date.now(),
           type: "error",
-          message: `Agent plan creation failed.`,
+          message: `Agent plan creation failed: ${err instanceof Error ? err.message : String(err)}`,
         };
         ws.send(
           JSON.stringify({

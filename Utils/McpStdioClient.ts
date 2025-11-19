@@ -23,7 +23,6 @@ export class McpSTDIOClient {
   }
 
   async init() {
-    console.log("initializing");
     try {
       const transport = new StdioClientTransport({
         command: this.serverConfig.command,
@@ -32,7 +31,26 @@ export class McpSTDIOClient {
       await this.client.connect(transport);
       console.log("connected");
     } catch (err) {
+      console.error("[MCP STDIO] Failed to initialize connection:", err);
       throw err;
+    }
+  }
+
+  async test() {
+    try {
+      const transport = new StdioClientTransport({
+        command: this.serverConfig.command,
+        args: this.serverConfig.args || [],
+      });
+
+      await this.client.connect(transport);
+      console.log("Connected to MCP STDIO server successfully");
+
+      this.client.close();
+      return true;
+    } catch (err) {
+      console.error("STDIO MCP connection failed:", err);
+      return false;
     }
   }
 
@@ -41,6 +59,7 @@ export class McpSTDIOClient {
       const response = await getTools(this.client);
       return response;
     } catch (err) {
+      console.error("[MCP STDIO] Failed to list tools, returning empty array:", err);
       return [];
     }
   }
@@ -49,6 +68,7 @@ export class McpSTDIOClient {
       const response = await callTool(this.client, toolCall);
       return response;
     } catch (err) {
+      console.error("[MCP STDIO] Failed to call tool:", toolCall.tool, err);
       throw err;
     }
   }
@@ -57,6 +77,7 @@ export class McpSTDIOClient {
       const response = await getPrompts(this.client);
       return response;
     } catch (err) {
+      console.error("[MCP STDIO] Failed to list prompts, returning empty array:", err);
       return [];
     }
   }
@@ -65,6 +86,7 @@ export class McpSTDIOClient {
       const response = await getPrompt(this.client, prompt);
       return response;
     } catch (err) {
+      console.error("[MCP STDIO] Failed to get prompt:", prompt, err);
       throw err;
     }
   }
@@ -73,6 +95,7 @@ export class McpSTDIOClient {
       const response = await getResources(this.client);
       return response;
     } catch (err) {
+      console.error("[MCP STDIO] Failed to list resources, returning empty array:", err);
       return [];
     }
   }
@@ -81,6 +104,7 @@ export class McpSTDIOClient {
       const response = await getResource(this.client, resource);
       return response;
     } catch (err) {
+      console.error("[MCP STDIO] Failed to get resource:", resource, err);
       throw err;
     }
   }

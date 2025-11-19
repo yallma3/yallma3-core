@@ -1,5 +1,16 @@
-import type { LLMMessage, LLMProvider, LLMResponse } from "../Models/LLM";
-import type { LLMSpecTool } from "../Models/Tool";
+import type { LLMSpecTool, ToolCall } from "../Models/Tool";
+import type {
+  LLMMessage,
+  LLMResponse,
+  LLMProvider,
+  OpenAIMessage,
+  OpenAIResponse,
+  OpenAIToolCall,
+  ClaudeResponse,
+  ClaudeContentItem,
+  GeminiResponse,
+  GeminiPart,
+} from "../Models/LLM";
 export class OpenAIProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
@@ -22,8 +33,8 @@ export class OpenAIProvider implements LLMProvider {
   /**
    * Execute tools and return tool messages
    */
-  private async executeTools(toolCalls: any[]): Promise<any[]> {
-    const toolMessages: any[] = [];
+  private async executeTools(toolCalls: ToolCall[]): Promise<LLMMessage[]> {
+    const toolMessages: LLMMessage[] = [];
 
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name === call.name);
@@ -98,7 +109,7 @@ export class OpenAIProvider implements LLMProvider {
               arguments: JSON.stringify(t.input),
             },
           })),
-        } as any,
+        } as LLMMessage,
         ...toolMessages,
       ];
 
@@ -112,7 +123,7 @@ export class OpenAIProvider implements LLMProvider {
    * Makes a raw call to the OpenAI API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
-    const body: any = {
+    const body: Record<string, unknown> = {
       model: this.model,
       messages,
       temperature: 0.7,
@@ -143,24 +154,24 @@ export class OpenAIProvider implements LLMProvider {
       throw new Error(`OpenAI API returned status ${res.status}`);
     }
 
-    const json = await res.json();
-    const message = (json as any).choices?.[0]?.message;
+    const json = await res.json() as OpenAIResponse;
+    const message = json.choices?.[0]?.message;
 
     if (!message) {
       throw new Error("Invalid OpenAI response format");
     }
 
     const rawContent: string | null = message.content ?? null;
-    const toolCalls =
-      message.tool_calls?.map((t: any) => ({
+    const toolCalls: ToolCall[] | null =
+      message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
-        name: t.function?.name,
-        input: JSON.parse(t.function?.arguments || "{}"),
+        name: t.function?.name ?? "",
+        input: JSON.parse(t.function?.arguments ?? "{}") as Record<string, unknown>,
       })) || null;
 
     const content =
       rawContent ||
-      (toolCalls?.length ? `Calling tool ${toolCalls[0].name}` : "");
+      (toolCalls?.length ? `Calling tool ${toolCalls[0]!.name}` : "");
 
     return { content, toolCalls };
   }
@@ -188,8 +199,8 @@ export class GroqProvider implements LLMProvider {
   /**
    * Execute tools and return tool messages
    */
-  private async executeTools(toolCalls: any[]): Promise<any[]> {
-    const toolMessages: any[] = [];
+  private async executeTools(toolCalls: ToolCall[]): Promise<LLMMessage[]> {
+    const toolMessages: LLMMessage[] = [];
 
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name === call.name);
@@ -239,7 +250,7 @@ export class GroqProvider implements LLMProvider {
               arguments: JSON.stringify(t.input),
             },
           })),
-        } as any,
+        } as OpenAIMessage,
         ...toolMessages,
       ];
 
@@ -253,7 +264,7 @@ export class GroqProvider implements LLMProvider {
    * Makes a raw call to the Groq API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
-    const body: any = {
+    const body: Record<string, unknown> = {
       model: this.model,
       messages: messages,
       temperature: 0.7,
@@ -286,25 +297,25 @@ export class GroqProvider implements LLMProvider {
       throw new Error(`Chat API returned status ${res.status}`);
     }
 
-    const json = await res.json();
+    const json = await res.json() as OpenAIResponse;
 
-    const message = (json as any).choices[0].message;
+    const message = json.choices[0]?.message;
     if (!message) {
       throw new Error("Invalid Groq response format");
     }
 
     // Extract both content and tool calls safely
     const rawContent: string | null = message.content ?? null;
-    const toolCalls =
-      message.tool_calls?.map((t: any) => ({
+    const toolCalls: ToolCall[] | null =
+      message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
-        name: t.function?.name,
-        input: JSON.parse(t.function?.arguments || "{}"),
+        name: t.function?.name ?? "",
+        input: JSON.parse(t.function?.arguments ?? "{}") as Record<string, unknown>,
       })) || null;
 
     const content =
       rawContent ||
-      (toolCalls?.length ? `calling tool ${toolCalls[0].name}` : "");
+      (toolCalls?.length ? `calling tool ${toolCalls[0]!.name}` : "");
 
     return { content, toolCalls };
   }
@@ -332,8 +343,8 @@ export class OpenRouterProvider implements LLMProvider {
   /**
    * Execute tools and return tool messages
    */
-  private async executeTools(toolCalls: any[]): Promise<any[]> {
-    const toolMessages: any[] = [];
+  private async executeTools(toolCalls: ToolCall[]): Promise<LLMMessage[]> {
+    const toolMessages: LLMMessage[] = [];
 
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name === call.name);
@@ -383,7 +394,7 @@ export class OpenRouterProvider implements LLMProvider {
               arguments: JSON.stringify(t.input),
             },
           })),
-        } as any,
+        } as OpenAIMessage,
         ...toolMessages,
       ];
 
@@ -397,7 +408,7 @@ export class OpenRouterProvider implements LLMProvider {
    * Makes a raw call to the OpenRouter API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
-    const body: any = {
+    const body: Record<string, unknown> = {
       model: this.model,
       messages,
       temperature: 0.7,
@@ -429,7 +440,7 @@ export class OpenRouterProvider implements LLMProvider {
     }
 
     const json = await res.json();
-    const message = (json as any).choices?.[0]?.message;
+    const message = (json as OpenAIResponse).choices?.[0]?.message;
     if (!message) {
       throw new Error("Invalid OpenRouter response format");
     }
@@ -437,7 +448,7 @@ export class OpenRouterProvider implements LLMProvider {
     // Extract both content and tool calls safely
     const rawContent: string | null = message.content ?? null;
     const toolCalls =
-      message.tool_calls?.map((t: any) => ({
+      message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
         name: t.function?.name,
         input: JSON.parse(t.function?.arguments || "{}"),
@@ -472,8 +483,8 @@ export class GeminiProvider implements LLMProvider {
   /**
    * Execute tools and return tool results for Gemini format
    */
-  private async executeTools(toolCalls: any[]): Promise<any[]> {
-    const toolResults: any[] = [];
+  private async executeTools(toolCalls: ToolCall[]): Promise<Record<string, unknown>[]> {
+    const toolResults: Record<string, unknown>[] = [];
 
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name === call.name);
@@ -541,7 +552,7 @@ export class GeminiProvider implements LLMProvider {
    * Makes a raw call to the Gemini API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
-    const body: any = {
+    const body: Record<string, unknown> = {
       contents: messages.map((msg) => ({
         role: msg.role === "assistant" ? "model" : msg.role,
         parts: [{ text: msg.content }],
@@ -583,18 +594,18 @@ export class GeminiProvider implements LLMProvider {
       throw new Error(`Gemini API returned status ${res.status}`);
     }
 
-    const json = await res.json();
+    const json = await res.json() as GeminiResponse;
 
-    const candidates = (json as any).candidates ?? [];
+    const candidates = json.candidates ?? [];
     const first = candidates[0];
     const parts = first?.content?.parts ?? [];
 
-    const rawContent = parts.find((p: any) => p.text)?.text ?? null;
+    const rawContent = parts.find((p: GeminiPart) => p.text)?.text ?? null;
 
     const functionCalls =
       parts
-        .filter((p: any) => p.functionCall)
-        .map((p: any) => ({
+        .filter((p: GeminiPart) => p.functionCall)
+        .map((p: GeminiPart) => ({
           id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           name: p.functionCall.name,
           input: p.functionCall.args,
@@ -633,8 +644,8 @@ export class ClaudeProvider implements LLMProvider {
   /**
    * Execute tools and return tool messages for Claude format
    */
-  private async executeTools(toolCalls: any[]): Promise<any[]> {
-    const toolMessages: any[] = [];
+  private async executeTools(toolCalls: ToolCall[]): Promise<LLMMessage[]> {
+    const toolMessages: LLMMessage[] = [];
 
     for (const call of toolCalls) {
       const tool = this.tools.find((t) => t.name === call.name);
@@ -650,7 +661,7 @@ export class ClaudeProvider implements LLMProvider {
             content: JSON.stringify(result),
           },
         ],
-      });
+      } as LLMMessage);
     }
 
     return toolMessages;
@@ -686,7 +697,7 @@ export class ClaudeProvider implements LLMProvider {
             name: call.name,
             input: call.input,
           })),
-        } as any,
+        } as OpenAIMessage,
         ...toolMessages,
       ];
 
@@ -700,7 +711,7 @@ export class ClaudeProvider implements LLMProvider {
    * Makes a raw call to the Claude API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
-    const body: any = {
+    const body: Record<string, unknown> = {
       model: this.model,
       max_tokens: 4096,
       messages,
@@ -729,20 +740,20 @@ export class ClaudeProvider implements LLMProvider {
       throw new Error(`Claude API returned status ${res.status}`);
     }
 
-    const json = await res.json();
-    const content = (json as any).content ?? [];
+    const json = await res.json() as ClaudeResponse;
+    const content = json.content ?? [];
 
     const toolUses =
       content
-        ?.filter((item: any) => item.type === "tool_use")
-        ?.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          input: item.input,
+        ?.filter((item: ClaudeContentItem) => item.type === "tool_use")
+        ?.map((item: ClaudeContentItem) => ({
+          id: item.id!,
+          name: item.name!,
+          input: item.input!,
         })) || null;
 
     // 🔍 Detect normal text content
-    const textPart = content?.find((item: any) => item.type === "text");
+    const textPart = content?.find((item: ClaudeContentItem) => item.type === "text");
     const rawText = textPart?.text ?? null;
 
     const finalContent =

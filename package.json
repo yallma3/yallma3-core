@@ -5,16 +5,28 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "start": "bun run --watch index.ts"
+    "start": "bun run --watch index.ts",
+    "build": "bun build index.ts --compile --outfile server",
+    "serve": "./server",
+    "lint": "eslint . --ext .ts,.tsx",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@types/bun": "latest",
     "@types/cors": "^2.8.19",
     "@types/crypto-js": "^4.2.2",
     "@types/express": "^5.0.3",
     "@types/nodemailer": "^6.4.19",
     "@types/pdf-parse": "^1.1.5",
-    "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/parser": "^8.46.4",
+    "@vitest/coverage-v8": "^2.0.0",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "vitest": "^2.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -29,5 +41,6 @@
     "nodemailer": "^6.10.1",
     "pdf-parse": "^1.1.1",
     "ws": "^8.18.3"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }

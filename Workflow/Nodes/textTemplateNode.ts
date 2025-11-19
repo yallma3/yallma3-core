@@ -29,8 +29,7 @@ export interface TextNode extends BaseNode {
 // Template processing utility function - shared across multiple node types
 const processTextTemplate = async (
   template: string,
-  input: string,
-  nodeId: number
+  input: string
 ): Promise<string> => {
   // Handle {{input}} variable
   const inputRegex = /\{\{input\}\}/g;
@@ -45,43 +44,58 @@ const processTextTemplate = async (
 };
 
 export function register(nodeRegistry: NodeRegistry): void {
-  const metadata: NodeMetadata = {
-    category: "Text",
-    title: "Text",
-    nodeType: "Text",
-    nodeValue: "{{input}}",
-    sockets: [
-      { title: "Input", type: "input", dataType: "string" },
-      { title: "Output", type: "output", dataType: "string" },
-    ],
-    width: 380,
-    height: 220,
-    configParameters: [
-      {
-        parameterName: "Text Input",
-        parameterType: "text",
-        defaultValue: "{{input}}",
-        valueSource: "UserInput",
-        UIConfigurable: true,
-        description: "Text template to interpolate with input",
-        isNodeBodyContent: true,
-        i18n: {
-          en: {
-            "Text Input": {
-              Name: "Text Input",
-              Description: "Text template to interpolate with input",
-            },
+ const metadata: NodeMetadata = {
+  category: "Text",
+  title: "Text",
+  nodeType: "Text",
+  description: "A versatile text node that processes a template string. It replaces the `{{input}}` placeholder with the value from its input socket, making it ideal for formatting and combining text dynamically.",
+  nodeValue: "{{input}}",
+  sockets: [
+    { title: "Input", type: "input", dataType: "string" },
+    { title: "Output", type: "output", dataType: "string" },
+  ],
+  width: 380,
+  height: 220,
+  configParameters: [
+    {
+      parameterName: "Text Input",
+      parameterType: "text",
+      defaultValue: "{{input}}",
+      valueSource: "UserInput",
+      UIConfigurable: true,
+      description: "Text template to interpolate with input",
+      isNodeBodyContent: true,
+      i18n: {
+        en: {
+          "Text Input": {
+            Name: "Text Input",
+            Description: "Text template to interpolate with input",
           },
-          ar: {
-            "Text Input": {
-              Name: "القالب النصي",
-              Description: "قالب نصي يُدمج مع البيانات المُدخلة",
-            },
+        },
+        ar: {
+          "Text Input": {
+            Name: "القالب النصي",
+            Description: "قالب نصي يُدمج مع البيانات المُدخلة",
           },
         },
       },
-    ],
-  };
+    },
+  ],
+  i18n: {
+    en: {
+      category: "Text",
+      title: "Text",
+      nodeType: "Text", 
+      description: "A versatile text node that processes a template string. It replaces the `{{input}}` placeholder with the value from its input socket, making it ideal for formatting and combining text dynamically.",
+    },
+    ar: {
+      category: "نص",
+      title: "نص",
+      nodeType: "نص", 
+      description: "عقدة نصية متعددة الاستخدامات تقوم بمعالجة سلسلة قالب نصي. يتم استبدال العنصر النائب `{{input}}` بقيمة من مقبس الإدخال، مما يجعلها مثالية لتنسيق ودمج النصوص ديناميكياً.",
+    },
+  },
+};
 
   function createTextNode(id: number, position: Position): TextNode {
     return {
@@ -116,14 +130,15 @@ export function register(nodeRegistry: NodeRegistry): void {
         // If the node value is a string and contains template variables, process them
         const n = context.node as TextNode;
 
-        if (typeof n.nodeValue === "string") {
+          if (typeof n.nodeValue === "string") {
+          const inputValue = context.inputs[n.id * 100 + 1];
           let input = "";
-          if (typeof context.inputs[n.id * 100 + 1] != "string") {
-            input = JSON.stringify(context.inputs[n.id * 100 + 1], null, 2);
+          if (typeof inputValue !== "string") {
+            input = JSON.stringify(inputValue, null, 2);
           } else {
-            input = context.inputs[n.id * 100 + 1];
+            input = inputValue;
           }
-          return processTextTemplate(n.nodeValue, input, n.id);
+          return processTextTemplate(n.nodeValue, input);
         }
         return n.nodeValue;
       },

@@ -33,6 +33,7 @@ const metadata: NodeMetadata = {
   category: "MCP",
   title: "MCP Discovery",
   nodeType: "McpDiscovery",
+  description: "Connects to a Master Control Program (MCP) server to discover its capabilities. This node can use either HTTP or Stdio transport to list available tools, prompts, and resources.",
   nodeValue: "",
   sockets: [
     { title: "Input", type: "input", dataType: "string" },
@@ -55,6 +56,20 @@ const metadata: NodeMetadata = {
       ],
       description: "Transport mechanism to use for communication",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Transport Type": {
+            Name: "Transport Type",
+            Description: "Transport mechanism to use for communication",
+          },
+        },
+        ar: {
+          "Transport Type": {
+            Name: "نوع النقل",
+            Description: "آلية النقل المراد استخدامها للاتصال",
+          },
+        },
+      },
     },
     {
       parameterName: "MCP Server URL",
@@ -64,6 +79,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "URL of the MCP server to connect to",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "MCP Server URL": {
+            Name: "MCP Server URL",
+            Description: "URL of the MCP server to connect to",
+          },
+        },
+        ar: {
+          "MCP Server URL": {
+            Name: "رابط خادم MCP",
+            Description: "رابط خادم MCP المراد الاتصال به",
+          },
+        },
+      },
     },
     {
       parameterName: "Authentication Token",
@@ -73,6 +102,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Authentication token for the MCP server (if required)",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Authentication Token": {
+            Name: "Authentication Token",
+            Description: "Authentication token for the MCP server (if required)",
+          },
+        },
+        ar: {
+          "Authentication Token": {
+            Name: "رمز المصادقة",
+            Description: "رمز المصادقة لخادم MCP (إذا لزم الأمر)",
+          },
+        },
+      },
     },
     {
       parameterName: "Command",
@@ -82,6 +125,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Command to run MCP server",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Command": {
+            Name: "Command",
+            Description: "Command to run MCP server",
+          },
+        },
+        ar: {
+          "Command": {
+            Name: "الأمر",
+            Description: "الأمر لتشغيل خادم MCP",
+          },
+        },
+      },
     },
     {
       parameterName: "Args",
@@ -89,10 +146,38 @@ const metadata: NodeMetadata = {
       defaultValue: "",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "Command Args separated by ','",
+      description: "Command arguments separated by comma",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Args": {
+            Name: "Args",
+            Description: "Command arguments separated by comma",
+          },
+        },
+        ar: {
+          "Args": {
+            Name: "المعاملات",
+            Description: "معاملات الأمر مفصولة بفاصلة",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "MCP",
+      title: "MCP Discovery",
+      nodeType: "MCP Discovery",
+      description: "Connects to a Master Control Program (MCP) server to discover its capabilities. This node can use either HTTP or Stdio transport to list available tools, prompts, and resources.",
+    },
+    ar: {
+      category: "MCP",
+      title: "اكتشاف MCP",
+      nodeType: "اكتشاف MCP",
+      description: "يتصل بخادم برنامج التحكم الرئيسي (MCP) لاكتشاف قدراته. يمكن لهذه العقدة استخدام نقل HTTP أو Stdio لقائمة الأدوات والطلبات والموارد المتاحة.",
+    },
+  },
 };
 
 export function createNMcpDiscoveryNode(

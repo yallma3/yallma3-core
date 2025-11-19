@@ -29,7 +29,7 @@ export interface PineconeSearchNode extends BaseNode {
 
 function getCollection(collectionString: string): {
   host: string;
-  options: { [key: string]: any };
+  options: Record<string, unknown>;
 } {
   let url = collectionString;
   if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -37,7 +37,7 @@ function getCollection(collectionString: string): {
   }
   const u = new URL(url);
   const host = `${u.protocol}//${u.host}`;
-  const options: { [key: string]: any } = {};
+  const options: Record<string, unknown> = {};
   if (u.pathname !== "/") {
     options.namespace = u.pathname.slice(1);
   }
@@ -46,8 +46,9 @@ function getCollection(collectionString: string): {
 
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
-    category: "VectorDatabase",
+    category: "Input/Output",
     title: "Vector Search",
+    description: "Performs a similarity search on a vector index. It takes an embedding vector as input and retrieves the top 'k' most similar items, returning their metadata and scores.",
     nodeType: "PineconeSearch",
     nodeValue: "",
     sockets: [
@@ -128,6 +129,20 @@ export function register(nodeRegistry: NodeRegistry): void {
         },
       },
     ],
+    i18n: {
+      en: {
+        category: "Input/Output",
+        title: "Vector Search",
+        nodeType: "Vector Search",
+        description: "Performs a similarity search on a vector index. It takes an embedding vector as input and retrieves the top 'k' most similar items, returning their metadata and scores.",
+      },
+      ar: {
+        category: "إدخال/إخراج",
+        title: "بحث المتجهات",
+        nodeType: "بحث المتجهات",
+        description: "يُجري بحثاً عن التشابه في فهرس المتجهات. يأخذ متجه تضمين كمدخل ويسترجع أعلى 'k' عنصر الأكثر تشابهاً، مُعيداً البيانات الوصفية والدرجات الخاصة بها.",
+      },
+    },
   };
 
   function createPineconeSearchNode(
@@ -243,10 +258,10 @@ export function register(nodeRegistry: NodeRegistry): void {
             matches?: Array<{
               id: string;
               score: number;
-              values?: number[];
-              metadata?: Record<string, any>;
+               values?: number[];
+              metadata?: Record<string, unknown>;
             }>;
-            [key: string]: any;
+            [key: string]: unknown;
           };
           return {
             [n.id * 100 + 2]: result,
@@ -276,7 +291,7 @@ export function register(nodeRegistry: NodeRegistry): void {
           (param) => param.parameterName === parameterName
         );
       },
-      setConfigParameter(parameterName: string, value: any): void {
+         setConfigParameter(parameterName: string, value: string | number | boolean | undefined): void {
         const parameter = (this.configParameters ?? []).find(
           (param) => param.parameterName === parameterName
         );

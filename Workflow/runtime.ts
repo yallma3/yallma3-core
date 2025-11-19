@@ -15,7 +15,7 @@ export const executeFlowRuntime = async (
 
     const executionLayers = buildExecutionLayers(workflow);
 
-    const results = new Map<number, any>();
+    const results = new Map<number, unknown>();
 
     // build quick lookup maps
     const socketToNode: Record<number, number> = {};
@@ -41,7 +41,7 @@ export const executeFlowRuntime = async (
           if (!node) return;
 
           // gather inputs for this node
-          const inputs: Record<string, any> = {};
+          const inputs: Record<number, unknown> = {};
 
           // Add context to WorkflowInput Node
           if (node.nodeType == "WorkflowInput") {
@@ -71,7 +71,7 @@ export const executeFlowRuntime = async (
           }
 
           // run the node
-          let output: any;
+          let output: unknown;
           if (node.process) {
             const execContext: NodeExecutionContext = {
               node: node,

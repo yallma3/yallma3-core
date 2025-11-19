@@ -30,7 +30,7 @@ export interface PineconeStoreNode extends BaseNode {
 
 function getCollection(collectionString: string): {
   host: string;
-  options: { [key: string]: any };
+  options: Record<string, unknown>;
 } {
   let url = collectionString;
   if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -38,7 +38,7 @@ function getCollection(collectionString: string): {
   }
   const u = new URL(url);
   const host = `${u.protocol}//${u.host}`;
-  const options: { [key: string]: any } = {};
+  const options: Record<string, unknown> = {};
   if (u.pathname !== "/") {
     options.namespace = u.pathname.slice(1);
   }
@@ -47,9 +47,10 @@ function getCollection(collectionString: string): {
 
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
-    category: "VectorDatabase",
-    title: "Pinecone Vector Store",
-    nodeType: "PineconeSearch",
+    category: "Input/Output",
+    title: "Vector Store",
+    nodeType: "Vector Store",
+    description: "Stores (upserts) a vector embedding and its associated metadata into a specified Pinecone index. It generates a deterministic ID for each vector to ensure content addressability.",
     nodeValue: "",
     sockets: [
       { title: "Vector", type: "input", dataType: "embedding" },
@@ -109,6 +110,20 @@ export function register(nodeRegistry: NodeRegistry): void {
         },
       },
     ],
+    i18n: {
+      en: {
+        category: "Input/Output",
+        title: "Vector Store",
+        nodeType: "Vector Store",
+        description: "Stores (upserts) a vector embedding and its associated metadata into a specified Pinecone index. It generates a deterministic ID for each vector to ensure content addressability.",
+      },
+      ar: {
+        category: "إدخال/إخراج",
+        title: "مخزن المتجهات",
+        nodeType: "مخزن المتجهات",
+        description: "يخزن (يُحدث أو يُدرج) متجه تضمين والبيانات الوصفية المرتبطة به في فهرس Pinecone محدد. يُنشئ معرّفاً حتمياً لكل متجه لضمان قابلية العنونة بالمحتوى.",
+      },
+    },
   };
 
   function createPineconeStoreNode(
@@ -271,7 +286,7 @@ export function register(nodeRegistry: NodeRegistry): void {
           (param) => param.parameterName === parameterName
         );
       },
-      setConfigParameter(parameterName: string, value: any): void {
+ setConfigParameter(parameterName: string, value: string | number | boolean | undefined): void {
         const parameter = (this.configParameters ?? []).find(
           (param) => param.parameterName === parameterName
         );

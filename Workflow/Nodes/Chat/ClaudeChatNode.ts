@@ -25,9 +25,10 @@ export interface ChatNode extends BaseNode {
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "Claude Chat",
   nodeType: "ClaudeChat",
+  description: "Integrates with Anthropic's Claude API for chat completions. It sends a user prompt and an optional system prompt to a selected model, returning the generated response and token usage.",
   nodeValue: "claude-3-haiku-20240307",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
@@ -64,6 +65,20 @@ const metadata: NodeMetadata = {
           label: "Claude 3.5 Sonnet",
         },
       ],
+      i18n: {
+        en: {
+          "Model": {
+            Name: "Model",
+            Description: "Model name to use for the chat node",
+          },
+        },
+        ar: {
+          "Model": {
+            Name: "النموذج",
+            Description: "اسم النموذج المراد استخدامه لعقدة المحادثة",
+          },
+        },
+      },
     },
     {
       parameterName: "API Key",
@@ -73,8 +88,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "API Key for the Claude service",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "API Key": {
+            Name: "API Key",
+            Description: "API Key for the Claude service",
+          },
+        },
+        ar: {
+          "API Key": {
+            Name: "مفتاح API",
+            Description: "مفتاح API لخدمة Claude",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "AI",
+      title: "Claude Chat",
+      nodeType: "Claude Chat",
+      description: "Integrates with Anthropic's Claude API for chat completions. It sends a user prompt and an optional system prompt to a selected model, returning the generated response and token usage.",
+    },
+    ar: {
+      category: "ذكاء اصطناعي",
+      title: "محادثة Claude",
+      nodeType: "محادثة Claude",
+      description: "يتكامل مع واجهة Claude API من Anthropic لإتمام المحادثات. يرسل طلب المستخدم وطلب نظام اختياري إلى نموذج محدد، مُعيداً الاستجابة المُولدة واستخدام الرموز.",
+    },
+  },
 };
 
 export function createNClaudeChatNode(id: number): ChatNode {
@@ -145,7 +188,7 @@ export function createNClaudeChatNode(id: number): ChatNode {
           n.getConfigParameter && n.getConfigParameter("API Key")
             ? (n.getConfigParameter("API Key")?.paramValue as string)
             : "No key";
-        // if (n.getConfigParameter) {
+         // if (n.getConfigParameter) {
         //   CLAUDE_API_KEY =
         //     (n.getConfigParameter("API Key")?.paramValue as string) || "";
         // } else {

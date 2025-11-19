@@ -1,9 +1,19 @@
-import type { Agent, ReviewResult } from "../Models/Agent";
+import type { Agent } from "../Models/Agent";
 import type { AgentStep, Task } from "../Models/Task";
 import { getLLMProvider } from "../LLM/LLMRunner";
 import type { LLMProvider, LLMOption } from "../Models/LLM";
 import type WebSocket from "ws";
 import { toolExecutorAttacher } from "../Agent/Utls/ToolCallingHelper";
+import { closeMcpConnections } from "./Utls/McpUtils";
+
+interface Review {
+  task_completion_status: string;
+  feedback: string;
+}
+
+interface FinalCheck {
+  accept: boolean;
+}
 
 export class AgentRuntime {
   private agent: Agent;
@@ -58,7 +68,7 @@ export class AgentRuntime {
   private buildPrompt(
     iteration: number,
     previousResult: string,
-    feedback: any
+    feedback: string | Record<string, unknown>
   ): string {
     let intro: string;
 
@@ -193,7 +203,7 @@ export class Yallma3GenOneAgentRuntime {
   async run(): Promise<string> {
     let iteration = 0;
     let output = "";
-    let feedback: any = null;
+    let feedback: string | null = null;
 
     if (this.agent.tools.length > 0) {
       const attachedTools = await toolExecutorAttacher(
@@ -216,7 +226,7 @@ export class Yallma3GenOneAgentRuntime {
       const reviewPrompt = this.buildReviewPrompt(output);
       const reviewRaw = await this.llm.generateText(reviewPrompt);
 
-      let review: any;
+      let review: Review;
       try {
         review = JSON.parse(reviewRaw);
       } catch {
@@ -244,7 +254,7 @@ export class Yallma3GenOneAgentRuntime {
         const finalCheckPrompt = this.buildFinalCheckPrompt(output);
         const checkRaw = await this.llm.generateText(finalCheckPrompt);
 
-        let finalCheck: any;
+        let finalCheck: FinalCheck;
         try {
           finalCheck = JSON.parse(checkRaw);
         } catch {
@@ -274,13 +284,16 @@ export class Yallma3GenOneAgentRuntime {
       console.warn("⚠️ Max iterations reached, returning last output.");
     }
 
+    // Clean up MCP connections
+    await this.cleanup();
+
     return output;
   }
 
   private buildPrompt(
     iteration: number,
     previousResult: string,
-    feedback: any
+    feedback: string | Record<string, unknown> | null
   ): string {
     let intro = `You are ${this.agent.name}, a highly skilled ${
       this.agent.role
@@ -389,6 +402,11 @@ export class Yallma3GenOneAgentRuntime {
     "reason": "string",              // explain why it is acceptable or why it needs more work
     "next_action": "deliver" | "revise" // "deliver" if accept=true, "revise" if accept=false
   }`;
+  }
+
+  async cleanup() {
+    // Close MCP connections when agent finishes
+    await closeMcpConnections();
   }
 
   agentProfile(): string {

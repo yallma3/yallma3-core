@@ -29,9 +29,40 @@ export class McpHttpClient {
     try {
       const transport = new StreamableHTTPClientTransport(url);
       await this.client.connect(transport);
-    } catch (err) {
+    } catch {
       const sseTransport = new SSEClientTransport(url);
       await this.client.connect(sseTransport);
+    }
+  }
+
+  async test(): Promise<boolean> {
+    const url = new URL(this.serverUrl);
+
+    // Try Streamable HTTP first
+    try {
+      const transport = new StreamableHTTPClientTransport(url);
+      await this.client.connect(transport);
+      console.log(
+        "[MCP HTTP] Connected successfully via Streamable HTTP transport."
+      );
+      this.client.close();
+      return true;
+    } catch (err1) {
+      console.warn("[MCP HTTP] Streamable transport failed:", err1);
+
+      // Fallback: try SSE
+      try {
+        const sseTransport = new SSEClientTransport(url);
+        await this.client.connect(sseTransport);
+        console.log("[MCP HTTP] Connected successfully via SSE transport.");
+        this.client.close();
+        return true;
+      } catch (err2) {
+        console.error("[MCP HTTP] SSE transport also failed:", err2);
+        throw new Error(
+          `Failed to connect to MCP HTTP server via both transports.\nStreamable error: ${err1}\nSSE error: ${err2}`
+        );
+      }
     }
   }
 
@@ -40,6 +71,7 @@ export class McpHttpClient {
       const response = await getTools(this.client);
       return response;
     } catch (err) {
+      console.error("[MCP HTTP] Failed to list tools:", err);
       return err;
     }
   }
@@ -48,6 +80,7 @@ export class McpHttpClient {
       const response = await callTool(this.client, toolCall);
       return response;
     } catch (err) {
+      console.error("[MCP HTTP] Failed to call tool:", toolCall.tool, err);
       throw err;
     }
   }
@@ -56,6 +89,7 @@ export class McpHttpClient {
       const response = await getPrompts(this.client);
       return response;
     } catch (err) {
+      console.error("[MCP HTTP] Failed to list prompts:", err);
       return err;
     }
   }
@@ -64,6 +98,7 @@ export class McpHttpClient {
       const response = await getPrompt(this.client, prompt);
       return response;
     } catch (err) {
+      console.error("[MCP HTTP] Failed to get prompt:", prompt, err);
       throw err;
     }
   }
@@ -72,6 +107,7 @@ export class McpHttpClient {
       const response = await getResources(this.client);
       return response;
     } catch (err) {
+      console.error("[MCP HTTP] Failed to list resources:", err);
       return err;
     }
   }
@@ -80,6 +116,7 @@ export class McpHttpClient {
       const response = await getResource(this.client, resource);
       return response;
     } catch (err) {
+      console.error("[MCP HTTP] Failed to get resource:", resource, err);
       throw err;
     }
   }

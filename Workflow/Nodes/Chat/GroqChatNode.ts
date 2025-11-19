@@ -13,14 +13,14 @@
 
 import type {
   BaseNode,
+  Position,
   ConfigParameterType,
   NodeValue,
   NodeExecutionContext,
   NodeMetadata,
-  Position,
 } from "../../types/types";
 import { NodeRegistry } from "../../NodeRegistry";
-import { sys } from "typescript";
+import type { OpenAIResponse } from "../../../Models/LLM";
 export interface ChatNode extends BaseNode {
   nodeType: string;
   nodeValue?: NodeValue;
@@ -28,9 +28,10 @@ export interface ChatNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Chat",
+  category: "AI",
   title: "Groq Chat",
   nodeType: "GroqChat",
+  description: "Integrates with the Groq API for high-speed chat completions. It sends a user prompt and an optional system prompt to a selected model, returning the generated response and token usage.",
   nodeValue: "llama-3.1-8b-instant",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
@@ -71,6 +72,20 @@ const metadata: NodeMetadata = {
           label: "Claude 3.5 Sonnet",
         },
       ],
+      i18n: {
+        en: {
+          "Model": {
+            Name: "Model",
+            Description: "Model name to use for the chat node",
+          },
+        },
+        ar: {
+          "Model": {
+            Name: "النموذج",
+            Description: "اسم النموذج المراد استخدامه لعقدة المحادثة",
+          },
+        },
+      },
     },
     {
       parameterName: "API Key",
@@ -78,10 +93,38 @@ const metadata: NodeMetadata = {
       defaultValue: "",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "API Key for the Claude service",
+      description: "API Key for the Groq service",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "API Key": {
+            Name: "API Key",
+            Description: "API Key for the Groq service",
+          },
+        },
+        ar: {
+          "API Key": {
+            Name: "مفتاح API",
+            Description: "مفتاح API لخدمة Groq",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "AI",
+      title: "Groq Chat",
+      nodeType: "Groq Chat",
+      description: "Integrates with the Groq API for high-speed chat completions. It sends a user prompt and an optional system prompt to a selected model, returning the generated response and token usage.",
+    },
+    ar: {
+      category: "ذكاء اصطناعي",
+      title: "محادثة Groq",
+      nodeType: "محادثة Groq",
+      description: "يتكامل مع Groq API لإتمام المحادثات عالية السرعة. يرسل طلب المستخدم وطلب نظام اختياري إلى نموذج محدد، مُعيداً الاستجابة المُولدة واستخدام الرموز.",
+    },
+  },
 };
 
 export function createNGroqChatNode(id: number, position: Position): ChatNode {
@@ -148,14 +191,6 @@ export function createNGroqChatNode(id: number, position: Position): ChatNode {
       const model = modelMatch ? modelMatch : "llama-3.1-8b-instant"; // Default fallback
 
       try {
-        // Get API key from .env using Vite's environment variable format
-        // const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-
-        // if (!GROQ_API_KEY) {
-        //   throw new Error(
-        //     "GROQ API key not found. Please check your .env file and ensure it has VITE_GROQ_API_KEY defined."
-        //   );
-        // }
         let GROQ_API_KEY = "";
         if (n.getConfigParameter) {
           GROQ_API_KEY =
@@ -202,18 +237,18 @@ export function createNGroqChatNode(id: number, position: Position): ChatNode {
           throw new Error(`Chat API returned status ${res.status}`);
         }
 
-        const json = await res.json();
+         const json = await res.json() as OpenAIResponse;
         console.log(
           `Chat node ${n.id} received response:`,
-          (json as any).choices[0].message.content.substring(0, 50) + "..."
+          json.choices[0]?.message.content?.substring(0, 50) + "..."
         );
 
         // Return an object with both values to support multiple outputs
-        return {
+       return {
           // Socket id 3 is for Response content
-          [n.id * 100 + 3]: (json as any).choices[0].message.content,
+          [n.id * 100 + 3]: json.choices[0]?.message.content || "",
           // Socket id 4 is for Token count
-          [n.id * 100 + 4]: (json as any).usage?.total_tokens || 0,
+          [n.id * 100 + 4]: json.usage?.total_tokens || 0,
         };
       } catch (error) {
         console.error("Error in Chat node:", error);

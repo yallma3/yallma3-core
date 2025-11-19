@@ -4,7 +4,7 @@
  * Licensed under MPL 2.0: https://www.mozilla.org/MPL/2.0/
  */
 
-import type { BaseNode, NodeMetadata, Position, ConfigParameterType, NodeValue, NodeExecutionContext, DataType } from "../types/types";
+import type { BaseNode, NodeMetadata, Position, ConfigParameterType, NodeExecutionContext, DataType } from "../types/types";
 import { nodeRegistry } from "../NodeRegistry";
 
 interface UrlReferenceNode extends BaseNode {
@@ -15,8 +15,9 @@ interface UrlReferenceNode extends BaseNode {
 
 const metadata: NodeMetadata = {
   nodeType: "UrlReference",
-  category: "Data",
+  category: "Tools",
   title: "URL Reference",
+  description: "Creates a reference to a URL that can be passed to other nodes. The URL can be set directly in the configuration or provided dynamically via an input socket.",
   sockets: [
     { title: "URL", type: "input", dataType: "string" },
     { title: "URL Reference", type: "output", dataType: "url" }
@@ -32,6 +33,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Directly set the URL if not using input",
       isNodeBodyContent: true,
+      i18n: {
+        en: {
+          "URL": {
+            Name: "URL",
+            Description: "Directly set the URL if not using input",
+          },
+        },
+        ar: {
+          "URL": {
+            Name: "الرابط",
+            Description: "تعيين الرابط مباشرة إذا لم يتم استخدام المدخل",
+          },
+        },
+      },
     },
     {
       parameterName: "Use URL Input",
@@ -40,8 +55,36 @@ const metadata: NodeMetadata = {
       valueSource: "UserInput",
       UIConfigurable: true,
       description: "If true, the URL will come from the input socket",
+      i18n: {
+        en: {
+          "Use URL Input": {
+            Name: "Use URL Input",
+            Description: "If true, the URL will come from the input socket",
+          },
+        },
+        ar: {
+          "Use URL Input": {
+            Name: "استخدام مدخل الرابط",
+            Description: "إذا كان صحيحاً، سيأتي الرابط من مقبس الإدخال",
+          },
+        },
+      },
     },
-  ]
+  ],
+  i18n: {
+    en: {
+      category: "Tools",
+      title: "URL Reference",
+      nodeType: "URL Reference",
+      description: "Creates a reference to a URL that can be passed to other nodes. The URL can be set directly in the configuration or provided dynamically via an input socket.",
+    },
+    ar: {
+      category: "أدوات",
+      title: "مرجع الرابط",
+      nodeType: "مرجع الرابط",
+      description: "يُنشئ مرجعاً لرابط URL يمكن تمريره إلى عقد أخرى. يمكن ضبط الرابط مباشرة في الإعدادات أو توفيره ديناميكياً عبر مقبس الإدخال.",
+    },
+  },
 };
 
 function createUrlReferenceNode(id: number, position: Position): UrlReferenceNode {

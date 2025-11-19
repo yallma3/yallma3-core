@@ -1,230 +1,354 @@
-// import express from "express";
-// import { stdioListTools, stdioToolCall, stdioListPrompts, stdioGetPrompt, stdioListResources, stdioGetResource } from "../Utils/McpStdioClient";
+import express from "express";
+import { McpSTDIOClient } from "../Utils/McpStdioClient";
+import { McpHttpClient } from "../Utils/McpHttpClient";
+import type { ServerConfig } from "../Models/Mcp";
 
-// const router = express.Router();
+const router = express.Router();
 
-// // HTTP Client Routes
+// Check MCP Server health STDIO or HTTP
+router.post("/health", async (req, res) => {
+  try {
+    const mcpConfig = req.body;
 
-// // Get tools from HTTP MCP server
-// router.get("/http/tools", async (req, res) => {
-//   try {
-//     const { serverUrl } = req.query;
-//     if (!serverUrl || typeof serverUrl !== 'string') {
-//       return res.status(400).json({ error: "serverUrl query parameter is required" });
-//     }
+    if (!mcpConfig || !mcpConfig.type) {
+      return res.status(400).json({ error: "Missing MCP configuration" });
+    }
 
-//     const tools = await httpListTools(serverUrl);
-//     res.json({ tools });
-//   } catch (error) {
-//     console.error("Error listing tools from HTTP server:", error);
-//     res.status(500).json({ error: "Failed to list tools", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+    if (mcpConfig.type === "STDIO") {
+      console.log("[HealthCheck] Testing STDIO MCP server...");
 
-// // Call a tool on HTTP MCP server
-// router.post("/http/tools/call", async (req, res) => {
-//   try {
-//     const { serverUrl, toolCall } = req.body;
-//     if (!serverUrl || typeof serverUrl !== 'string') {
-//       return res.status(400).json({ error: "serverUrl is required in request body" });
-//     }
-//     if (!toolCall || typeof toolCall !== 'object' || !toolCall.tool) {
-//       return res.status(400).json({ error: "toolCall object with name property is required in request body" });
-//     }
+      const serverConfig: ServerConfig = {
+        command: mcpConfig.command,
+        args: mcpConfig.args || [],
+      };
 
-//     const result = await httpToolCall(serverUrl, toolCall);
-//     res.json({ result });
-//   } catch (error) {
-//     console.error("Error calling tool on HTTP server:", error);
-//     res.status(500).json({ error: "Failed to call tool", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+      const client = new McpSTDIOClient(serverConfig);
+      const ok = await client.test();
 
-// // Get prompts from HTTP MCP server
-// router.get("/http/prompts", async (req, res) => {
-//   try {
-//     const { serverUrl } = req.query;
-//     if (!serverUrl || typeof serverUrl !== 'string') {
-//       return res.status(400).json({ error: "serverUrl query parameter is required" });
-//     }
+      if (ok) {
+        return res.status(200).json({ status: "ok", type: "STDIO" });
+      } else {
+        return res.status(500).json({ status: "failed", type: "STDIO" });
+      }
+    }
 
-//     const prompts = await httpListPrompts(serverUrl);
-//     res.json({ prompts });
-//   } catch (error) {
-//     console.error("Error listing prompts from HTTP server:", error);
-//     res.status(500).json({ error: "Failed to list prompts", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+    if (mcpConfig.type === "HTTP") {
+      console.log("[HealthCheck] Testing HTTP MCP server...");
 
-// // Get specific prompt from HTTP MCP server
-// router.get("/http/prompts/:prompt", async (req, res) => {
-//   try {
-//     const { serverUrl } = req.query;
-//     const { prompt } = req.params;
+      if (!mcpConfig.url) {
+        return res.status(400).json({ error: "Missing server URL" });
+      }
 
-//     if (!serverUrl || typeof serverUrl !== 'string') {
-//       return res.status(400).json({ error: "serverUrl query parameter is required" });
-//     }
-//     if (!prompt || typeof prompt !== 'string') {
-//       return res.status(400).json({ error: "prompt parameter is required" });
-//     }
+      const client = new McpHttpClient(mcpConfig.url);
+      const ok = await client.test();
 
-//     const promptResult = await httpGetPrompt(serverUrl, prompt);
-//     res.json({ prompt: promptResult });
-//   } catch (error) {
-//     console.error("Error getting prompt from HTTP server:", error);
-//     res.status(500).json({ error: "Failed to get prompt", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+      if (ok) {
+        return res.status(200).json({ status: "ok", type: "HTTP" });
+      } else {
+        return res.status(500).json({ status: "failed", type: "HTTP" });
+      }
+    }
 
-// // Get resources from HTTP MCP server
-// router.get("/http/resources", async (req, res) => {
-//   try {
-//     const { serverUrl } = req.query;
-//     if (!serverUrl || typeof serverUrl !== 'string') {
-//       return res.status(400).json({ error: "serverUrl query parameter is required" });
-//     }
+    return res.status(400).json({ error: "Unsupported MCP type" });
+  } catch (error) {
+    console.error("Error checking MCP health:", error);
+    return res.status(500).json({
+      error: "MCP server health check failed",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+// Auto connect to MCP STDIO or HTTP
+router.post("/connect", async (req, res) => {
+  try {
+    const mcpConfig = req.body;
 
-//     const resources = await httpListResources(serverUrl);
-//     res.json({ resources });
-//   } catch (error) {
-//     console.error("Error listing resources from HTTP server:", error);
-//     res.status(500).json({ error: "Failed to list resources", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+    if (!mcpConfig || !mcpConfig.type) {
+      return res.status(400).json({ error: "Missing MCP configuration" });
+    }
 
-// // Get specific resource from HTTP MCP server
-// router.get("/http/resources/:resource", async (req, res) => {
-//   try {
-//     const { serverUrl } = req.query;
-//     const { resource } = req.params;
+    let tools: unknown = [];
+    let prompts: unknown = [];
+    let resources: unknown = [];
 
-//     if (!serverUrl || typeof serverUrl !== 'string') {
-//       return res.status(400).json({ error: "serverUrl query parameter is required" });
-//     }
-//     if (!resource || typeof resource !== 'string') {
-//       return res.status(400).json({ error: "resource parameter is required" });
-//     }
+    if (mcpConfig.type === "STDIO") {
+      console.log("STDIO");
 
-//     const resourceResult = await httpGetResource(serverUrl, resource);
-//     res.json({ resource: resourceResult });
-//   } catch (error) {
-//     console.error("Error getting resource from HTTP server:", error);
-//     res.status(500).json({ error: "Failed to get resource", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+      if (!mcpConfig.command) {
+        return res.status(400).json({ error: "Missing command for STDIO" });
+      }
 
-// // STDIO Client Routes
+      const serverConfig: ServerConfig = {
+        command: mcpConfig.command,
+        args: mcpConfig.args,
+      };
+      const client = new McpSTDIOClient(serverConfig);
+      try {
+        await client.init();
+        tools = await client.listTools();
+        prompts = await client.listPrompts();
+        resources = await client.listResources();
+      } finally {
+        await client.close();
+      }
+    } else if (mcpConfig.type === "HTTP") {
+      console.log("HTTP");
 
-// // Get tools from STDIO MCP server
-// router.post("/stdio/tools", async (req, res) => {
-//   try {
-//     const serverConfig = req.body;
-//     if (!serverConfig || !serverConfig.command) {
-//       return res.status(400).json({ error: "serverConfig with command is required in request body" });
-//     }
+      if (!mcpConfig.url) {
+        return res.status(400).json({ error: "Missing server URL" });
+      }
 
-//     const tools = await stdioListTools(serverConfig);
-//     res.json({ tools });
-//   } catch (error) {
-//     console.error("Error listing tools from STDIO server:", error);
-//     res.status(500).json({ error: "Failed to list tools", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+      const serverUrl = mcpConfig.url;
 
-// // Call a tool on STDIO MCP server
-// router.post("/stdio/tools/call", async (req, res) => {
-//   try {
-//     const { serverConfig, toolCall } = req.body;
-//     if (!serverConfig || !serverConfig.command) {
-//       return res.status(400).json({ error: "serverConfig with command is required in request body" });
-//     }
-//     console.log(toolCall)
+      const client = new McpHttpClient(serverUrl);
 
-//     if (!toolCall || typeof toolCall !== 'object' || !toolCall.tool) {
-//       return res.status(400).json({ error: "toolCall object with name property is required in request body" });
-//     }
+      try {
 
-//     const result = await stdioToolCall(serverConfig, toolCall);
-//     res.json({ result });
-//   } catch (error) {
-//     console.error("Error calling tool on STDIO server:", error);
-//     res.status(500).json({ error: "Failed to call tool", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+        await client.init();
 
-// // Get prompts from STDIO MCP server
-// router.post("/stdio/prompts", async (req, res) => {
-//   try {
-//     const serverConfig = req.body;
-//     if (!serverConfig || !serverConfig.command) {
-//       return res.status(400).json({ error: "serverConfig with command is required in request body" });
-//     }
+        tools = await client.listTools();
 
-//     const prompts = await stdioListPrompts(serverConfig);
-//     res.json({ prompts });
-//   } catch (error) {
-//     console.error("Error listing prompts from STDIO server:", error);
-//     res.status(500).json({ error: "Failed to list prompts", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+        prompts = await client.listPrompts();
 
-// // Get specific prompt from STDIO MCP server
-// router.post("/stdio/prompts/:prompt", async (req, res) => {
-//   try {
-//     const { prompt } = req.params;
-//     const serverConfig = req.body;
+        resources = await client.listResources();
 
-//     if (!serverConfig || !serverConfig.command) {
-//       return res.status(400).json({ error: "serverConfig with command is required in request body" });
-//     }
-//     if (!prompt || typeof prompt !== 'string') {
-//       return res.status(400).json({ error: "prompt parameter is required" });
-//     }
+    } finally {
 
-//     const promptResult = await stdioGetPrompt(serverConfig, prompt);
-//     res.json({ prompt: promptResult });
-//   } catch (error) {
-//     console.error("Error getting prompt from STDIO server:", error);
-//     res.status(500).json({ error: "Failed to get prompt", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+      await client.close();
 
-// // Get resources from STDIO MCP server
-// router.post("/stdio/resources", async (req, res) => {
-//   try {
-//     const serverConfig = req.body;
-//     if (!serverConfig || !serverConfig.command) {
-//       return res.status(400).json({ error: "serverConfig with command is required in request body" });
-//     }
+    }
 
-//     const resources = await stdioListResources(serverConfig);
-//     res.json({ resources });
-//   } catch (error) {
-//     console.error("Error listing resources from STDIO server:", error);
-//     res.status(500).json({ error: "Failed to list resources", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+    } else {
+      return res.status(400).json({ error: "Unsupported MCP type" });
+    }
 
-// // Get specific resource from STDIO MCP server
-// router.post("/stdio/resources/:resource", async (req, res) => {
-//   try {
-//     const { resource } = req.params;
-//     const serverConfig = req.body;
+    res.json({ tools, prompts, resources });
 
-//     if (!serverConfig || !serverConfig.command) {
-//       return res.status(400).json({ error: "serverConfig with command is required in request body" });
-//     }
-//     if (!resource || typeof resource !== 'string') {
-//       return res.status(400).json({ error: "resource parameter is required" });
-//     }
+  } catch (error) {
+    console.error("Error listing tools from HTTP server:", error);
+    res.status(500).json({
+      error: "Failed to list tools",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
 
-//     const resourceResult = await stdioGetResource(serverConfig, resource);
-//     res.json({ resource: resourceResult });
-//   } catch (error) {
-//     console.error("Error getting resource from STDIO server:", error);
-//     res.status(500).json({ error: "Failed to get resource", details: error instanceof Error ? error.message : String(error) });
-//   }
-// });
+// HTTP Client Routes
 
-// export default router;
+router.post("/http/connect", async (req, res) => {
+  try {
+    const { serverUrl } = req.query;
+    if (!serverUrl || typeof serverUrl !== "string") {
+      return res
+        .status(400)
+        .json({ error: "serverUrl query parameter is required" });
+    }
+    console.log(serverUrl);
+    const client = new McpHttpClient(serverUrl);
+    try {
+      await client.init();
+      const tools = await client.listTools();
+      const prompts = await client.listPrompts();
+      const resources = await client.listResources();
+      res.json({ tools, prompts, resources });
+    } finally {
+      await client.close();
+    }
+  } catch (error) {
+    console.error("Error listing tools from HTTP server:", error);
+    res.status(500).json({
+      error: "Failed to list tools",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get tools from HTTP MCP server
+router.get("/http/tools", async (req, res) => {
+  try {
+    const { serverUrl } = req.query;
+    if (!serverUrl || typeof serverUrl !== "string") {
+      return res
+        .status(400)
+        .json({ error: "serverUrl query parameter is required" });
+    }
+    const client = new McpHttpClient(serverUrl);
+    try {
+      await client.init();
+      const tools = await client.listTools();
+      res.json({ tools });
+    } finally {
+      await client.close();
+    }
+  } catch (error) {
+    console.error("Error listing tools from HTTP server:", error);
+    res.status(500).json({
+      error: "Failed to list tools",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get prompts from HTTP MCP server
+router.get("/http/prompts", async (req, res) => {
+  try {
+    const { serverUrl } = req.query;
+    if (!serverUrl || typeof serverUrl !== "string") {
+      return res
+        .status(400)
+        .json({ error: "serverUrl query parameter is required" });
+    }
+    const client = new McpHttpClient(serverUrl);
+    try {
+      await client.init();
+      const prompts = await client.listPrompts();
+      res.json({ prompts });
+    } finally {
+      await client.close();
+    }
+  } catch (error) {
+    console.error("Error listing prompts from HTTP server:", error);
+    res.status(500).json({
+      error: "Failed to list prompts",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get resources from HTTP MCP server
+router.get("/http/resources", async (req, res) => {
+  try {
+    const { serverUrl } = req.query;
+    if (!serverUrl || typeof serverUrl !== "string") {
+      return res
+        .status(400)
+        .json({ error: "serverUrl query parameter is required" });
+    }
+    const client = new McpHttpClient(serverUrl);
+    try {
+      await client.init();
+      const resources = await client.listResources();
+      res.json({ resources });
+    } finally {
+      await client.close();
+    }
+  } catch (error) {
+    console.error("Error listing resources from HTTP server:", error);
+    res.status(500).json({
+      error: "Failed to list resources",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// STDIO Client Routes
+
+router.post("/stdio/connect", async (req, res) => {
+  try {
+    const serverConfig = req.body;
+    if (!serverConfig || !serverConfig.command) {
+      return res.status(400).json({
+        error: "serverConfig with command is required in request body",
+      });
+    }
+    console.log(serverConfig);
+
+    const client = new McpSTDIOClient(serverConfig);
+    try {
+      await client.init();
+      const tools = await client.listTools();
+      const prompts = await client.listPrompts();
+      const resources = await client.listResources();
+      res.json({ tools, prompts, resources });
+    } finally {
+      await client.close();
+    }
+  } catch (error) {
+    console.error("Error listing tools from STDIO server:", error);
+    res.status(500).json({
+      error: "Failed to list tools",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get tools from STDIO MCP server
+router.post("/stdio/tools", async (req, res) => {
+  try {
+    const serverConfig = req.body;
+    if (!serverConfig || !serverConfig.command) {
+      return res.status(400).json({
+        error: "serverConfig with command is required in request body",
+      });
+    }
+
+    const client = new McpSTDIOClient(serverConfig);
+    try {
+      await client.init();
+      const tools = await client.listTools();
+      res.json({ tools });
+    } finally {
+      await client.close();
+    }
+  } catch (error) {
+    console.error("Error listing tools from STDIO server:", error);
+    res.status(500).json({
+      error: "Failed to list tools",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get prompts from STDIO MCP server
+router.post("/stdio/prompts", async (req, res) => {
+  try {
+    const serverConfig = req.body;
+    if (!serverConfig || !serverConfig.command) {
+      return res.status(400).json({
+        error: "serverConfig with command is required in request body",
+      });
+    }
+    const client = new McpSTDIOClient(serverConfig);
+    try {
+      await client.init();
+      const prompts = await client.listPrompts();
+      res.json({ prompts });
+    } finally {
+      await client.close();
+    }
+  } catch (error) {
+    console.error("Error listing prompts from STDIO server:", error);
+    res.status(500).json({
+      error: "Failed to list prompts",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get resources from STDIO MCP server
+router.post("/stdio/resources", async (req, res) => {
+  try {
+    const serverConfig = req.body;
+    if (!serverConfig || !serverConfig.command) {
+      return res.status(400).json({
+        error: "serverConfig with command is required in request body",
+      });
+    }
+    const client = new McpSTDIOClient(serverConfig);
+    try {
+      await client.init();
+      const resources = await client.listResources();
+      res.json({ resources });
+    } finally {
+      await client.close();
+    }
+  } catch (error) {
+    console.error("Error listing resources from STDIO server:", error);
+    res.status(500).json({
+      error: "Failed to list resources",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+export default router;

@@ -28,9 +28,10 @@ export interface JSONManipulatorNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Data Processing",
+  category: "Text",
   title: "JSON Manipulator",
   nodeType: "JSONManipulator",
+  description: "A versatile node for processing JSON data. It can extract fields, filter arrays, transform structures, and count items based on configurable operations and field paths.",
   nodeValue: "JSON Processor",
   sockets: [
     { title: "JSON Input", type: "input", dataType: "string" },
@@ -49,6 +50,20 @@ const metadata: NodeMetadata = {
       description:
         "Operation: extract_field, extract_array, filter, transform, count",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Operation": {
+            Name: "Operation",
+            Description: "Operation: extract_field, extract_array, filter, transform, count",
+          },
+        },
+        ar: {
+          "Operation": {
+            Name: "العملية",
+            Description: "العملية: استخراج الحقل، استخراج المصفوفة، تصفية، تحويل، عد",
+          },
+        },
+      },
     },
     {
       parameterName: "Field Path",
@@ -59,6 +74,20 @@ const metadata: NodeMetadata = {
       description:
         "Field path to extract (e.g., 'title', 'data.name', 'items[0].id')",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Field Path": {
+            Name: "Field Path",
+            Description: "Field path to extract (e.g., 'title', 'data.name', 'items[0].id')",
+          },
+        },
+        ar: {
+          "Field Path": {
+            Name: "مسار الحقل",
+            Description: "مسار الحقل للاستخراج (مثال: 'title', 'data.name', 'items[0].id')",
+          },
+        },
+      },
     },
     {
       parameterName: "Filter Condition",
@@ -69,6 +98,20 @@ const metadata: NodeMetadata = {
       description:
         "Filter condition (e.g., 'version > 1', 'title contains \"test\"')",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Filter Condition": {
+            Name: "Filter Condition",
+            Description: "Filter condition (e.g., 'version > 1', 'title contains \"test\"')",
+          },
+        },
+        ar: {
+          "Filter Condition": {
+            Name: "شرط التصفية",
+            Description: "شرط التصفية (مثال: 'version > 1', 'title contains \"test\"')",
+          },
+        },
+      },
     },
     {
       parameterName: "Output Format",
@@ -78,8 +121,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Output format: array, object, string, count",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Output Format": {
+            Name: "Output Format",
+            Description: "Output format: array, object, string, count",
+          },
+        },
+        ar: {
+          "Output Format": {
+            Name: "صيغة الإخراج",
+            Description: "صيغة الإخراج: مصفوفة، كائن، نص، عد",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Text",
+      title: "JSON Manipulator",
+      nodeType: "JSON Manipulator",
+      description: "A versatile node for processing JSON data. It can extract fields, filter arrays, transform structures, and count items based on configurable operations and field paths.",
+    },
+    ar: {
+      category: "نص",
+      title: "معالج JSON",
+      nodeType: "معالج JSON",
+      description: "عقدة متعددة الاستخدامات لمعالجة بيانات JSON. يمكنها استخراج الحقول، وتصفية المصفوفات، وتحويل الهياكل، وعد العناصر بناءً على عمليات قابلة للتكوين ومسارات الحقول.",
+    },
+  },
 };
 
 export function createJSONManipulatorNode(
@@ -115,8 +186,8 @@ export function createJSONManipulatorNode(
         console.log(`Executing JSONManipulator node ${id}`);
 
         // Validate required inputs
-        if (!jsonInput) {
-          throw new Error("JSON input is required");
+        if (!jsonInput || typeof jsonInput !== 'string') {
+          throw new Error("JSON input is required and must be a string");
         }
 
         // Get configuration parameters
@@ -137,7 +208,7 @@ export function createJSONManipulatorNode(
         );
 
         // Parse JSON input
-        let jsonData: any;
+        let jsonData: unknown;
         try {
           jsonData = JSON.parse(jsonInput);
         } catch (parseError) {
@@ -150,8 +221,8 @@ export function createJSONManipulatorNode(
           );
         }
 
-        // Process based on operation
-        let result: any;
+       // Process based on operation
+        let result: unknown;
 
         switch (operation.toLowerCase()) {
           case "extract_field":
@@ -173,7 +244,7 @@ export function createJSONManipulatorNode(
             throw new Error(`Unsupported operation: ${operation}`);
         }
 
-        // Format output
+       // Format output
         let formattedResult: string;
         switch (outputFormat.toLowerCase()) {
           case "array":
@@ -201,7 +272,7 @@ export function createJSONManipulatorNode(
         console.log(`JSON manipulation completed successfully`);
 
         return {
-          // Socket id 2 is for Result output
+         // Socket id 2 is for Result output
           [id * 100 + 2]: formattedResult,
           // Socket id 3 is for Status
           [id * 100 + 3]: `Success: ${operation} operation completed`,
@@ -244,7 +315,7 @@ export function createJSONManipulatorNode(
 
 // Helper functions for JSON manipulation
 
-function extractField(data: any, fieldPath: string): any {
+function extractField(data: unknown, fieldPath: string): unknown {
   if (Array.isArray(data)) {
     return data
       .map((item) => getNestedValue(item, fieldPath))
@@ -254,15 +325,15 @@ function extractField(data: any, fieldPath: string): any {
   }
 }
 
-function extractArrayField(data: any, fieldPath: string): any[] {
+function extractArrayField(data: unknown, fieldPath: string): unknown[] {
   const result = extractField(data, fieldPath);
   return Array.isArray(result)
     ? result
     : [result].filter((val) => val !== undefined);
 }
 
-function getNestedValue(obj: any, path: string): any {
-  return path.split(".").reduce((current, key) => {
+function getNestedValue(obj: unknown, path: string): unknown {
+  return path.split(".").reduce((current: unknown, key) => {
     if (current === null || current === undefined) return undefined;
 
     // Handle array notation like items[0]
@@ -270,15 +341,21 @@ function getNestedValue(obj: any, path: string): any {
     if (arrayMatch && arrayMatch[1] && arrayMatch[2]) {
       const arrayKey = arrayMatch[1];
       const index = arrayMatch[2];
-      const array = current[arrayKey];
-      return Array.isArray(array) ? array[parseInt(index, 10)] : undefined;
+      if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
+        const array = (current as Record<string, unknown>)[arrayKey];
+        return Array.isArray(array) ? array[parseInt(index, 10)] : undefined;
+      }
+      return undefined;
     }
 
-    return current[key];
+    if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
+      return (current as Record<string, unknown>)[key];
+    }
+    return undefined;
   }, obj);
 }
 
-function filterData(data: any, condition: string): any {
+function filterData(data: unknown, condition: string): unknown {
   if (!condition.trim()) return data;
 
   if (Array.isArray(data)) {
@@ -288,7 +365,7 @@ function filterData(data: any, condition: string): any {
   }
 }
 
-function evaluateCondition(item: any, condition: string): boolean {
+function evaluateCondition(item: unknown, condition: string): boolean {
   try {
     // Simple condition evaluation (extend as needed)
     // Supports: field > value, field < value, field == value, field contains "text"
@@ -342,7 +419,7 @@ function evaluateCondition(item: any, condition: string): boolean {
   }
 }
 
-function transformData(data: any, fieldPath: string): any {
+function transformData(data: unknown, fieldPath: string): unknown {
   // Simple transformation - can be extended
   if (Array.isArray(data)) {
     return data.map((item) => {
@@ -355,7 +432,7 @@ function transformData(data: any, fieldPath: string): any {
   }
 }
 
-function countItems(data: any, fieldPath?: string): number {
+function countItems(data: unknown, fieldPath?: string): number {
   if (fieldPath) {
     const extracted = extractField(data, fieldPath);
     return Array.isArray(extracted)

@@ -51,7 +51,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
             handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
             break;
-          case "run_workflow":
+          case "run_workflow": {
             consoleMessage = {
               id: crypto.randomUUID(),
               timestamp: Date.now(),
@@ -78,9 +78,8 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 timestamp: new Date().toISOString(),
               })
             );
-            // console.log("Workflow  result:", result);
-
             break;
+          }
           case "workflow_json":
             // console.log(data.data);
             break;
@@ -93,18 +92,69 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
           case "console_input":
             console.log("Received console input:", data.data);
+            
             if (data.data && typeof data.data === "object") {
               const event = data.data;
-              ConsoleInputUtils.addEvent(event);
-            }
+              const { promptId, message: inputMessage } = event;
 
-            // Broadcast to all clients
-            broadcast({
-              type: "console_input",
-              data: data.data,
-              timestamp: new Date().toISOString(),
-            });
+              if (promptId && inputMessage) {
+                // Resolve the specific prompt
+                const resolved = ConsoleInputUtils.resolvePrompt(promptId, inputMessage);
+                
+                if (resolved) {
+                  console.log(`Resolved prompt ${promptId} with input: ${inputMessage}`);
+                  
+                  // Add the event to console history
+                  ConsoleInputUtils.addEvent(event);
+
+                  // Broadcast confirmation to all clients
+                  broadcast({
+                    type: "console_input_resolved",
+                    data: {
+                      promptId,
+                      message: inputMessage,
+                      timestamp: new Date().toISOString(),
+                    },
+                    timestamp: new Date().toISOString(),
+                  });
+                } else {
+                  console.warn(`Failed to resolve prompt ${promptId} - prompt not found or already resolved`);
+                  
+                  // Send error back to client
+                  ws.send(
+                    JSON.stringify({
+                      type: "error",
+                      message: "Failed to resolve prompt - prompt not found or already resolved",
+                      promptId,
+                      timestamp: new Date().toISOString(),
+                    })
+                  );
+                }
+              } else {
+                console.warn("Console input missing promptId or message");
+                ws.send(
+                  JSON.stringify({
+                    type: "error",
+                    message: "Invalid console input format - missing promptId or message",
+                    timestamp: new Date().toISOString(),
+                  })
+                );
+              }
+            }
             break;
+
+          case "get_pending_prompts": {
+            // Allow frontend to request current pending prompts
+            const pendingPrompts = ConsoleInputUtils.getPendingPrompts();
+            ws.send(
+              JSON.stringify({
+                type: "pending_prompts",
+                data: pendingPrompts,
+                timestamp: new Date().toISOString(),
+              })
+            );
+            break;
+          }
 
           default:
             console.log("Unknown message type:", data.type);
@@ -176,6 +226,10 @@ export function setupWebSocketServer(wss: WebSocketServer) {
       `Broadcasted command ${commandData.id} to ${clients.size} clients`
     );
   }
+
+  setInterval(() => {
+    ConsoleInputUtils.cleanupPrompts(300000); 
+  }, 300000);
 
   return {
     broadcast,

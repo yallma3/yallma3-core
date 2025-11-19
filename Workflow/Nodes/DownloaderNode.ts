@@ -30,8 +30,9 @@ export interface PDFDownloaderNode extends BaseNode {
 }
 const metadata: NodeMetadata = {
   category: "Tools",
-  title: "Pdf Downloader",
+  title: "PDF Downloader",
   nodeType: "PdfDownloader",
+  description: "Downloads PDF files from a URL or a JSON array of paper objects and saves them locally. Features configurable settings for file size limits, download delays, and custom save directories.",
   nodeValue: "",
   sockets: [
     { title: "PDF URL or Papers JSON", type: "input", dataType: "string" },
@@ -48,6 +49,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Maximum file size to download in MB",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Max File Size (MB)": {
+            Name: "Max File Size (MB)",
+            Description: "Maximum file size to download in MB",
+          },
+        },
+        ar: {
+          "Max File Size (MB)": {
+            Name: "الحد الأقصى لحجم الملف (MB)",
+            Description: "الحد الأقصى لحجم الملف للتحميل بالميجابايت",
+          },
+        },
+      },
     },
     {
       parameterName: "Download Delay (ms)",
@@ -57,6 +72,20 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Delay between downloads in milliseconds",
       isNodeBodyContent: true,
+      i18n: {
+        en: {
+          "Download Delay (ms)": {
+            Name: "Download Delay (ms)",
+            Description: "Delay between downloads in milliseconds",
+          },
+        },
+        ar: {
+          "Download Delay (ms)": {
+            Name: "تأخير التحميل (مللي ثانية)",
+            Description: "التأخير بين عمليات التحميل بالمللي ثانية",
+          },
+        },
+      },
     },
     {
       parameterName: "Custom Directory",
@@ -66,8 +95,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Custom subdirectory name (e.g., 'research/papers')",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Custom Directory": {
+            Name: "Custom Directory",
+            Description: "Custom subdirectory name (e.g., 'research/papers')",
+          },
+        },
+        ar: {
+          "Custom Directory": {
+            Name: "مجلد مخصص",
+            Description: "اسم المجلد الفرعي المخصص (مثال: 'research/papers')",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Tools",
+      title: "PDF Downloader",
+      nodeType: "PDF Downloader",
+      description: "Downloads PDF files from a URL or a JSON array of paper objects and saves them locally. Features configurable settings for file size limits, download delays, and custom save directories.",
+    },
+    ar: {
+      category: "أدوات",
+      title: "محمّل PDF",
+      nodeType: "محمّل PDF",
+      description: "يحمّل ملفات PDF من عنوان URL أو من مصفوفة JSON من الأوراق ويحفظها محلياً. يتضمن إعدادات قابلة للتكوين لحدود حجم الملفات وتأخيرات التحميل والمجلدات المخصصة.",
+    },
+  },
 };
 
 export function createPDFDownloaderNode(
@@ -129,7 +186,7 @@ export function createPDFDownloaderNode(
         } else {
           throw new Error("Not an array");
         }
-      } catch (parseError) {
+      } catch {
         papers = [
           { pdfUrl: urlOrJson, title: "Direct URL", arxivId: "direct" },
         ];
@@ -290,18 +347,18 @@ async function initializeDownloadsDirectory(): Promise<string> {
   }
 }
 
-function generateCleanFilename(paper: any): string {
+function generateCleanFilename(paper: Record<string, unknown>): string {
   let filename = "";
 
   if (paper.arxivId && paper.arxivId !== "direct") {
-    filename = paper.arxivId.replace(/[\/\\:*?"<>|]/g, "_");
+    filename = String(paper.arxivId).replace(/[/\\:*?"<>|]/g, "_");
   } else if (
     paper.title &&
     paper.title !== "Unknown" &&
     paper.title !== "Direct URL"
   ) {
-    filename = paper.title
-      .replace(/[\/\\:*?"<>|]/g, "_")
+    filename = String(paper.title)
+      .replace(/[/\\:*?"<>|]/g, "_")
       .replace(/\s+/g, "_")
       .substring(0, 100);
   } else {
@@ -330,7 +387,7 @@ async function getUniqueFilename(
 async function downloadPDFToDirectory(
   url: string,
   targetDir: string,
-  paper: any,
+  paper: Record<string, unknown>,
   maxSizeMB: number = 50
 ) {
   try {
@@ -406,7 +463,6 @@ async function downloadPDFToDirectory(
         if (directResponse.ok) {
           const arrayBuffer = await directResponse.arrayBuffer();
 
-          // Quick size check
           if (arrayBuffer.byteLength > maxSizeMB * 1024 * 1024) {
             throw new Error(
               `PDF too large: ${Math.round(

@@ -27,10 +27,11 @@ export interface ArxivScraperNode extends BaseNode {
 }
 
 const metadata: NodeMetadata = {
-  category: "Other",
-  title: "Arxiv Scraper",
+  category: "Data",
+  title: "ArXiv Scraper",
   nodeType: "ArxivScraper",
   nodeValue: "cs.AI",
+  description: "Scrapes the latest papers from ArXiv for a given category, with a configurable maximum number of results. Returns paper metadata including title, abstract, PDF URL, and submission date.",
   sockets: [
     { title: "Category", type: "input", dataType: "string" },
     { title: "Results", type: "output", dataType: "string" },
@@ -45,8 +46,22 @@ const metadata: NodeMetadata = {
       defaultValue: "cs.AI",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "Default Arxiv category to scrape",
+      description: "Default ArXiv category to scrape",
       isNodeBodyContent: true,
+      i18n: {
+        en: {
+          "Default Category": {
+            Name: "Default Category",
+            Description: "Default ArXiv category to scrape",
+          },
+        },
+        ar: {
+          "Default Category": {
+            Name: "الفئة الافتراضية",
+            Description: "فئة ArXiv الافتراضية للبحث عنها",
+          },
+        },
+      },
     },
     {
       parameterName: "Max Results",
@@ -56,8 +71,36 @@ const metadata: NodeMetadata = {
       UIConfigurable: true,
       description: "Maximum number of papers to fetch",
       isNodeBodyContent: false,
+      i18n: {
+        en: {
+          "Max Results": {
+            Name: "Max Results",
+            Description: "Maximum number of papers to fetch",
+          },
+        },
+        ar: {
+          "Max Results": {
+            Name: "الحد الأقصى للنتائج",
+            Description: "الحد الأقصى لعدد الأوراق للجلب",
+          },
+        },
+      },
     },
   ],
+  i18n: {
+    en: {
+      category: "Data",
+      title: "ArXiv Scraper",
+      nodeType: "ArXiv Scraper",
+      description: "Scrapes the latest papers from ArXiv for a given category, with a configurable maximum number of results. Returns paper metadata including title, abstract, PDF URL, and submission date.",
+    },
+    ar: {
+      category: "بيانات",
+      title: "محك ArXiv",
+      nodeType: "محك ArXiv",
+      description: "يجرف أحدث الأوراق من ArXiv لفئة محددة، مع الحد الأقصى القابل للتكوين للنتائج. يُعيد بيانات وصفية للورقة بما في ذلك العنوان والملخص وعنوان URL للملف وتاريخ التقديم.",
+    },
+  },
 };
 
 export function createArxivScraperNode(
@@ -107,11 +150,11 @@ export function createArxivScraperNode(
       const maxResults =
         Number(n.getConfigParameter?.("Max Results")?.paramValue) || 2;
 
-      console.log(`📡 Scraping Arxiv category: ${category}`);
+      console.log(`📡 Scraping ArXiv category: ${category}`);
 
       // Local XML parser (regex-based, no DOMParser)
       function parseArxivXML(xmlText: string) {
-        const papers: any[] = [];
+        const papers: { arxivId: string; version: number; title: string; pdfUrl: string; submittedDate: string; abstract: string }[] = [];
         const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
         let match;
 
@@ -133,7 +176,7 @@ export function createArxivScraperNode(
           const pdfMatch = entry?.match(
             /<link[^>]+title="pdf"[^>]+href="([^"]+)"/i
           );
-          const pdfUrl = pdfMatch ? pdfMatch[1] : "";
+          const pdfUrl = pdfMatch?.[1] ?? "";
 
           // Format date
           let submittedDate = "";
@@ -143,7 +186,7 @@ export function createArxivScraperNode(
           }
 
           if (id && title) {
-            const cleanArxivId = id.split("/").pop()?.split("v")[0] || id;
+            const cleanArxivId = id.split("/").pop()?.split("v")[0] ?? id;
             papers.push({
               arxivId: cleanArxivId,
               version: 1,
@@ -158,7 +201,7 @@ export function createArxivScraperNode(
         return papers;
       }
 
-      // Fetch now uses regex parser
+       // Fetch now uses regex parser
       async function fetchArxivAPI(category: string, maxResults: number = 2) {
         console.log("MAXRESULTS:", maxResults);
         const apiUrl = `https://export.arxiv.org/api/query?search_query=cat:${category}&start=0&max_results=${maxResults}&sortBy=submittedDate&sortOrder=descending`;
@@ -197,7 +240,8 @@ export function createArxivScraperNode(
               title: "Sample AI Paper Title",
               pdfUrl: "https://arxiv.org/pdf/2501.00001.pdf",
               submittedDate: "2025-01-01",
-              abstract: "This is a sample abstract for testing purposes.",
+              abstract:
+                "This is a sample abstract for testing purposes.",
             },
           ];
         }
@@ -207,14 +251,14 @@ export function createArxivScraperNode(
         // Use ArXiv API instead of web scraping to avoid CORS issues
         const papers = await fetchArxivAPI(category, maxResults);
 
-        console.log(` Found ${papers.length} papers in ${category}`);
+          console.log(` Found ${papers.length} papers in ${category}`);
 
         return {
           [n.id * 100 + 2]: JSON.stringify(papers),
           [n.id * 100 + 3]: papers.length,
         };
       } catch (err) {
-        console.error(" Arxiv Scraper Error:", err);
+         console.error(" Arxiv Scraper Error:", err);
         return {
           [n.id * 100 + 2]: JSON.stringify([]),
           [n.id * 100 + 3]: 0,
@@ -242,8 +286,7 @@ export function createArxivScraperNode(
 }
 
 export function register(
-  nodeRegistry: NodeRegistry,
-  category: string = "Tools"
+  nodeRegistry: NodeRegistry
 ): void {
   nodeRegistry.registerNodeType(
     "ArxivScraper",
