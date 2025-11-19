@@ -51,7 +51,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
             handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
             break;
-          case "run_workflow":
+          case "run_workflow": {
             consoleMessage = {
               id: crypto.randomUUID(),
               timestamp: Date.now(),
@@ -79,6 +79,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               })
             );
             break;
+          }
           case "workflow_json":
             // console.log(data.data);
             break;
@@ -142,7 +143,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             }
             break;
 
-          case "get_pending_prompts":
+          case "get_pending_prompts": {
             // Allow frontend to request current pending prompts
             const pendingPrompts = ConsoleInputUtils.getPendingPrompts();
             ws.send(
@@ -153,6 +154,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               })
             );
             break;
+          }
 
           default:
             console.log("Unknown message type:", data.type);

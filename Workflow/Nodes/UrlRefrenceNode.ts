@@ -4,7 +4,7 @@
  * Licensed under MPL 2.0: https://www.mozilla.org/MPL/2.0/
  */
 
-import type { BaseNode, NodeMetadata, Position, ConfigParameterType, NodeValue, NodeExecutionContext, DataType } from "../types/types";
+import type { BaseNode, NodeMetadata, Position, ConfigParameterType, NodeExecutionContext, DataType } from "../types/types";
 import { nodeRegistry } from "../NodeRegistry";
 
 interface UrlReferenceNode extends BaseNode {

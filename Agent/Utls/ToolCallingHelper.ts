@@ -15,7 +15,7 @@ export async function workflowExecutor(
   input?: string
 ) {
   const workflow = await sendWorkflow(ws, workflowId);
-  const wrapper: any =
+  const wrapper =
     typeof workflow === "string" ? JSON.parse(workflow) : workflow;
 
   // If workflow is already an object (not string), guard against double-parse

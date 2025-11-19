@@ -62,37 +62,70 @@ router.post("/health", async (req, res) => {
 router.post("/connect", async (req, res) => {
   try {
     const mcpConfig = req.body;
-    console.log(mcpConfig);
+
+    if (!mcpConfig || !mcpConfig.type) {
+      return res.status(400).json({ error: "Missing MCP configuration" });
+    }
+
     let tools: unknown = [];
     let prompts: unknown = [];
     let resources: unknown = [];
 
-    if (mcpConfig.type == "STDIO") {
+    if (mcpConfig.type === "STDIO") {
       console.log("STDIO");
+
+      if (!mcpConfig.command) {
+        return res.status(400).json({ error: "Missing command for STDIO" });
+      }
+
       const serverConfig: ServerConfig = {
         command: mcpConfig.command,
         args: mcpConfig.args,
       };
       const client = new McpSTDIOClient(serverConfig);
-      await client.init();
-      tools = await client.listTools();
-      prompts = await client.listPrompts();
-      resources = await client.listResources();
-    } else if (mcpConfig.type == "HTTP") {
+      try {
+        await client.init();
+        tools = await client.listTools();
+        prompts = await client.listPrompts();
+        resources = await client.listResources();
+      } finally {
+        await client.close();
+      }
+    } else if (mcpConfig.type === "HTTP") {
       console.log("HTTP");
+
+      if (!mcpConfig.url) {
+        return res.status(400).json({ error: "Missing server URL" });
+      }
+
       const serverUrl = mcpConfig.url;
 
       const client = new McpHttpClient(serverUrl);
-      await client.init();
-      tools = await client.listTools();
-      prompts = await client.listPrompts();
-      resources = await client.listResources();
+
+      try {
+
+        await client.init();
+
+        tools = await client.listTools();
+
+        prompts = await client.listPrompts();
+
+        resources = await client.listResources();
+
+    } finally {
+
+      await client.close();
+
     }
 
-    // res.json({ tools, prompts, resources });
+    } else {
+      return res.status(400).json({ error: "Unsupported MCP type" });
+    }
+
     res.json({ tools, prompts, resources });
+
   } catch (error) {
-    console.error("Error listing tools from STDIO server:", error);
+    console.error("Error listing tools from HTTP server:", error);
     res.status(500).json({
       error: "Failed to list tools",
       details: error instanceof Error ? error.message : String(error),
@@ -112,14 +145,17 @@ router.post("/http/connect", async (req, res) => {
     }
     console.log(serverUrl);
     const client = new McpHttpClient(serverUrl);
-    await client.init();
-    const tools = await client.listTools();
-    const prompts = await client.listPrompts();
-    const resources = await client.listResources();
-
-    res.json({ tools, prompts, resources });
+    try {
+      await client.init();
+      const tools = await client.listTools();
+      const prompts = await client.listPrompts();
+      const resources = await client.listResources();
+      res.json({ tools, prompts, resources });
+    } finally {
+      await client.close();
+    }
   } catch (error) {
-    console.error("Error listing tools from STDIO server:", error);
+    console.error("Error listing tools from HTTP server:", error);
     res.status(500).json({
       error: "Failed to list tools",
       details: error instanceof Error ? error.message : String(error),
@@ -137,9 +173,13 @@ router.get("/http/tools", async (req, res) => {
         .json({ error: "serverUrl query parameter is required" });
     }
     const client = new McpHttpClient(serverUrl);
-    await client.init();
-    const tools = await client.listTools();
-    res.json({ tools });
+    try {
+      await client.init();
+      const tools = await client.listTools();
+      res.json({ tools });
+    } finally {
+      await client.close();
+    }
   } catch (error) {
     console.error("Error listing tools from HTTP server:", error);
     res.status(500).json({
@@ -159,9 +199,13 @@ router.get("/http/prompts", async (req, res) => {
         .json({ error: "serverUrl query parameter is required" });
     }
     const client = new McpHttpClient(serverUrl);
-    await client.init();
-    const prompts = await client.listPrompts();
-    res.json({ prompts });
+    try {
+      await client.init();
+      const prompts = await client.listPrompts();
+      res.json({ prompts });
+    } finally {
+      await client.close();
+    }
   } catch (error) {
     console.error("Error listing prompts from HTTP server:", error);
     res.status(500).json({
@@ -181,9 +225,13 @@ router.get("/http/resources", async (req, res) => {
         .json({ error: "serverUrl query parameter is required" });
     }
     const client = new McpHttpClient(serverUrl);
-    await client.init();
-    const resources = await client.listResources();
-    res.json({ resources });
+    try {
+      await client.init();
+      const resources = await client.listResources();
+      res.json({ resources });
+    } finally {
+      await client.close();
+    }
   } catch (error) {
     console.error("Error listing resources from HTTP server:", error);
     res.status(500).json({
@@ -206,12 +254,15 @@ router.post("/stdio/connect", async (req, res) => {
     console.log(serverConfig);
 
     const client = new McpSTDIOClient(serverConfig);
-    await client.init();
-    const tools = await client.listTools();
-    const prompts = await client.listPrompts();
-    const resources = await client.listResources();
-
-    res.json({ tools, prompts, resources });
+    try {
+      await client.init();
+      const tools = await client.listTools();
+      const prompts = await client.listPrompts();
+      const resources = await client.listResources();
+      res.json({ tools, prompts, resources });
+    } finally {
+      await client.close();
+    }
   } catch (error) {
     console.error("Error listing tools from STDIO server:", error);
     res.status(500).json({
@@ -232,9 +283,13 @@ router.post("/stdio/tools", async (req, res) => {
     }
 
     const client = new McpSTDIOClient(serverConfig);
-    await client.init();
-    const tools = await client.listTools();
-    res.json({ tools });
+    try {
+      await client.init();
+      const tools = await client.listTools();
+      res.json({ tools });
+    } finally {
+      await client.close();
+    }
   } catch (error) {
     console.error("Error listing tools from STDIO server:", error);
     res.status(500).json({
@@ -254,9 +309,13 @@ router.post("/stdio/prompts", async (req, res) => {
       });
     }
     const client = new McpSTDIOClient(serverConfig);
-    await client.init();
-    const prompts = await client.listPrompts();
-    res.json({ prompts });
+    try {
+      await client.init();
+      const prompts = await client.listPrompts();
+      res.json({ prompts });
+    } finally {
+      await client.close();
+    }
   } catch (error) {
     console.error("Error listing prompts from STDIO server:", error);
     res.status(500).json({
@@ -276,9 +335,13 @@ router.post("/stdio/resources", async (req, res) => {
       });
     }
     const client = new McpSTDIOClient(serverConfig);
-    await client.init();
-    const resources = await client.listResources();
-    res.json({ resources });
+    try {
+      await client.init();
+      const resources = await client.listResources();
+      res.json({ resources });
+    } finally {
+      await client.close();
+    }
   } catch (error) {
     console.error("Error listing resources from STDIO server:", error);
     res.status(500).json({

@@ -15,6 +15,7 @@ export const mockMcpSTDIOClient = {
   callTool: vi.fn().mockResolvedValue({ result: 'tool result' }),
   getPrompt: vi.fn().mockResolvedValue({ content: 'prompt content' }),
   readResource: vi.fn().mockResolvedValue({ content: 'resource content' }),
+  close: vi.fn().mockResolvedValue(undefined),
 };
 
 export const mockMcpHttpClient = {
@@ -32,6 +33,7 @@ export const mockMcpHttpClient = {
   callTool: vi.fn().mockResolvedValue({ result: 'http tool result' }),
   getPrompt: vi.fn().mockResolvedValue({ content: 'http prompt content' }),
   readResource: vi.fn().mockResolvedValue({ content: 'http resource content' }),
+  close: vi.fn().mockResolvedValue(undefined),
 };
 
 // Mock the constructors

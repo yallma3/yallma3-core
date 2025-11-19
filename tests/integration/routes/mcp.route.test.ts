@@ -9,6 +9,7 @@ const mockStdioClient = {
   listTools: vi.fn().mockResolvedValue([{ name: 'test-tool', description: 'A test tool' }]),
   listPrompts: vi.fn().mockResolvedValue([{ name: 'test-prompt', description: 'A test prompt' }]),
   listResources: vi.fn().mockResolvedValue([{ uri: 'test://resource', name: 'Test Resource' }]),
+  close: vi.fn().mockResolvedValue(undefined),
 };
 
 const mockHttpClient = {
@@ -17,6 +18,7 @@ const mockHttpClient = {
   listTools: vi.fn().mockResolvedValue([{ name: 'http-tool', description: 'An HTTP tool' }]),
   listPrompts: vi.fn().mockResolvedValue([{ name: 'http-prompt', description: 'An HTTP prompt' }]),
   listResources: vi.fn().mockResolvedValue([{ uri: 'http://resource', name: 'HTTP Resource' }]),
+  close: vi.fn().mockResolvedValue(undefined),
 };
 
 vi.mock('../../../Utils/McpStdioClient', () => ({
@@ -145,6 +147,76 @@ describe("MCP Routes", () => {
       expect(data).toHaveProperty('tools');
       expect(data).toHaveProperty('prompts');
       expect(data).toHaveProperty('resources');
+    });
+
+    it("should return 400 for missing config", async () => {
+      const port = server.address().port;
+      const response = await fetch(`http://localhost:${port}/api/mcp/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error: string };
+      expect(data).toHaveProperty('error');
+    });
+
+    it("should return 400 for missing type", async () => {
+      const port = server.address().port;
+      const response = await fetch(`http://localhost:${port}/api/mcp/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'test' })
+      });
+
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error: string };
+      expect(data).toHaveProperty('error');
+    });
+
+    it("should return 400 for unsupported type", async () => {
+      const port = server.address().port;
+      const response = await fetch(`http://localhost:${port}/api/mcp/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'UNSUPPORTED' })
+      });
+
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error: string };
+      expect(data).toHaveProperty('error');
+    });
+
+    it("should return 400 for STDIO missing command", async () => {
+      const port = server.address().port;
+      const response = await fetch(`http://localhost:${port}/api/mcp/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'STDIO',
+          args: ['arg1']
+        })
+      });
+
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error: string };
+      expect(data).toHaveProperty('error');
+    });
+
+    it("should return 400 for HTTP missing url", async () => {
+      const port = server.address().port;
+      const response = await fetch(`http://localhost:${port}/api/mcp/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'HTTP'
+        })
+      });
+
+      expect(response.status).toBe(400);
+      const data = await response.json() as { error: string };
+      expect(data).toHaveProperty('error');
     });
   });
 

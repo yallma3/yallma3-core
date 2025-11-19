@@ -296,7 +296,7 @@ describe("WebSocket Server", () => {
       };
 
       // Both clients should listen for both resolved prompts (broadcast goes to all)
-      const setupMessageListener = (ws: WebSocket, clientNum: number) => {
+      const setupMessageListener = (ws: WebSocket) => {
         ws.on('message', (data) => {
           const message = JSON.parse(data.toString());
           if (message.type === 'connected') {
@@ -339,8 +339,8 @@ describe("WebSocket Server", () => {
         });
       };
 
-      setupMessageListener(ws1, 1);
-      setupMessageListener(ws2, 2);
+      setupMessageListener(ws1);
+      setupMessageListener(ws2);
 
       setTimeout(() => {
         ws1.close();

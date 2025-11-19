@@ -39,10 +39,13 @@ export const connectToMcpTools = async (mcpTool: Tool) => {
       client = new McpHttpClient(serverUrl);
       await client.init();
       tools = await client.listTools();
+    } else {
+      console.error(`Unsupported MCP connection type: ${connectionType}`);
+      return null;
     }
 
     // Store the client for later tool execution
-    if (client! && mcpTool.name) {
+    if (client && mcpTool.name) {
       mcpClients.set(mcpTool.name, client);
     }
 
@@ -136,7 +139,8 @@ export function normalizeTool(tool: unknown) {
           result.properties = {};
           const props = s.properties as Record<string, unknown>;
           for (const [prop, value] of Object.entries(props)) {
-            (result.properties as Record<string, unknown>)[prop] = cleanSchema(value);
+            (result.properties as Record<string, unknown>)[prop] =
+              cleanSchema(value);
           }
         } else {
           result[key] = cleanSchema(s[key]);
