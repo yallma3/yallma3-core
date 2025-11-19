@@ -1,7 +1,19 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupWebSocketServer } from "../../../Websocket/socket";
 import { ConsoleInputUtils, registerPrompt } from "../../../Workflow/Nodes/ConsoleInput";
+
+// Mock dependencies
+vi.mock('../../../Workflow/runtime', () => ({
+  executeFlowRuntime: vi.fn(),
+}));
+
+vi.mock('../../../Task/TaskIntrepreter', () => ({
+  planAgenticTask: vi.fn(),
+}));
+
+import { executeFlowRuntime } from '../../../Workflow/runtime';
+import { planAgenticTask } from '../../../Task/TaskIntrepreter';
 
 describe("WebSocket Server", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -305,19 +317,19 @@ describe("WebSocket Server", () => {
               // Both clients connected, send both inputs
               ws1.send(JSON.stringify({
                 type: 'console_input',
-                data: { 
+                data: {
                   promptId: promptId1,
                   message: 'input from client 1',
                   type: 'input',
                   details: 'User input'
                 }
               }));
-              
+
               // Send second input with a slight delay to avoid race conditions
               setTimeout(() => {
                 ws2.send(JSON.stringify({
                   type: 'console_input',
-                  data: { 
+                  data: {
                     promptId: promptId2,
                     message: 'input from client 2',
                     type: 'input',
@@ -346,6 +358,120 @@ describe("WebSocket Server", () => {
         ws1.close();
         ws2.close();
         reject(new Error('Test timed out - resolved ' + resolvedPrompts.size + ' prompts, expected 2'));
+      }, 5000);
+    });
+  });
+
+  it("should handle run_workspace message with successful workflow execution", async () => {
+    const port = wss.address().port;
+
+    // Mock the dependencies
+    const mockPlan = {
+      steps: [
+        {
+          type: 'workflow',
+          workflow: '{"id": "test-workflow", "nodes": [], "edges": []}',
+          task: 'test-task',
+          agent: 'test-agent'
+        }
+      ]
+    };
+    const mockFlowResult = {
+      layers: [],
+      results: {},
+      finalResult: 'test result'
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(planAgenticTask).mockResolvedValue(mockPlan as any);
+    vi.mocked(executeFlowRuntime).mockResolvedValue(mockFlowResult);
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messages: any[] = [];
+
+      ws.on('message', (data) => {
+        const message = JSON.parse(data.toString());
+        messages.push(message);
+
+        if (message.type === 'connected') {
+          // Send run_workspace message
+          ws.send(JSON.stringify({
+            type: 'run_workspace',
+            data: JSON.stringify({
+              apiKey: 'test-key',
+              mainLLM: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } },
+              tasks: [{ id: 'test-task', title: 'Test Task', description: 'A test task', expectedOutput: 'Test output', type: 'test', executorId: 'test-executor', position: '0,0', selected: false, sockets: [] }],
+              agents: [{ id: 'test-agent', name: 'Test Agent', role: 'Test Role', objective: 'Test objective', background: 'Test background', capabilities: 'Test capabilities', apiKey: 'test-key', llm: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } }, tools: [] }],
+              intent: 'Test intent'
+            })
+          }));
+        } else if (message.type === 'message' && message.data === 'Step 1 completed') {
+          // Workflow completed successfully
+          expect(messages.some(m => m.type === 'message' && m.data === 'Plan Created Successfully')).toBe(true);
+          expect(messages.some(m => m.type === 'message' && m.data === 'Executing Plan')).toBe(true);
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => {
+        ws.close();
+        reject(new Error('Test timed out - did not receive completion message'));
+      }, 5000);
+    });
+  });
+
+  it("should handle run_workspace message with workflow execution failure", async () => {
+    const port = wss.address().port;
+
+    // Mock the dependencies
+    const mockPlan = {
+      steps: [
+        {
+          type: 'workflow',
+          workflow: '{"id": "test-workflow", "nodes": [], "edges": []}',
+          task: 'test-task',
+          agent: 'test-agent'
+        }
+      ]
+    };
+    const mockError = new Error('Workflow execution failed');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(planAgenticTask).mockResolvedValue(mockPlan as any);
+    vi.mocked(executeFlowRuntime).mockResolvedValue(mockError);
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+
+      ws.on('message', (data) => {
+        const message = JSON.parse(data.toString());
+
+        if (message.type === 'connected') {
+          // Send run_workspace message
+          ws.send(JSON.stringify({
+            type: 'run_workspace',
+            data: JSON.stringify({
+              apiKey: 'test-key',
+              mainLLM: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } },
+              tasks: [{ id: 'test-task', title: 'Test Task', description: 'A test task', expectedOutput: 'Test output', type: 'test', executorId: 'test-executor', position: '0,0', selected: false, sockets: [] }],
+              agents: [{ id: 'test-agent', name: 'Test Agent', role: 'Test Role', objective: 'Test objective', background: 'Test background', capabilities: 'Test capabilities', apiKey: 'test-key', llm: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } }, tools: [] }],
+              intent: 'Test intent'
+            })
+          }));
+        } else if (message.type === 'error' && message.data.includes('Workflow execution failed')) {
+          // Error message sent for workflow failure
+          expect(message.data).toContain('Workflow execution failed');
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => {
+        ws.close();
+        reject(new Error('Test timed out - did not receive error message'));
       }, 5000);
     });
   });

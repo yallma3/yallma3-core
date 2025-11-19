@@ -236,20 +236,25 @@ export const BasicAgentRuntime = async (
 
     const type = step.type;
     if (type == "workflow") {
-      const workflow = await sendWorkflow(ws, step.workflow);
-      const wrapper = JSON.parse(workflow);
+      const json: Workflow = JSON.parse(step.workflow);
 
-      // If workflow is already an object (not string), guard against double-parse
-      const json: Workflow =
-        typeof wrapper.data === "string"
-          ? JSON.parse(wrapper.data)
-          : wrapper.data;
-
-       console.log("Parsed workflow:", json);
-       const result = await executeFlowRuntime(json, ws);
-       if (result && (result as FlowResult).finalResult) {
-         prevResults.push((result as FlowResult).finalResult as string);
-       }
+      console.log("Parsed workflow:", json);
+      const result = await executeFlowRuntime(json, ws);
+      if (result && typeof result === 'object' && 'finalResult' in result) {
+        const flowResult = result as FlowResult;
+        if (flowResult.finalResult) {
+          prevResults.push(String(flowResult.finalResult));
+        }
+      } else {
+        console.error("Workflow execution failed:", result);
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            data: `Workflow execution failed: ${result}`,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
       ws.send(
         JSON.stringify({
           type: "message",

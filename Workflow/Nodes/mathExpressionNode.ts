@@ -28,7 +28,8 @@ export function register(nodeRegistry: NodeRegistry): void {
     category: "Logic",
     title: "Math Expression",
     nodeType: "MathExpression",
-    description: "Evaluates a mathematical expression using an input variable 'x'. The expression is configured in the node settings, and the node replaces 'x' with the value from the input socket before computing the result.",
+    description:
+      "Evaluates a mathematical expression using an input variable 'x'. The expression is configured in the node settings, and the node replaces 'x' with the value from the input socket before computing the result.",
     nodeValue: 0,
     sockets: [
       { title: "Input", type: "input", dataType: "string" },
@@ -39,7 +40,7 @@ export function register(nodeRegistry: NodeRegistry): void {
     configParameters: [
       {
         parameterName: "Expression",
-        parameterType: "number",
+        parameterType: "string",
         defaultValue: "x",
         valueSource: "UserInput",
         UIConfigurable: true,
@@ -47,13 +48,14 @@ export function register(nodeRegistry: NodeRegistry): void {
         isNodeBodyContent: true,
         i18n: {
           en: {
-            "Expression": {
+            Expression: {
               Name: "Expression",
-              Description: "Mathematical expression (use 'x' for input variable)",
+              Description:
+                "Mathematical expression (use 'x' for input variable)",
             },
           },
           ar: {
-            "Expression": {
+            Expression: {
               Name: "التعبير",
               Description: "تعبير رياضي (استخدم 'x' للمتغير المدخل)",
             },
@@ -66,13 +68,15 @@ export function register(nodeRegistry: NodeRegistry): void {
         category: "Logic",
         title: "Math Expression",
         nodeType: "Math Expression",
-        description: "Evaluates a mathematical expression using an input variable 'x'. The expression is configured in the node settings, and the node replaces 'x' with the value from the input socket before computing the result.",
+        description:
+          "Evaluates a mathematical expression using an input variable 'x'. The expression is configured in the node settings, and the node replaces 'x' with the value from the input socket before computing the result.",
       },
       ar: {
         category: "منطق",
         title: "تعبير رياضي",
         nodeType: "تعبير رياضي",
-        description: "يُقيّم تعبيراً رياضياً باستخدام متغير الإدخال 'x'. يتم تكوين التعبير في إعدادات العقدة، وتستبدل العقدة 'x' بالقيمة من مقبس الإدخال قبل حساب النتيجة.",
+        description:
+          "يُقيّم تعبيراً رياضياً باستخدام متغير الإدخال 'x'. يتم تكوين التعبير في إعدادات العقدة، وتستبدل العقدة 'x' بالقيمة من مقبس الإدخال قبل حساب النتيجة.",
       },
     },
   };

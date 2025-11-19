@@ -234,14 +234,15 @@ export function creatOpenAIChatNode(id: number, position: Position): ChatNode {
         }
 
         const json = await res.json() as OpenAIResponse;
+        const content = json.choices?.[0]?.message?.content ?? "";
         console.log(
           `Chat node ${n.id} received response:`,
-          json.choices[0]?.message.content?.substring(0, 50) + "..."
+          content.substring(0, 50) + "..."
         );
 
         return {
-          [n.id * 100 + 3]: json.choices[0]?.message.content || "",
-          [n.id * 100 + 4]: json.usage?.total_tokens || 0,
+          [n.id * 100 + 3]: content,
+          [n.id * 100 + 4]: json.usage?.total_tokens ?? 0,
         };
       } catch (error) {
         console.error("Error in OpenAI Chat node:", error);

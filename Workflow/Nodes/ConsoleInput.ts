@@ -43,10 +43,11 @@ export const addConsoleEvent = (event: ConsoleEvent) => {
 
 export const getInputForPrompt = (promptId: string): string | null => {
   const prompt = pendingPrompts.get(promptId);
-  if (prompt && prompt.resolved && prompt.response) {
-    return prompt.response;
+  if (!prompt || !prompt.resolved) {
+    return null;
   }
-  return null;
+  // Allow empty string as a valid response
+  return prompt.response ?? "";
 };
 
 export const resolvePrompt = (promptId: string, response: string): boolean => {
@@ -323,7 +324,7 @@ export function register(nodeRegistry: NodeRegistry): void {
             }
 
             const response = getInputForPrompt(promptId);
-            if (response) {
+            if (response !== null) {
               clearInterval(checkInterval);
               
               pendingPrompts.delete(promptId);
