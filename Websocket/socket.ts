@@ -49,7 +49,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               })
             );
 
-            handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
+            handleRunWorkspace(data.data, ws);
             break;
           case "run_workflow": {
             consoleMessage = {
@@ -92,18 +92,23 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
           case "console_input":
             console.log("Received console input:", data.data);
-            
+
             if (data.data && typeof data.data === "object") {
               const event = data.data;
               const { promptId, message: inputMessage } = event;
 
               if (promptId && inputMessage) {
                 // Resolve the specific prompt
-                const resolved = ConsoleInputUtils.resolvePrompt(promptId, inputMessage);
-                
+                const resolved = ConsoleInputUtils.resolvePrompt(
+                  promptId,
+                  inputMessage
+                );
+
                 if (resolved) {
-                  console.log(`Resolved prompt ${promptId} with input: ${inputMessage}`);
-                  
+                  console.log(
+                    `Resolved prompt ${promptId} with input: ${inputMessage}`
+                  );
+
                   // Add the event to console history
                   ConsoleInputUtils.addEvent(event);
 
@@ -118,13 +123,16 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                     timestamp: new Date().toISOString(),
                   });
                 } else {
-                  console.warn(`Failed to resolve prompt ${promptId} - prompt not found or already resolved`);
-                  
+                  console.warn(
+                    `Failed to resolve prompt ${promptId} - prompt not found or already resolved`
+                  );
+
                   // Send error back to client
                   ws.send(
                     JSON.stringify({
                       type: "error",
-                      message: "Failed to resolve prompt - prompt not found or already resolved",
+                      message:
+                        "Failed to resolve prompt - prompt not found or already resolved",
                       promptId,
                       timestamp: new Date().toISOString(),
                     })
@@ -135,7 +143,8 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 ws.send(
                   JSON.stringify({
                     type: "error",
-                    message: "Invalid console input format - missing promptId or message",
+                    message:
+                      "Invalid console input format - missing promptId or message",
                     timestamp: new Date().toISOString(),
                   })
                 );
@@ -228,7 +237,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
   }
 
   setInterval(() => {
-    ConsoleInputUtils.cleanupPrompts(300000); 
+    ConsoleInputUtils.cleanupPrompts(300000);
   }, 300000);
 
   return {

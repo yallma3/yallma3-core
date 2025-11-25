@@ -1,35 +1,10 @@
-import { BasicAgentRuntime, yallma3GenSeqential } from "../Agent/MainAgents";
 import { WebSocket } from "ws";
+import { getMainAgent } from "../Agent/Main/MainAgentRegistry";
 
-export async function handleRunWorkspace(
-  data: string,
-  agentType: string = "basic_agent",
-  ws: WebSocket
-) {
+export async function handleRunWorkspace(data: string, ws: WebSocket) {
   const workspaceData = JSON.parse(data);
 
-  switch (agentType) {
-    case "basic_agent":
-      await BasicAgentRuntime(workspaceData, ws);
-      break;
-    case "yallma3-gen-seq":
-      await yallma3GenSeqential(workspaceData, ws);
-      break;
-    default:
-      ws.send(
-        JSON.stringify({
-          type: "message",
-          data: "No Agent Handler for Agent Type: " + agentType,
-          timestamp: new Date().toISOString(),
-        })
-      );
-  }
-
-  // ws.send(
-  //   JSON.stringify({
-  //     type: "message",
-  //     data:  "From runtime handler",
-  //     timestamp: new Date().toISOString(),
-  //     })
-  // );
+  // const agent = getMainAgent(workspaceData.mainAgentVersion);
+  const agent = getMainAgent("1.0.0", workspaceData, ws);
+  await agent.run();
 }

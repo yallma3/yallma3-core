@@ -1,5 +1,5 @@
 import type WebSocket from "ws";
-import { sendWorkflow } from "../MainAgents";
+import { sendWorkflow } from "../Main/MainAgent";
 import type { Workflow } from "../../Models/Workflow";
 import { executeFlowRuntime } from "../../Workflow/runtime";
 import type { LLMSpecTool, Tool } from "../../Models/Tool";
@@ -42,7 +42,11 @@ export const toolExecutorAttacher = async (ws: WebSocket, tools: Tool[]) => {
 
     // Convert MCP tools to LLMSpecTool format
     for (const mcpTool of mcpServerTools) {
-      const normalizedTool = normalizeTool(mcpTool) as { name: string; description: string; inputSchema: unknown };
+      const normalizedTool = normalizeTool(mcpTool) as {
+        name: string;
+        description: string;
+        inputSchema: unknown;
+      };
 
       const llmTool: LLMSpecTool = {
         type: "function",
