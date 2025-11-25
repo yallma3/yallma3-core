@@ -8,8 +8,10 @@ import type {
   OpenAIToolCall,
   ClaudeResponse,
   ClaudeContentItem,
+  ClaudeToolUseContent,
   GeminiResponse,
   GeminiPart,
+  AnthropicMessageBody,
 } from "../Models/LLM";
 export class OpenAIProvider implements LLMProvider {
   private model: string;
@@ -56,7 +58,7 @@ export class OpenAIProvider implements LLMProvider {
    */
   async generateText(prompt: string): Promise<string> {
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
-    let maxIterations = 10; // Prevent infinite loops
+    let maxIterations = 50; // Prevent infinite loops
     let iteration = 0;
 
     while (iteration < maxIterations) {
@@ -129,7 +131,7 @@ export class OpenAIProvider implements LLMProvider {
       throw new Error(`OpenAI API returned status ${res.status}`);
     }
 
-    const json = await res.json() as OpenAIResponse;
+    const json = (await res.json()) as OpenAIResponse;
     const message = json.choices?.[0]?.message;
 
     if (!message) {
@@ -141,7 +143,10 @@ export class OpenAIProvider implements LLMProvider {
       message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
         name: t.function?.name ?? "",
-        input: JSON.parse(t.function?.arguments ?? "{}") as Record<string, unknown>,
+        input: JSON.parse(t.function?.arguments ?? "{}") as Record<
+          string,
+          unknown
+        >,
       })) || null;
 
     const content =
@@ -272,7 +277,7 @@ export class GroqProvider implements LLMProvider {
       throw new Error(`Chat API returned status ${res.status}`);
     }
 
-    const json = await res.json() as OpenAIResponse;
+    const json = (await res.json()) as OpenAIResponse;
 
     const message = json.choices[0]?.message;
     if (!message) {
@@ -285,7 +290,10 @@ export class GroqProvider implements LLMProvider {
       message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
         name: t.function?.name ?? "",
-        input: JSON.parse(t.function?.arguments ?? "{}") as Record<string, unknown>,
+        input: JSON.parse(t.function?.arguments ?? "{}") as Record<
+          string,
+          unknown
+        >,
       })) || null;
 
     const content =
@@ -431,7 +439,9 @@ export class OpenRouterProvider implements LLMProvider {
 
     const content =
       rawContent ||
-      (toolCalls?.length ? `calling tool ${toolCalls[0].name}` : "");
+      (toolCalls?.length && toolCalls[0]
+        ? `calling tool ${toolCalls[0].name}`
+        : "");
 
     return { content, toolCalls };
   }
@@ -458,7 +468,9 @@ export class GeminiProvider implements LLMProvider {
   /**
    * Execute tools and return tool results for Gemini format
    */
-  private async executeTools(toolCalls: ToolCall[]): Promise<Record<string, unknown>[]> {
+  private async executeTools(
+    toolCalls: ToolCall[]
+  ): Promise<Record<string, unknown>[]> {
     const toolResults: Record<string, unknown>[] = [];
 
     for (const call of toolCalls) {
@@ -569,7 +581,7 @@ export class GeminiProvider implements LLMProvider {
       throw new Error(`Gemini API returned status ${res.status}`);
     }
 
-    const json = await res.json() as GeminiResponse;
+    const json = (await res.json()) as GeminiResponse;
 
     const candidates = json.candidates ?? [];
     const first = candidates[0];
@@ -582,13 +594,15 @@ export class GeminiProvider implements LLMProvider {
         .filter((p: GeminiPart) => p.functionCall)
         .map((p: GeminiPart) => ({
           id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          name: p.functionCall.name,
-          input: p.functionCall.args,
+          name: p.functionCall?.name ?? "",
+          input: p.functionCall?.args ?? {},
         })) || [];
 
     const content =
       rawContent ||
-      (functionCalls.length ? `calling tool ${functionCalls[0].name}` : "");
+      (functionCalls.length && functionCalls[0]
+        ? `calling tool ${functionCalls[0].name}`
+        : "");
 
     return {
       content,
@@ -627,13 +641,21 @@ export class ClaudeProvider implements LLMProvider {
       if (!tool?.executor) continue;
       const result = await tool.executor(call.input);
 
+      const toolResultText =
+        typeof result === "string" ? result : JSON.stringify(result);
+
       toolMessages.push({
         role: "user",
         content: [
           {
             type: "tool_result",
             tool_use_id: call.id,
-            content: JSON.stringify(result),
+            content: [
+              {
+                type: "text",
+                text: toolResultText,
+              },
+            ],
           },
         ],
       } as LLMMessage);
@@ -662,17 +684,21 @@ export class ClaudeProvider implements LLMProvider {
       const toolMessages = await this.executeTools(response.toolCalls);
 
       // Build conversation history for next call (Claude format)
+      const toolUseContent: ClaudeContentItem[] = response.toolCalls.map(
+        (call) => ({
+          type: "tool_use",
+          id: call.id,
+          name: call.name,
+          input: call.input,
+        })
+      );
+
       messages = [
         ...messages,
         {
           role: "assistant",
-          content: response.toolCalls.map((call) => ({
-            type: "tool_use",
-            id: call.id,
-            name: call.name,
-            input: call.input,
-          })),
-        } as OpenAIMessage,
+          content: toolUseContent,
+        },
         ...toolMessages,
       ];
 
@@ -686,12 +712,19 @@ export class ClaudeProvider implements LLMProvider {
    * Makes a raw call to the Claude API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
-    const body: Record<string, unknown> = {
+    const mappedMessages = messages.map((m) => ({
+      role: m.role === "function" ? "tool" : m.role,
+      content: Array.isArray(m.content)
+        ? m.content
+        : [{ type: "text", text: m.content }],
+    }));
+
+    const body: AnthropicMessageBody = {
       model: this.model,
       max_tokens: 4096,
-      messages,
       temperature: 0.7,
       top_p: 1,
+      messages: mappedMessages,
     };
 
     if (this.supportsTools && this.tools.length > 0) {
@@ -700,6 +733,7 @@ export class ClaudeProvider implements LLMProvider {
         description: t.description,
         input_schema: t.parameters,
       }));
+      body.tool_choice = { type: "auto" };
     }
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -712,27 +746,35 @@ export class ClaudeProvider implements LLMProvider {
     });
 
     if (!res.ok) {
+      console.log("Anthropic error:", await res.text());
+
       throw new Error(`Claude API returned status ${res.status}`);
     }
 
-    const json = await res.json() as ClaudeResponse;
+    const json = (await res.json()) as ClaudeResponse;
     const content = json.content ?? [];
+    const isToolUseContent = (
+      item: ClaudeContentItem
+    ): item is ClaudeToolUseContent => item.type === "tool_use";
 
     const toolUses =
-      content
-        ?.filter((item: ClaudeContentItem) => item.type === "tool_use")
-        ?.map((item: ClaudeContentItem) => ({
-          id: item.id!,
-          name: item.name!,
-          input: item.input!,
-        })) || null;
+      content?.filter(isToolUseContent)?.map((item) => ({
+        id: item.id,
+        name: item.name,
+        input: item.input,
+      })) || null;
 
     // 🔍 Detect normal text content
-    const textPart = content?.find((item: ClaudeContentItem) => item.type === "text");
+    const textPart = content?.find(
+      (item: ClaudeContentItem) => item.type === "text"
+    );
     const rawText = textPart?.text ?? null;
 
     const finalContent =
-      rawText || (toolUses?.length ? `calling tool ${toolUses[0].name}` : "");
+      rawText ||
+      (toolUses?.length && toolUses[0]
+        ? `calling tool ${toolUses[0].name}`
+        : "");
 
     return {
       content: finalContent,

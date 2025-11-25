@@ -49,7 +49,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               })
             );
 
-            handleRunWorkspace(data.data, "yallma3-gen-seq", ws);
+            handleRunWorkspace(data.data, ws);
             break;
           case "run_workflow": {
             consoleMessage = {

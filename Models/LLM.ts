@@ -12,7 +12,7 @@ export interface LLMOption {
 
 export interface LLMMessage {
   role: "system" | "user" | "assistant" | "tool" | "function";
-  content: string | null;
+  content: string | ClaudeContentItem[] | null;
   tool_call_id?: string;
   tool_calls?: unknown[];
 }
@@ -56,6 +56,30 @@ export interface OpenAIResponse {
     total_tokens: number;
   };
 }
+type AnthropicToolChoice =
+  | { type: "auto" }
+  | { type: "none" }
+  | { type: "tool"; name: string };
+
+export interface AnthropicMessageBody {
+  model: string;
+  max_tokens: number;
+  temperature?: number;
+  top_p?: number;
+
+  messages: {
+    role: "user" | "assistant" | "system" | "tool";
+    content: unknown[];
+  }[];
+
+  tools?: {
+    name: string;
+    description: string;
+    input_schema: Record<string, unknown>;
+  }[];
+
+  tool_choice?: AnthropicToolChoice;
+}
 
 export interface ClaudeToolUse {
   type: "tool_use";
@@ -64,13 +88,28 @@ export interface ClaudeToolUse {
   input: Record<string, unknown>;
 }
 
-export interface ClaudeContentItem {
-  type: "text" | "tool_use";
-  text?: string;
-  id?: string;
-  name?: string;
-  input?: Record<string, unknown>;
+export interface ClaudeTextContent {
+  type: "text";
+  text: string;
 }
+
+export interface ClaudeToolUseContent {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface ClaudeToolResultContent {
+  type: "tool_result";
+  tool_use_id: string;
+  content: ClaudeTextContent[];
+}
+
+export type ClaudeContentItem =
+  | ClaudeTextContent
+  | ClaudeToolUseContent
+  | ClaudeToolResultContent;
 
 export interface ClaudeResponse {
   id: string;
