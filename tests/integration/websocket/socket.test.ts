@@ -405,7 +405,7 @@ describe("WebSocket Server", () => {
           }));
         } else if (message.type === 'message' && message.data.message === '[1/1] Task \'Test Task\' completed successfully.') {
           // Workflow completed successfully
-          expect(message.data.results).toBe('Test output');
+           expect(JSON.parse(JSON.parse(message.data.results).task)).toBe('Test output');
           ws.close();
           resolve();
         }

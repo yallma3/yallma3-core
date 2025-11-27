@@ -69,7 +69,7 @@ export class MainAgentV1 implements MainAgent {
         taskContext
       );
 
-      const agentResult = await this.runAgent(task, agentPlan, taskContext);
+      const agentResult = await this.runAgent(task, agentPlan, taskContext, bestFit);
 
       if (agentResult) {
         results[task.id] = agentResult;
@@ -234,11 +234,24 @@ export class MainAgentV1 implements MainAgent {
     }
   }
 
-  private async runAgent(task: Task, plan: AgentStep[], context: string) {
-    const agentId = task.type === "specific-agent" ? task.executorId : null;
+  private async runAgent(
+    task: Task,
+    plan: AgentStep[],
+    context: string,
+    bestFit: { type: string; id: string } | null
+  ) {
+    const agentId =
+      task.type === "specific-agent"
+        ? task.executorId
+        : bestFit?.type === "agent"
+          ? bestFit.id
+          : null;
 
     const agent = this.workspaceData.agents.find((a) => a.id === agentId);
-    if (!agent) return null;
+    if (!agent) {
+      this.emitError(0, 0, task.title);
+      return null;
+    }
 
     this.emitInfo(`Running agent '${agent.name}' for '${task.title}'`);
 
@@ -265,14 +278,14 @@ export class MainAgentV1 implements MainAgent {
     const finalResult =
       (finalTaskId && results[finalTaskId]) || JSON.stringify(results, null, 2);
 
-    this.emitSuccessRaw("Workspace completed successfully.", finalResult);
-
-    await this.saveResults(layers, results);
-
     results["__meta__"] = JSON.stringify({
       version: this.version,
       timestamp: Date.now(),
     });
+
+    this.emitSuccessRaw("Workspace completed successfully.", finalResult);
+
+    await this.saveResults(layers, results);
   }
 
   private async saveResults(
@@ -284,7 +297,7 @@ export class MainAgentV1 implements MainAgent {
       await mkdir(outputDir, { recursive: true });
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const workspaceName = this.workspaceData.name.replace(" ", "_");
+      const workspaceName = this.workspaceData.name.replaceAll(" ", "_");
       const filename = `${workspaceName}_${timestamp}.txt`;
 
       const filepath = join(outputDir, filename);
@@ -293,6 +306,8 @@ export class MainAgentV1 implements MainAgent {
 Generated: ${new Date().toISOString()}
 
 ${layers.map((l) => `${l.taskId}\n${results[l.taskId]}\n`).join("\n")}
+
+__meta__: ${results["__meta__"]}
 `;
 
       await writeFile(filepath, output, "utf8");
