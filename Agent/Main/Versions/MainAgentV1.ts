@@ -179,7 +179,10 @@ export class MainAgentV1 implements MainAgent {
     results: Record<string, string>;
   }) {
     const workflowId = task.type === "workflow" ? task.executorId : bestFit?.id;
-    if (!workflowId) throw new Error("Missing workflow ID");
+    if (!workflowId) {
+      this.emitError(layerIndex, totalLayers, task.title);
+      return;
+    }
 
     this.emitInfo(
       `[${layerIndex}/${totalLayers}] Running task '${task.title}' (workflow: ${workflowId})`
