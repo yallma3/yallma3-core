@@ -1,30 +1,41 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from "vitest";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupWebSocketServer } from "../../../Websocket/socket";
-import { ConsoleInputUtils, registerPrompt } from "../../../Workflow/Nodes/ConsoleInput";
+import {
+  ConsoleInputUtils,
+  registerPrompt,
+} from "../../../Workflow/Nodes/ConsoleInput";
 
 // Mock dependencies
-vi.mock('../../../Workflow/runtime', () => ({
+vi.mock("../../../Workflow/runtime", () => ({
   executeFlowRuntime: vi.fn(),
 }));
 
-vi.mock('../../../Task/TaskIntrepreter', () => ({
+vi.mock("../../../Task/TaskIntrepreter", () => ({
   planAgenticTask: vi.fn(),
   analyzeTaskCore: vi.fn().mockResolvedValue({
-    taskId: 'test-task',
-    intent: 'Test intent',
-    classification: 'simple',
+    taskId: "test-task",
+    intent: "Test intent",
+    classification: "simple",
     needsDecomposition: false,
     userInput: null,
   }),
 }));
 
-vi.mock('../../../Agent/Utls/ToolCallingHelper', () => ({
+vi.mock("../../../Agent/Utls/ToolCallingHelper", () => ({
   workflowExecutor: vi.fn(),
 }));
 
-import { planAgenticTask } from '../../../Task/TaskIntrepreter';
-import { workflowExecutor } from '../../../Agent/Utls/ToolCallingHelper';
+import { planAgenticTask } from "../../../Task/TaskIntrepreter";
+import { workflowExecutor } from "../../../Agent/Utls/ToolCallingHelper";
 
 describe("WebSocket Server", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,9 +52,9 @@ describe("WebSocket Server", () => {
     ConsoleInputUtils.clearEvents();
     // Clean up all prompts
     const pending = ConsoleInputUtils.getPendingPrompts();
-    pending.forEach(p => {
+    pending.forEach((p) => {
       if (p) {
-        ConsoleInputUtils.resolvePrompt(p.promptId, 'cleanup');
+        ConsoleInputUtils.resolvePrompt(p.promptId, "cleanup");
       }
     });
     ConsoleInputUtils.cleanupPrompts(0);
@@ -60,17 +71,17 @@ describe("WebSocket Server", () => {
       const ws = new WebSocket(`ws://localhost:${port}`);
       let connectedReceived = false;
 
-      ws.on('open', () => {
+      ws.on("open", () => {
         // Send ping
-        ws.send(JSON.stringify({ type: 'ping' }));
+        ws.send(JSON.stringify({ type: "ping" }));
       });
 
-      ws.on('message', (data) => {
+      ws.on("message", (data) => {
         const message = JSON.parse(data.toString());
-        if (message.type === 'connected') {
+        if (message.type === "connected") {
           connectedReceived = true;
-        } else if (message.type === 'pong' && connectedReceived) {
-          expect(message).toHaveProperty('timestamp');
+        } else if (message.type === "pong" && connectedReceived) {
+          expect(message).toHaveProperty("timestamp");
           ws.close();
           resolve();
         }
@@ -84,10 +95,15 @@ describe("WebSocket Server", () => {
     return new Promise<void>((resolve) => {
       const ws = new WebSocket(`ws://localhost:${port}`);
 
-      ws.on('message', (data) => {
-        const message = JSON.parse(data.toString()) as { type: string; message: string };
-        expect(message.type).toBe('connected');
-        expect(message.message).toBe('Connected to yaLLMa3API WebSocket server');
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString()) as {
+          type: string;
+          message: string;
+        };
+        expect(message.type).toBe("connected");
+        expect(message.message).toBe(
+          "Connected to yaLLMa3API WebSocket server"
+        );
         ws.close();
         resolve();
       });
@@ -103,7 +119,7 @@ describe("WebSocket Server", () => {
 
       let receivedCount = 0;
       let connectedCount = 0;
-      const promptId = 'test_prompt_123';
+      const promptId = "test_prompt_123";
 
       registerPrompt(promptId, 1);
 
@@ -118,25 +134,27 @@ describe("WebSocket Server", () => {
 
       // Set up message listeners for both clients
       const setupMessageListener = (ws: WebSocket) => {
-        ws.on('message', (data) => {
+        ws.on("message", (data) => {
           const message = JSON.parse(data.toString());
-          if (message.type === 'connected') {
+          if (message.type === "connected") {
             connectedCount++;
             if (connectedCount === 2) {
               // Both clients connected, now send console input from ws1
-              ws1.send(JSON.stringify({
-                type: 'console_input',
-                data: { 
-                  promptId: promptId,
-                  message: 'test input',
-                  type: 'input',
-                  details: 'User input'
-                }
-              }));
+              ws1.send(
+                JSON.stringify({
+                  type: "console_input",
+                  data: {
+                    promptId: promptId,
+                    message: "test input",
+                    type: "input",
+                    details: "User input",
+                  },
+                })
+              );
             }
-          } else if (message.type === 'console_input_resolved') {
+          } else if (message.type === "console_input_resolved") {
             expect(message.data.promptId).toBe(promptId);
-            expect(message.data.message).toBe('test input');
+            expect(message.data.message).toBe("test input");
             checkComplete();
           }
         });
@@ -149,7 +167,13 @@ describe("WebSocket Server", () => {
       setTimeout(() => {
         ws1.close();
         ws2.close();
-        reject(new Error('Test timed out - received ' + receivedCount + ' messages, expected 2'));
+        reject(
+          new Error(
+            "Test timed out - received " +
+              receivedCount +
+              " messages, expected 2"
+          )
+        );
       }, 5000);
     });
   });
@@ -161,27 +185,29 @@ describe("WebSocket Server", () => {
       const ws = new WebSocket(`ws://localhost:${port}`);
       let connectedReceived = false;
 
-      ws.on('message', (data) => {
+      ws.on("message", (data) => {
         const message = JSON.parse(data.toString());
-        if (message.type === 'connected') {
+        if (message.type === "connected") {
           connectedReceived = true;
           // Send console input without promptId
-          ws.send(JSON.stringify({
-            type: 'console_input',
-            data: { 
-              message: 'test input',
-              type: 'input'
-            }
-          }));
-        } else if (message.type === 'error' && connectedReceived) {
-          expect(message.message).toContain('missing promptId or message');
+          ws.send(
+            JSON.stringify({
+              type: "console_input",
+              data: {
+                message: "test input",
+                type: "input",
+              },
+            })
+          );
+        } else if (message.type === "error" && connectedReceived) {
+          expect(message.message).toContain("missing promptId or message");
           ws.close();
           resolve();
         }
       });
 
       setTimeout(() => {
-        reject(new Error('Test timed out waiting for error message'));
+        reject(new Error("Test timed out waiting for error message"));
       }, 5000);
     });
   });
@@ -193,29 +219,31 @@ describe("WebSocket Server", () => {
       const ws = new WebSocket(`ws://localhost:${port}`);
       let connectedReceived = false;
 
-      ws.on('message', (data) => {
+      ws.on("message", (data) => {
         const message = JSON.parse(data.toString());
-        if (message.type === 'connected') {
+        if (message.type === "connected") {
           connectedReceived = true;
           // Send console input for non-existent prompt
-          ws.send(JSON.stringify({
-            type: 'console_input',
-            data: { 
-              promptId: 'non_existent_prompt',
-              message: 'test input',
-              type: 'input'
-            }
-          }));
-        } else if (message.type === 'error' && connectedReceived) {
-          expect(message.message).toContain('not found or already resolved');
-          expect(message.promptId).toBe('non_existent_prompt');
+          ws.send(
+            JSON.stringify({
+              type: "console_input",
+              data: {
+                promptId: "non_existent_prompt",
+                message: "test input",
+                type: "input",
+              },
+            })
+          );
+        } else if (message.type === "error" && connectedReceived) {
+          expect(message.message).toContain("not found or already resolved");
+          expect(message.promptId).toBe("non_existent_prompt");
           ws.close();
           resolve();
         }
       });
 
       setTimeout(() => {
-        reject(new Error('Test timed out waiting for error message'));
+        reject(new Error("Test timed out waiting for error message"));
       }, 5000);
     });
   });
@@ -227,15 +255,17 @@ describe("WebSocket Server", () => {
       const ws = new WebSocket(`ws://localhost:${port}`);
       let connectedReceived = false;
 
-      ws.on('message', (data) => {
+      ws.on("message", (data) => {
         const message = JSON.parse(data.toString());
-        if (message.type === 'connected') {
+        if (message.type === "connected") {
           connectedReceived = true;
           // Request pending prompts
-          ws.send(JSON.stringify({
-            type: 'get_pending_prompts'
-          }));
-        } else if (message.type === 'pending_prompts' && connectedReceived) {
+          ws.send(
+            JSON.stringify({
+              type: "get_pending_prompts",
+            })
+          );
+        } else if (message.type === "pending_prompts" && connectedReceived) {
           expect(message.data).toBeInstanceOf(Array);
           ws.close();
           resolve();
@@ -243,7 +273,9 @@ describe("WebSocket Server", () => {
       });
 
       setTimeout(() => {
-        reject(new Error('Test timed out waiting for pending_prompts response'));
+        reject(
+          new Error("Test timed out waiting for pending_prompts response")
+        );
       }, 5000);
     });
   });
@@ -254,8 +286,8 @@ describe("WebSocket Server", () => {
     return new Promise<void>((resolve) => {
       const ws = new WebSocket(`ws://localhost:${port}`);
 
-      ws.on('open', () => {
-        ws.send(JSON.stringify({ type: 'unknown_type', data: 'test' }));
+      ws.on("open", () => {
+        ws.send(JSON.stringify({ type: "unknown_type", data: "test" }));
       });
 
       // If no error message is sent, the test passes
@@ -273,14 +305,14 @@ describe("WebSocket Server", () => {
       const ws = new WebSocket(`ws://localhost:${port}`);
       let connectedReceived = false;
 
-      ws.on('message', (data) => {
+      ws.on("message", (data) => {
         const message = JSON.parse(data.toString());
-        if (message.type === 'connected') {
+        if (message.type === "connected") {
           connectedReceived = true;
           // Now send invalid JSON after receiving connected message
-          ws.send('invalid json');
-        } else if (message.type === 'error' && connectedReceived) {
-          expect(message.message).toBe('Invalid message format');
+          ws.send("invalid json");
+        } else if (message.type === "error" && connectedReceived) {
+          expect(message.message).toBe("Invalid message format");
           ws.close();
           resolve();
         }
@@ -288,7 +320,7 @@ describe("WebSocket Server", () => {
 
       // Timeout after 5 seconds
       setTimeout(() => {
-        reject(new Error('Test timed out waiting for error message'));
+        reject(new Error("Test timed out waiting for error message"));
       }, 5000);
     });
   });
@@ -301,8 +333,8 @@ describe("WebSocket Server", () => {
       const ws2 = new WebSocket(`ws://localhost:${port}`);
 
       let connectedCount = 0;
-      const promptId1 = 'prompt_client1';
-      const promptId2 = 'prompt_client2';
+      const promptId1 = "prompt_client1";
+      const promptId2 = "prompt_client2";
       const resolvedPrompts = new Set<string>();
 
       // Register both prompts before attempting to resolve them
@@ -320,42 +352,46 @@ describe("WebSocket Server", () => {
 
       // Both clients should listen for both resolved prompts (broadcast goes to all)
       const setupMessageListener = (ws: WebSocket) => {
-        ws.on('message', (data) => {
+        ws.on("message", (data) => {
           const message = JSON.parse(data.toString());
-          if (message.type === 'connected') {
+          if (message.type === "connected") {
             connectedCount++;
             if (connectedCount === 2) {
               // Both clients connected, send both inputs
-              ws1.send(JSON.stringify({
-                type: 'console_input',
-                data: {
-                  promptId: promptId1,
-                  message: 'input from client 1',
-                  type: 'input',
-                  details: 'User input'
-                }
-              }));
+              ws1.send(
+                JSON.stringify({
+                  type: "console_input",
+                  data: {
+                    promptId: promptId1,
+                    message: "input from client 1",
+                    type: "input",
+                    details: "User input",
+                  },
+                })
+              );
 
               // Send second input with a slight delay to avoid race conditions
               setTimeout(() => {
-                ws2.send(JSON.stringify({
-                  type: 'console_input',
-                  data: {
-                    promptId: promptId2,
-                    message: 'input from client 2',
-                    type: 'input',
-                    details: 'User input'
-                  }
-                }));
+                ws2.send(
+                  JSON.stringify({
+                    type: "console_input",
+                    data: {
+                      promptId: promptId2,
+                      message: "input from client 2",
+                      type: "input",
+                      details: "User input",
+                    },
+                  })
+                );
               }, 100);
             }
-          } else if (message.type === 'console_input_resolved') {
+          } else if (message.type === "console_input_resolved") {
             // Both clients receive all broadcasts
             if (message.data.promptId === promptId1) {
-              expect(message.data.message).toBe('input from client 1');
+              expect(message.data.message).toBe("input from client 1");
               checkComplete(promptId1);
             } else if (message.data.promptId === promptId2) {
-              expect(message.data.message).toBe('input from client 2');
+              expect(message.data.message).toBe("input from client 2");
               checkComplete(promptId2);
             }
           }
@@ -368,7 +404,13 @@ describe("WebSocket Server", () => {
       setTimeout(() => {
         ws1.close();
         ws2.close();
-        reject(new Error('Test timed out - resolved ' + resolvedPrompts.size + ' prompts, expected 2'));
+        reject(
+          new Error(
+            "Test timed out - resolved " +
+              resolvedPrompts.size +
+              " prompts, expected 2"
+          )
+        );
       }, 5000);
     });
   });
@@ -377,35 +419,73 @@ describe("WebSocket Server", () => {
     const port = wss.address().port;
 
     // Mock the dependencies
-    vi.mocked(workflowExecutor).mockResolvedValue('Test output');
+    vi.mocked(workflowExecutor).mockResolvedValue("Test output");
 
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(`ws://localhost:${port}`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const messages: any[] = [];
 
-      ws.on('message', (data) => {
+      ws.on("message", (data) => {
         const message = JSON.parse(data.toString());
         messages.push(message);
 
-        if (message.type === 'connected') {
+        if (message.type === "connected") {
           // Send run_workspace message
-          ws.send(JSON.stringify({
-            type: 'run_workspace',
-            data: JSON.stringify({
-              name: 'Test Workspace',
-              description: 'A test workspace',
-              apiKey: 'test-key',
-              mainLLM: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } },
-              tasks: [{ id: 'test-task', title: 'Test Task', description: 'A test task', expectedOutput: 'Test output', type: 'workflow', executorId: 'test-workflow', position: '0,0', selected: false, sockets: [] }],
-              agents: [{ id: 'test-agent', name: 'Test Agent', role: 'Test Role', objective: 'Test objective', background: 'Test background', capabilities: 'Test capabilities', apiKey: 'test-key', llm: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } }, tools: [] }],
-              connections: [],
-              intent: 'Test intent'
+          ws.send(
+            JSON.stringify({
+              type: "run_workspace",
+              data: JSON.stringify({
+                name: "Test Workspace",
+                description: "A test workspace",
+                apiKey: "test-key",
+                mainLLM: {
+                  provider: "OpenAI",
+                  model: { name: "GPT-4", id: "gpt-4" },
+                },
+                tasks: [
+                  {
+                    id: "test-task",
+                    title: "Test Task",
+                    description: "A test task",
+                    expectedOutput: "Test output",
+                    type: "workflow",
+                    executorId: "test-workflow",
+                    position: "0,0",
+                    selected: false,
+                    sockets: [],
+                  },
+                ],
+                agents: [
+                  {
+                    id: "test-agent",
+                    name: "Test Agent",
+                    role: "Test Role",
+                    objective: "Test objective",
+                    background: "Test background",
+                    capabilities: "Test capabilities",
+                    apiKey: "test-key",
+                    llm: {
+                      provider: "OpenAI",
+                      model: { name: "GPT-4", id: "gpt-4" },
+                    },
+                    tools: [],
+                  },
+                ],
+                connections: [],
+                intent: "Test intent",
+              }),
             })
-          }));
-        } else if (message.type === 'message' && message.data.message === '[1/1] Task \'Test Task\' completed successfully.') {
+          );
+        } else if (
+          message.type === "message" &&
+          message.data.message ===
+            "[1/1] Task 'Test Task' completed successfully."
+        ) {
           // Workflow completed successfully
-          expect(message.data.results).toBe('Test output');
+          expect(JSON.parse(JSON.parse(message.data.results).task)).toBe(
+            "Test output"
+          );
           ws.close();
           resolve();
         }
@@ -413,7 +493,9 @@ describe("WebSocket Server", () => {
 
       setTimeout(() => {
         ws.close();
-        reject(new Error('Test timed out - did not receive completion message'));
+        reject(
+          new Error("Test timed out - did not receive completion message")
+        );
       }, 5000);
     });
   });
@@ -425,14 +507,14 @@ describe("WebSocket Server", () => {
     const mockPlan = {
       steps: [
         {
-          type: 'workflow',
+          type: "workflow",
           workflow: '{"id": "test-workflow", "nodes": [], "edges": []}',
-          task: 'test-task',
-          agent: 'test-agent'
-        }
-      ]
+          task: "test-task",
+          agent: "test-agent",
+        },
+      ],
     };
-    const mockError = new Error('Workflow execution failed');
+    const mockError = new Error("Workflow execution failed");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(planAgenticTask).mockResolvedValue(mockPlan as any);
@@ -441,27 +523,63 @@ describe("WebSocket Server", () => {
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(`ws://localhost:${port}`);
 
-      ws.on('message', (data) => {
+      ws.on("message", (data) => {
         const message = JSON.parse(data.toString());
 
-        if (message.type === 'connected') {
+        if (message.type === "connected") {
           // Send run_workspace message
-          ws.send(JSON.stringify({
-            type: 'run_workspace',
-            data: JSON.stringify({
-              name: 'Test Workspace',
-              description: 'A test workspace',
-              apiKey: 'test-key',
-              mainLLM: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } },
-              tasks: [{ id: 'test-task', title: 'Test Task', description: 'A test task', expectedOutput: 'Test output', type: 'workflow', executorId: 'test-workflow', position: '0,0', selected: false, sockets: [] }],
-              agents: [{ id: 'test-agent', name: 'Test Agent', role: 'Test Role', objective: 'Test objective', background: 'Test background', capabilities: 'Test capabilities', apiKey: 'test-key', llm: { provider: 'OpenAI', model: { name: 'GPT-4', id: 'gpt-4' } }, tools: [] }],
-              connections: [],
-              intent: 'Test intent'
+          ws.send(
+            JSON.stringify({
+              type: "run_workspace",
+              data: JSON.stringify({
+                name: "Test Workspace",
+                description: "A test workspace",
+                apiKey: "test-key",
+                mainLLM: {
+                  provider: "OpenAI",
+                  model: { name: "GPT-4", id: "gpt-4" },
+                },
+                tasks: [
+                  {
+                    id: "test-task",
+                    title: "Test Task",
+                    description: "A test task",
+                    expectedOutput: "Test output",
+                    type: "workflow",
+                    executorId: "test-workflow",
+                    position: "0,0",
+                    selected: false,
+                    sockets: [],
+                  },
+                ],
+                agents: [
+                  {
+                    id: "test-agent",
+                    name: "Test Agent",
+                    role: "Test Role",
+                    objective: "Test objective",
+                    background: "Test background",
+                    capabilities: "Test capabilities",
+                    apiKey: "test-key",
+                    llm: {
+                      provider: "OpenAI",
+                      model: { name: "GPT-4", id: "gpt-4" },
+                    },
+                    tools: [],
+                  },
+                ],
+                connections: [],
+                intent: "Test intent",
+              }),
             })
-          }));
-        } else if (message.type === 'message' && message.data.message === '[1/1] Task \'Test Task\' completed successfully.') {
+          );
+        } else if (
+          message.type === "message" &&
+          message.data.message ===
+            "[1/1] Task 'Test Task' completed successfully."
+        ) {
           // Workflow completed with error
-          expect(message.data.type).toBe('success');
+          expect(message.data.type).toBe("success");
           ws.close();
           resolve();
         }
@@ -469,7 +587,7 @@ describe("WebSocket Server", () => {
 
       setTimeout(() => {
         ws.close();
-        reject(new Error('Test timed out - did not receive error message'));
+        reject(new Error("Test timed out - did not receive error message"));
       }, 5000);
     });
   });

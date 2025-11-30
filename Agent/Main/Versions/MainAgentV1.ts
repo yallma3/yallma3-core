@@ -22,6 +22,7 @@ import type { LLMProvider } from "../../../Models/LLM";
 
 export class MainAgentV1 implements MainAgent {
   version = "1.0.0";
+  private aborted = false;
 
   constructor(private workspaceData: WorkspaceData, private ws: WebSocket) {}
 
@@ -37,6 +38,8 @@ export class MainAgentV1 implements MainAgent {
     let step = 1;
 
     for (const layer of layers) {
+      if (this.aborted) break;
+
       const task = this.getTask(layer.taskId);
       if (!task) continue;
 
@@ -57,11 +60,16 @@ export class MainAgentV1 implements MainAgent {
         continue;
       }
 
+      if (this.aborted) break;
+
       const coreAnalysis = await this.analyzeTaskCore(
         MainLLM,
         task,
         taskContext
       );
+
+      if (this.aborted) break;
+
       const agentPlan = await this.createAgentPlan(
         MainLLM,
         task,
@@ -69,7 +77,14 @@ export class MainAgentV1 implements MainAgent {
         taskContext
       );
 
-      const agentResult = await this.runAgent(task, agentPlan, taskContext);
+      if (this.aborted) break;
+
+      const agentResult = await this.runAgent(
+        task,
+        agentPlan,
+        taskContext,
+        bestFit
+      );
 
       if (agentResult) {
         results[task.id] = agentResult;
@@ -85,6 +100,11 @@ export class MainAgentV1 implements MainAgent {
 
     await this.finalize(layers, results);
     return results;
+  }
+
+  async abort(): Promise<void> {
+    this.aborted = true;
+    this.emitErrorRaw("Execution aborted by user", "", false);
   }
 
   // STAGE 1: INITIALIZATION
@@ -178,8 +198,13 @@ export class MainAgentV1 implements MainAgent {
     taskContext: string;
     results: Record<string, string>;
   }) {
+    if (this.aborted) return;
+
     const workflowId = task.type === "workflow" ? task.executorId : bestFit?.id;
-    if (!workflowId) throw new Error("Missing workflow ID");
+    if (!workflowId) {
+      this.emitError(layerIndex, totalLayers, task.title);
+      return;
+    }
 
     this.emitInfo(
       `[${layerIndex}/${totalLayers}] Running task '${task.title}' (workflow: ${workflowId})`
@@ -191,6 +216,7 @@ export class MainAgentV1 implements MainAgent {
       taskContext
     );
 
+    if (this.aborted) return;
     if (finalResult) {
       results[task.id] =
         typeof finalResult === "string"
@@ -234,11 +260,25 @@ export class MainAgentV1 implements MainAgent {
     }
   }
 
-  private async runAgent(task: Task, plan: AgentStep[], context: string) {
-    const agentId = task.type === "specific-agent" ? task.executorId : null;
+  private async runAgent(
+    task: Task,
+    plan: AgentStep[],
+    context: string,
+    bestFit: { type: string; id: string } | null
+  ) {
+    let result;
+    const agentId =
+      task.type === "specific-agent"
+        ? task.executorId
+        : bestFit?.type === "agent"
+        ? bestFit.id
+        : null;
 
     const agent = this.workspaceData.agents.find((a) => a.id === agentId);
-    if (!agent) return null;
+    if (!agent) {
+      this.emitError(0, 0, task.title);
+      return null;
+    }
 
     this.emitInfo(`Running agent '${agent.name}' for '${task.title}'`);
 
@@ -251,8 +291,13 @@ export class MainAgentV1 implements MainAgent {
       this.workspaceData.apiKey,
       this.workspaceData.mainLLM
     );
-
-    return runtime.run();
+    runtime.setAbortChecker(() => this.aborted);
+    try {
+      result = await runtime.run();
+    } catch (e) {
+      console.log(e);
+    }
+    return result;
   }
 
   // STAGE 6: FINALIZE
@@ -261,18 +306,19 @@ export class MainAgentV1 implements MainAgent {
     layers: { taskId: string }[],
     results: Record<string, string>
   ) {
+    if (this.aborted) return;
     const finalTaskId = layers[layers.length - 1]?.taskId ?? "";
     const finalResult =
       (finalTaskId && results[finalTaskId]) || JSON.stringify(results, null, 2);
-
-    this.emitSuccessRaw("Workspace completed successfully.", finalResult);
-
-    await this.saveResults(layers, results);
 
     results["__meta__"] = JSON.stringify({
       version: this.version,
       timestamp: Date.now(),
     });
+
+    this.emitSuccessRaw("Workspace completed successfully.", finalResult);
+
+    await this.saveResults(layers, results);
   }
 
   private async saveResults(
@@ -284,7 +330,7 @@ export class MainAgentV1 implements MainAgent {
       await mkdir(outputDir, { recursive: true });
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const workspaceName = this.workspaceData.name.replace(" ", "_");
+      const workspaceName = this.workspaceData.name.replaceAll(" ", "_");
       const filename = `${workspaceName}_${timestamp}.txt`;
 
       const filepath = join(outputDir, filename);
@@ -293,6 +339,8 @@ export class MainAgentV1 implements MainAgent {
 Generated: ${new Date().toISOString()}
 
 ${layers.map((l) => `${l.taskId}\n${results[l.taskId]}\n`).join("\n")}
+__meta__: ${results["__meta__"]}
+
 `;
 
       await writeFile(filepath, output, "utf8");
@@ -306,6 +354,7 @@ ${layers.map((l) => `${l.taskId}\n${results[l.taskId]}\n`).join("\n")}
   // HELPERS — WebSocket Emitters
 
   private emit(type: string, message: string, results?: string) {
+    if (this.aborted && type != "error") return;
     const event = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -346,7 +395,14 @@ ${layers.map((l) => `${l.taskId}\n${results[l.taskId]}\n`).join("\n")}
     this.emit("error", `[${step}/${total}] Task '${title}' failed.`);
   }
 
-  private emitErrorRaw(message: string, err: unknown = null) {
-    this.emit("error", `${message}: ${err ? String(err) : "Unknown error"}`);
+  private emitErrorRaw(
+    message: string,
+    err: unknown = null,
+    showError: boolean = true
+  ) {
+    this.emit(
+      "error",
+      `${message} ${showError ? (err ? String(err) : ": Unknown error") : ""}  `
+    );
   }
 }
