@@ -317,7 +317,7 @@ export class MainAgentV1 implements MainAgent {
     });
 
     this.emitSuccessRaw("Workspace completed successfully.", finalResult);
-
+    this.emitWorkspaceStopped();
     await this.saveResults(layers, results);
   }
 
@@ -410,5 +410,19 @@ __meta__: ${results["__meta__"]}
       "error",
       `${message} ${showError ? (err ? String(err) : ": Unknown error") : ""}  `
     );
+  }
+
+  private emitWorkspaceStopped(reason?: string) {
+    const message = reason
+      ? `Workspace execution stopped: ${reason}`
+      : "Workspace execution stopped";
+
+    const event = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      message,
+    };
+
+    this.ws.send(JSON.stringify({ type: "workspace_stopped", data: event }));
   }
 }
