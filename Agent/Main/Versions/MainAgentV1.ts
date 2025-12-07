@@ -337,6 +337,12 @@ export class MainAgentV1 implements MainAgent {
 
       const output = `${this.workspaceData.name} Workspace Execution Results
 Generated: ${new Date().toISOString()}
+MainLLM: ${this.workspaceData.mainLLM.provider} -- ${
+        this.workspaceData.mainLLM.model.name
+      }
+Agents LLMs: ${this.workspaceData.agents
+        .map((a) => `${a.name} -- ${a.llm.provider} ${a.llm.model.name}`)
+        .join(", ")}
 
 ${layers.map((l) => `${l.taskId}\n${results[l.taskId]}\n`).join("\n")}
 __meta__: ${results["__meta__"]}

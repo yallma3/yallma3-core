@@ -73,6 +73,14 @@ interface PublicModel {
   provider: string; // e.g. "openai"
   contextWindow: number;
   mode?: string;
+  pricing?: {
+    // defined as Cost per 1 Million Tokens (industry standard view)
+    inputPerToken: number;
+    outputPerToken: number;
+    inputPer1MToken: number;
+    outputPer1MToken: number;
+    currency: string; // e.g., 'USD'
+  };
 }
 
 export interface ProviderModels {
@@ -88,7 +96,12 @@ interface LiteLLMRegistry {
     litellm_provider?: string;
     max_input_tokens?: number;
     max_tokens?: number;
+    max_output_tokens?: number; // Often distinct from max_tokens in some registries
+    input_cost_per_token?: number; // e.g., 1e-06
+    output_cost_per_token?: number; // e.g., 5e-06
     mode?: string;
+    supports_function_calling?: boolean;
+    supports_tool_choice?: boolean;
   };
 }
 
@@ -179,11 +192,23 @@ export async function fetchPublicModels(): Promise<ProviderModels> {
       const provider = info.litellm_provider?.toLowerCase() || "";
       if (!isMainModel(modelId, provider)) return;
 
+      // Remove provider name prefix from the display name if present
+      const displayName = modelId.startsWith(`${provider}/`)
+        ? modelId.slice(provider.length + 1)
+        : modelId;
+
       const model: PublicModel = {
-        id: modelId,
-        name: modelId,
+        id: displayName,
+        name: displayName,
         provider: provider,
         contextWindow: info.max_input_tokens || info.max_tokens || 4096,
+        pricing: {
+          inputPerToken: info.input_cost_per_token || 0,
+          outputPerToken: info.output_cost_per_token || 0,
+          inputPer1MToken: (info.input_cost_per_token || 0) * 1_000_000,
+          outputPer1MToken: (info.output_cost_per_token || 0) * 1_000_000,
+          currency: "USD",
+        },
       };
 
       // --- SORTING LOGIC ---
