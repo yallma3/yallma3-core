@@ -60,11 +60,13 @@ export function addModel(provider: keyof ProviderModels, model: LLMModel) {
   if (!AvailableLLMs[provider]) {
     AvailableLLMs[provider] = [];
   }
-  +  // Check for duplicate model ID
+
+  // Check for duplicate model ID
   const exists = AvailableLLMs[provider].some((m) => m.id === model.id);
   if (exists) {
     throw new Error(`Model with id ${model.id} already exists in ${provider}`);
   }
+
   // Ensure the new model is not readonly by default unless specified
   if (model.readonly === undefined) {
     model.readonly = false;
@@ -89,7 +91,7 @@ export function editModel(
 
   const model = models[index];
 
-  if (model.readonly) {
+  if (model && model.readonly) {
     throw new Error(`Model ${modelId} is read-only and cannot be modified.`);
   }
 
@@ -109,7 +111,7 @@ export function removeModel(provider: keyof ProviderModels, modelId: string) {
 
   const model = models[index];
 
-  if (model.readonly) {
+  if (model && model.readonly) {
     throw new Error(`Model ${modelId} is read-only and cannot be removed.`);
   }
 

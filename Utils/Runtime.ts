@@ -4,6 +4,8 @@ import { getMainAgent } from "../Agent/Main/MainAgentRegistry";
 export function createMainAgent(data: string, ws: WebSocket) {
   try {
     const workspaceData = JSON.parse(data);
+    const agent = getMainAgent("1.0.0", workspaceData, ws);
+    return agent;
   } catch (error) {
     throw new Error(
       `Invalid workspace data: ${
@@ -11,6 +13,4 @@ export function createMainAgent(data: string, ws: WebSocket) {
       }`
     );
   }
-  const agent = getMainAgent("1.0.0", workspaceData, ws);
-  return agent;
 }
