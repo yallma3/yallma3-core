@@ -521,7 +521,6 @@ export class GeminiProvider implements LLMProvider {
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
-      console.log("GEM RESPONSE:", response);
 
       // If no tool calls, return the content
       if (!response.toolCalls || response.toolCalls.length === 0) {

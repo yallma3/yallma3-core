@@ -4,8 +4,19 @@
       "name": "Llama 3.1 8B",
       "id": "llama-3.1-8b-instant",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 131072,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.05,
+            "outputPer1MToken": 0.08
+          }
+        ]
       },
       "readonly": true
     },
@@ -13,8 +24,19 @@
       "name": "Llama 3.3 70B",
       "id": "llama-3.3-70b-versatile",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 131072,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.59,
+            "outputPer1MToken": 0.79
+          }
+        ]
       },
       "readonly": true
     },
@@ -22,8 +44,19 @@
       "name": "Llama Guard 4 12B",
       "id": "meta-llama/llama-guard-4-12b",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 131072,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.2,
+            "outputPer1MToken": 0.2
+          }
+        ]
       },
       "readonly": true
     },
@@ -44,15 +77,6 @@
         "output": 0
       },
       "readonly": true
-    },
-    {
-      "id": "test-model-id-12345",
-      "name": "Readonly Model",
-      "contextWindow": {
-        "input": 100,
-        "output": 100
-      },
-      "readonly": true
     }
   ],
   "OpenAI": [
@@ -60,8 +84,19 @@
       "name": "GPT 5",
       "id": "gpt-5",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 272000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 1.25,
+            "outputPer1MToken": 10
+          }
+        ]
       },
       "readonly": true
     },
@@ -69,8 +104,19 @@
       "name": "GPT 5 nano",
       "id": "gpt-5-nano",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 128000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.05,
+            "outputPer1MToken": 0.4
+          }
+        ]
       },
       "readonly": true
     },
@@ -78,8 +124,19 @@
       "name": "GPT 5 mini",
       "id": "gpt-5-mini",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 128000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.25,
+            "outputPer1MToken": 2
+          }
+        ]
       },
       "readonly": true
     },
@@ -114,8 +171,19 @@
       "name": "GPT 4o",
       "id": "gpt-40",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 128000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 2.5,
+            "outputPer1MToken": 10
+          }
+        ]
       },
       "readonly": true
     },
@@ -123,8 +191,19 @@
       "name": "GPT 4o mini",
       "id": "gpt-4o-mini",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 128000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.15,
+            "outputPer1MToken": 0.6
+          }
+        ]
       },
       "readonly": true
     }
@@ -134,8 +213,19 @@
       "name": "Deepseek chat v3.1 free",
       "id": "deepseek/deepseek-chat-v3.1:free",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 131072,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0,
+            "outputPer1MToken": 0
+          }
+        ]
       },
       "readonly": true
     },
@@ -152,8 +242,19 @@
       "name": "Grok 4 Fast",
       "id": "x-ai/grok-4-fast",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 2000000,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.2,
+            "outputPer1MToken": 0.5
+          }
+        ]
       },
       "readonly": true
     },
@@ -188,8 +289,19 @@
       "name": "Mistral Nemo",
       "id": "mistralai/mistral-nemo",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 128000,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.15,
+            "outputPer1MToken": 0.15
+          }
+        ]
       },
       "readonly": true
     },
@@ -206,8 +318,19 @@
       "name": "Qwen3 Coder",
       "id": "qwen/qwen3-coder",
       "contextWindow": {
-        "input": 0,
-        "output": 0
+        "input": 262144,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.22,
+            "outputPer1MToken": 0.95
+          }
+        ]
       },
       "readonly": true
     },

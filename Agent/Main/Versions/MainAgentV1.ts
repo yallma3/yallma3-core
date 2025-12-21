@@ -295,7 +295,9 @@ export class MainAgentV1 implements MainAgent {
     try {
       result = await runtime.run();
     } catch (e) {
-      console.log(e);
+      console.error("Agent execution error:", e);
+      this.emitErrorRaw("Agent execution failed", e);
+      return null;
     }
     return result;
   }
@@ -407,7 +409,7 @@ __meta__: ${results["__meta__"]}
   ) {
     this.emit(
       "error",
-      `${message} ${showError ? (err ? String(err) : ": Unknown error") : ""}  `
+      `${message} ${showError ? (err ? String(err) : ": Unknown error") : ""}`
     );
   }
 
