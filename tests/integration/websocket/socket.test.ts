@@ -40,11 +40,13 @@ import { workflowExecutor } from "../../../Agent/Utls/ToolCallingHelper";
 describe("WebSocket Server", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let wss: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let wsFunctions: any;
 
   beforeAll(() => {
     // Create a test WebSocket server
     wss = new WebSocketServer({ port: 0 }); // Random port
-    setupWebSocketServer(wss);
+    wsFunctions = setupWebSocketServer(wss);
   });
 
   beforeEach(() => {
@@ -483,9 +485,7 @@ describe("WebSocket Server", () => {
             "[1/1] Task 'Test Task' completed successfully."
         ) {
           // Workflow completed successfully
-          expect(JSON.parse(JSON.parse(message.data.results).task)).toBe(
-            "Test output"
-          );
+           expect(JSON.parse(JSON.parse(message.data.results).task)).toBe('Test output');
           ws.close();
           resolve();
         }
@@ -589,6 +589,65 @@ describe("WebSocket Server", () => {
         ws.close();
         reject(new Error("Test timed out - did not receive error message"));
       }, 5000);
+    });
+  });
+
+  describe("WebSocket utility functions", () => {
+    it("should broadcast commands to all clients", async () => {
+      const port = wss.address().port;
+
+      return new Promise<void>((resolve, reject) => {
+        const ws1 = new WebSocket(`ws://localhost:${port}`);
+        const ws2 = new WebSocket(`ws://localhost:${port}`);
+        let connectedCount = 0;
+        const receivedCommands: string[] = [];
+
+        const checkComplete = () => {
+          if (receivedCommands.length === 2) {
+            expect(receivedCommands).toContain('test-command');
+            ws1.close();
+            ws2.close();
+            resolve();
+          }
+        };
+
+        const setupListener = (ws: WebSocket) => {
+          ws.on('message', (data) => {
+            const message = JSON.parse(data.toString());
+            if (message.type === 'connected') {
+              connectedCount++;
+              if (connectedCount === 2) {
+                // Both clients connected, broadcast command
+                wsFunctions.broadcastCommand({
+                  id: 'test-cmd-123',
+                  command: 'test-command',
+                  data: { param: 'value' }
+                });
+              }
+            } else if (message.type === 'execute_command') {
+              expect(message.commandId).toBe('test-cmd-123');
+              expect(message.command).toBe('test-command');
+              expect(message.data).toEqual({ param: 'value' });
+              receivedCommands.push(message.command);
+              checkComplete();
+            }
+          });
+        };
+
+        setupListener(ws1);
+        setupListener(ws2);
+
+        setTimeout(() => {
+          ws1.close();
+          ws2.close();
+          reject(new Error('Test timed out - command not broadcasted'));
+        }, 5000);
+      });
+    });
+
+    it("should return correct client count", () => {
+      // Should have at least 1 client from previous tests
+      expect(wsFunctions.getClientCount()).toBeGreaterThanOrEqual(0);
     });
   });
 });

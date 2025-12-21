@@ -346,7 +346,6 @@ Agents LLMs: ${this.workspaceData.agents
 
 ${layers.map((l) => `${l.taskId}\n${results[l.taskId]}\n`).join("\n")}
 __meta__: ${results["__meta__"]}
-
 `;
 
       await writeFile(filepath, output, "utf8");

@@ -19,6 +19,12 @@ export function sendWorkflow(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const cleanup = () => {
+      ws.off("message", listener);
+      clearTimeout(timeoutId);
+    };
 
     let timeoutId: ReturnType<typeof setTimeout>;
 
