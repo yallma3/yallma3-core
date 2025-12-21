@@ -12,29 +12,22 @@
 */
 
 import express from "express";
-import { fetchPublicModels } from "../LLM/config";
+import { AvailableLLMs } from "../LLM/config";
 
 const router = express.Router();
 
 // Get all public models
 router.get("/models", async (req, res) => {
   try {
-    const data = await fetchPublicModels();
     res.json({
       success: true,
-      data,
-      count:
-        data.openai.length +
-        data.anthropic.length +
-        data.gemini.length +
-        data.groq.length +
-        data.openrouter.length,
+      AvailableLLMs,
     });
   } catch (error) {
     console.error("Error listing public models:", error);
     res.status(500).json({
       success: false,
-      error: "Failed to list public models",
+      error: "Failed to list models",
       details: error instanceof Error ? error.message : String(error),
     });
   }
