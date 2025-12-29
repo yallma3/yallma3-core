@@ -154,7 +154,7 @@ export class OpenAIProvider implements LLMProvider {
       throw new Error(`OpenAI API returned status ${res.status}`);
     }
 
-    const json = await res.json() as OpenAIResponse;
+    const json = (await res.json()) as OpenAIResponse;
     const message = json.choices?.[0]?.message;
 
     if (!message) {
@@ -166,7 +166,10 @@ export class OpenAIProvider implements LLMProvider {
       message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
         name: t.function?.name ?? "",
-        input: JSON.parse(t.function?.arguments ?? "{}") as Record<string, unknown>,
+        input: JSON.parse(t.function?.arguments ?? "{}") as Record<
+          string,
+          unknown
+        >,
       })) || null;
 
     const content =
@@ -294,10 +297,11 @@ export class GroqProvider implements LLMProvider {
     });
 
     if (!res.ok) {
-      throw new Error(`Chat API returned status ${res.status}`);
+      const errorBody = await res.text(); // or res.json()
+      throw new Error(`Chat API returned status ${res.status}: ${errorBody}`);
     }
 
-    const json = await res.json() as OpenAIResponse;
+    const json = (await res.json()) as OpenAIResponse;
 
     const message = json.choices[0]?.message;
     if (!message) {
@@ -310,7 +314,10 @@ export class GroqProvider implements LLMProvider {
       message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
         name: t.function?.name ?? "",
-        input: JSON.parse(t.function?.arguments ?? "{}") as Record<string, unknown>,
+        input: JSON.parse(t.function?.arguments ?? "{}") as Record<
+          string,
+          unknown
+        >,
       })) || null;
 
     const content =
@@ -483,7 +490,9 @@ export class GeminiProvider implements LLMProvider {
   /**
    * Execute tools and return tool results for Gemini format
    */
-  private async executeTools(toolCalls: ToolCall[]): Promise<Record<string, unknown>[]> {
+  private async executeTools(
+    toolCalls: ToolCall[]
+  ): Promise<Record<string, unknown>[]> {
     const toolResults: Record<string, unknown>[] = [];
 
     for (const call of toolCalls) {
@@ -512,7 +521,6 @@ export class GeminiProvider implements LLMProvider {
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
-      console.log("GEM RESPONSE:", response);
 
       // If no tool calls, return the content
       if (!response.toolCalls || response.toolCalls.length === 0) {
@@ -575,18 +583,17 @@ export class GeminiProvider implements LLMProvider {
         },
       ];
     }
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
+    console.log("GEMINI URL", url);
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${this.model}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": this.apiKey,
-        },
-        body: JSON.stringify(body),
-      }
-    );
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": this.apiKey,
+      },
+      body: JSON.stringify(body),
+    });
 
     if (!res.ok) {
       const error = await res.text();
@@ -594,7 +601,7 @@ export class GeminiProvider implements LLMProvider {
       throw new Error(`Gemini API returned status ${res.status}`);
     }
 
-    const json = await res.json() as GeminiResponse;
+    const json = (await res.json()) as GeminiResponse;
 
     const candidates = json.candidates ?? [];
     const first = candidates[0];
@@ -740,7 +747,7 @@ export class ClaudeProvider implements LLMProvider {
       throw new Error(`Claude API returned status ${res.status}`);
     }
 
-    const json = await res.json() as ClaudeResponse;
+    const json = (await res.json()) as ClaudeResponse;
     const content = json.content ?? [];
 
     const toolUses =
@@ -753,7 +760,9 @@ export class ClaudeProvider implements LLMProvider {
         })) || null;
 
     // 🔍 Detect normal text content
-    const textPart = content?.find((item: ClaudeContentItem) => item.type === "text");
+    const textPart = content?.find(
+      (item: ClaudeContentItem) => item.type === "text"
+    );
     const rawText = textPart?.text ?? null;
 
     const finalContent =

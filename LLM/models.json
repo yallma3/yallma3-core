@@ -1,0 +1,643 @@
+{
+  "Groq": [
+    {
+      "name": "Llama 3.1 8B",
+      "id": "llama-3.1-8b-instant",
+      "contextWindow": {
+        "input": 131072,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.05,
+            "outputPer1MToken": 0.08
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Llama 3.3 70B",
+      "id": "llama-3.3-70b-versatile",
+      "contextWindow": {
+        "input": 131072,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.59,
+            "outputPer1MToken": 0.79
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Llama Guard 4 12B",
+      "id": "meta-llama/llama-guard-4-12b",
+      "contextWindow": {
+        "input": 131072,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.2,
+            "outputPer1MToken": 0.2
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT OSS 20B",
+      "id": "openai/gpt-oss-20b",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT OSS 120B",
+      "id": "openai/gpt-oss-120b",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    }
+  ],
+  "OpenAI": [
+    {
+      "name": "GPT 5",
+      "id": "gpt-5",
+      "contextWindow": {
+        "input": 272000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 1.25,
+            "outputPer1MToken": 10
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT 5 nano",
+      "id": "gpt-5-nano",
+      "contextWindow": {
+        "input": 128000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.05,
+            "outputPer1MToken": 0.4
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT 5 mini",
+      "id": "gpt-5-mini",
+      "contextWindow": {
+        "input": 128000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.25,
+            "outputPer1MToken": 2
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT 4.1",
+      "id": "gpt-4.1",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT 4.1 nano",
+      "id": "gpt-4.1-nano",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT 4.1 mini",
+      "id": "gpt-4.1-mini",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT 4o",
+      "id": "gpt-40",
+      "contextWindow": {
+        "input": 128000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 2.5,
+            "outputPer1MToken": 10
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT 4o mini",
+      "id": "gpt-4o-mini",
+      "contextWindow": {
+        "input": 128000,
+        "output": 16384
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.15,
+            "outputPer1MToken": 0.6
+          }
+        ]
+      },
+      "readonly": true
+    }
+  ],
+  "OpenRouter": [
+    {
+      "name": "Deepseek chat v3.1 free",
+      "id": "deepseek/deepseek-chat-v3.1:free",
+      "contextWindow": {
+        "input": 131072,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0,
+            "outputPer1MToken": 0
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Grok Code Fast 1",
+      "id": "x-ai/grok-code-fast-1",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "Grok 4 Fast",
+      "id": "x-ai/grok-4-fast",
+      "contextWindow": {
+        "input": 2000000,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.2,
+            "outputPer1MToken": 0.5
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Grok 3 Mini",
+      "id": "x-ai/grok-3-mini",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT OSS 20B",
+      "id": "openai/gpt-oss-20b",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "GPT OSS 120B",
+      "id": "openai/gpt-oss-120b",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "Mistral Nemo",
+      "id": "mistralai/mistral-nemo",
+      "contextWindow": {
+        "input": 128000,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.15,
+            "outputPer1MToken": 0.15
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Mistral Small 3.2 24B",
+      "id": "mistralai/mistral-small-3.2-24b-instruct",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    },
+    {
+      "name": "Qwen3 Coder",
+      "id": "qwen/qwen3-coder",
+      "contextWindow": {
+        "input": 262144,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.22,
+            "outputPer1MToken": 0.95
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Qwen3 Coder 30B A3B Instruct",
+      "id": "qwen/qwen3-coder-30b-a3b-instruct",
+      "contextWindow": {
+        "input": 0,
+        "output": 0
+      },
+      "readonly": true
+    }
+  ],
+  "Gemini": [
+    {
+      "name": "Gemini 3 Pro",
+      "id": "gemini-3-pro-preview",
+      "contextWindow": {
+        "input": 1000000,
+        "output": 64000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": 200000,
+            "measure": "total",
+            "inputPer1MToken": 2,
+            "outputPer1MToken": 12
+          },
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 4,
+            "outputPer1MToken": 18
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Gemini 2.5 Pro",
+      "id": "models/gemini-2.5-pro",
+      "contextWindow": {
+        "input": 1048576,
+        "output": 65536
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": 200000,
+            "measure": "total",
+            "inputPer1MToken": 1.25,
+            "outputPer1MToken": 10
+          },
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 2.5,
+            "outputPer1MToken": 15
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Gemini 2.5 Flash",
+      "id": "models/gemini-2.5-flash",
+      "contextWindow": {
+        "input": 1048576,
+        "output": 65536
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.3,
+            "outputPer1MToken": 2.5
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Gemini 2.5 Flash-Lite",
+      "id": "models/gemini-2.5-flash-lite",
+      "contextWindow": {
+        "input": 1048576,
+        "output": 65536
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.1,
+            "outputPer1MToken": 0.4
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Gemini 2.0 Flash",
+      "id": "models/gemini-2.0-flash",
+      "contextWindow": {
+        "input": 1048576,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.1,
+            "outputPer1MToken": 0.4
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Gemini 2.0 Flash-Lite",
+      "id": "models/gemini-2.0-flash-lite",
+      "contextWindow": {
+        "input": 1048576,
+        "output": 8192
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.075,
+            "outputPer1MToken": 0.3
+          }
+        ]
+      },
+      "readonly": true
+    }
+  ],
+  "Anthropic": [
+    {
+      "name": "Claude Sonnet 4.5",
+      "id": "claude-sonnet-4-5",
+      "contextWindow": {
+        "input": 200000,
+        "output": 64000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 3,
+            "outputPer1MToken": 15
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Claude Haiku 4.5",
+      "id": "claude-haiku-4-5",
+      "contextWindow": {
+        "input": 200000,
+        "output": 64000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 1,
+            "outputPer1MToken": 5
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Claude Opus 4.5",
+      "id": "claude-opus-4-5",
+      "contextWindow": {
+        "input": 200000,
+        "output": 64000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 5,
+            "outputPer1MToken": 25
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Claude Opus 4.1",
+      "id": "claude-opus-4-1",
+      "contextWindow": {
+        "input": 200000,
+        "output": 32000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 15,
+            "outputPer1MToken": 75
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Claude Sonnet 4",
+      "id": "claude-sonnet-4-0",
+      "contextWindow": {
+        "input": 200000,
+        "output": 64000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 3,
+            "outputPer1MToken": 15
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Claude Sonnet 3.7",
+      "id": "claude-3-7-sonnet-latest",
+      "contextWindow": {
+        "input": 200000,
+        "output": 64000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 3,
+            "outputPer1MToken": 15
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Claude Opus 4",
+      "id": "claude-opus-4-0",
+      "contextWindow": {
+        "input": 200000,
+        "output": 32000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 15,
+            "outputPer1MToken": 75
+          }
+        ]
+      },
+      "readonly": true
+    },
+    {
+      "name": "Claude Haiku 3.5",
+      "id": "claude-3-5-haiku-latest",
+      "contextWindow": {
+        "input": 200000,
+        "output": 8000
+      },
+      "pricing": {
+        "currency": "USD",
+        "tiers": [
+          {
+            "maxTotalTokens": "Infinity",
+            "measure": "total",
+            "inputPer1MToken": 0.8,
+            "outputPer1MToken": 4
+          }
+        ]
+      },
+      "readonly": true
+    }
+  ]
+}

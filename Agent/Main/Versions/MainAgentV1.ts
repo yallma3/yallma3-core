@@ -22,6 +22,7 @@ import type { LLMProvider } from "../../../Models/LLM";
 
 export class MainAgentV1 implements MainAgent {
   version = "1.0.0";
+  private aborted = false;
 
   constructor(private workspaceData: WorkspaceData, private ws: WebSocket) {}
 
@@ -37,6 +38,8 @@ export class MainAgentV1 implements MainAgent {
     let step = 1;
 
     for (const layer of layers) {
+      if (this.aborted) break;
+
       const task = this.getTask(layer.taskId);
       if (!task) continue;
 
@@ -57,11 +60,16 @@ export class MainAgentV1 implements MainAgent {
         continue;
       }
 
+      if (this.aborted) break;
+
       const coreAnalysis = await this.analyzeTaskCore(
         MainLLM,
         task,
         taskContext
       );
+
+      if (this.aborted) break;
+
       const agentPlan = await this.createAgentPlan(
         MainLLM,
         task,
@@ -69,7 +77,14 @@ export class MainAgentV1 implements MainAgent {
         taskContext
       );
 
-      const agentResult = await this.runAgent(task, agentPlan, taskContext, bestFit);
+      if (this.aborted) break;
+
+      const agentResult = await this.runAgent(
+        task,
+        agentPlan,
+        taskContext,
+        bestFit
+      );
 
       if (agentResult) {
         results[task.id] = agentResult;
@@ -85,6 +100,11 @@ export class MainAgentV1 implements MainAgent {
 
     await this.finalize(layers, results);
     return results;
+  }
+
+  async abort(): Promise<void> {
+    this.aborted = true;
+    this.emitErrorRaw("Execution aborted by user", "", false);
   }
 
   // STAGE 1: INITIALIZATION
@@ -178,6 +198,8 @@ export class MainAgentV1 implements MainAgent {
     taskContext: string;
     results: Record<string, string>;
   }) {
+    if (this.aborted) return;
+
     const workflowId = task.type === "workflow" ? task.executorId : bestFit?.id;
     if (!workflowId) {
       this.emitError(layerIndex, totalLayers, task.title);
@@ -194,6 +216,7 @@ export class MainAgentV1 implements MainAgent {
       taskContext
     );
 
+    if (this.aborted) return;
     if (finalResult) {
       results[task.id] =
         typeof finalResult === "string"
@@ -243,12 +266,13 @@ export class MainAgentV1 implements MainAgent {
     context: string,
     bestFit: { type: string; id: string } | null
   ) {
+    let result;
     const agentId =
       task.type === "specific-agent"
         ? task.executorId
         : bestFit?.type === "agent"
-          ? bestFit.id
-          : null;
+        ? bestFit.id
+        : null;
 
     const agent = this.workspaceData.agents.find((a) => a.id === agentId);
     if (!agent) {
@@ -267,8 +291,15 @@ export class MainAgentV1 implements MainAgent {
       this.workspaceData.apiKey,
       this.workspaceData.mainLLM
     );
-
-    return runtime.run();
+    runtime.setAbortChecker(() => this.aborted);
+    try {
+      result = await runtime.run();
+    } catch (e) {
+      console.error("Agent execution error:", e);
+      this.emitErrorRaw("Agent execution failed", e);
+      return null;
+    }
+    return result;
   }
 
   // STAGE 6: FINALIZE
@@ -277,6 +308,7 @@ export class MainAgentV1 implements MainAgent {
     layers: { taskId: string }[],
     results: Record<string, string>
   ) {
+    if (this.aborted) return;
     const finalTaskId = layers[layers.length - 1]?.taskId ?? "";
     const finalResult =
       (finalTaskId && results[finalTaskId]) || JSON.stringify(results, null, 2);
@@ -287,7 +319,7 @@ export class MainAgentV1 implements MainAgent {
     });
 
     this.emitSuccessRaw("Workspace completed successfully.", finalResult);
-
+    this.emitWorkspaceStopped();
     await this.saveResults(layers, results);
   }
 
@@ -307,9 +339,14 @@ export class MainAgentV1 implements MainAgent {
 
       const output = `${this.workspaceData.name} Workspace Execution Results
 Generated: ${new Date().toISOString()}
+MainLLM: ${this.workspaceData.mainLLM.provider} -- ${
+        this.workspaceData.mainLLM.model.name
+      }
+Agents LLMs: ${this.workspaceData.agents
+        .map((a) => `${a.name} -- ${a.llm.provider} ${a.llm.model.name}`)
+        .join(", ")}
 
 ${layers.map((l) => `${l.taskId}\n${results[l.taskId]}\n`).join("\n")}
-
 __meta__: ${results["__meta__"]}
 `;
 
@@ -324,6 +361,7 @@ __meta__: ${results["__meta__"]}
   // HELPERS — WebSocket Emitters
 
   private emit(type: string, message: string, results?: string) {
+    if (this.aborted && type != "error") return;
     const event = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -364,7 +402,28 @@ __meta__: ${results["__meta__"]}
     this.emit("error", `[${step}/${total}] Task '${title}' failed.`);
   }
 
-  private emitErrorRaw(message: string, err: unknown = null) {
-    this.emit("error", `${message}: ${err ? String(err) : "Unknown error"}`);
+  private emitErrorRaw(
+    message: string,
+    err: unknown = null,
+    showError: boolean = true
+  ) {
+    this.emit(
+      "error",
+      `${message} ${showError ? (err ? String(err) : ": Unknown error") : ""}`
+    );
+  }
+
+  private emitWorkspaceStopped(reason?: string) {
+    const message = reason
+      ? `Workspace execution stopped: ${reason}`
+      : "Workspace execution stopped";
+
+    const event = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      message,
+    };
+
+    this.ws.send(JSON.stringify({ type: "workspace_stopped", data: event }));
   }
 }

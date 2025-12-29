@@ -9,11 +9,17 @@ export interface MainAgent {
    * Returns key-value results.
    */
   run(): Promise<Record<string, string>>;
+  abort(): Promise<void>;
 }
 
-export function sendWorkflow(ws: WebSocket, workflow: string, timeoutMs = 30000): Promise<string> {
+export function sendWorkflow(
+  ws: WebSocket,
+  workflow: string,
+  timeoutMs = 30000
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
+
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const cleanup = () => {
@@ -35,16 +41,23 @@ export function sendWorkflow(ws: WebSocket, workflow: string, timeoutMs = 30000)
 
     timeoutId = setTimeout(() => {
       cleanup();
-      reject(new Error(`Workflow request ${requestId} timed out after ${timeoutMs}ms`));
+      reject(
+        new Error(
+          `Workflow request ${requestId} timed out after ${timeoutMs}ms`
+        )
+      );
     }, timeoutMs);
 
     ws.on("message", listener);
-    ws.send(JSON.stringify({
-      id: requestId,
-      type: "run_workflow",
-      requestId,
-      data: workflow,
-      timestamp: new Date().toISOString(),
-    }));
+    // send request
+    ws.send(
+      JSON.stringify({
+        id: requestId,
+        type: "run_workflow",
+        requestId,
+        data: workflow,
+        timestamp: new Date().toISOString(),
+      })
+    );
   });
 }

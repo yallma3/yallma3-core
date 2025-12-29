@@ -200,6 +200,16 @@ export class Yallma3GenOneAgentRuntime {
     this.ws = ws;
   }
 
+  private abortChecker: (() => boolean) | null = null;
+
+  setAbortChecker(fn: () => boolean) {
+    this.abortChecker = fn;
+  }
+
+  private checkAbort() {
+    if (this.abortChecker?.()) throw new Error("Agent execution aborted");
+  }
+
   async run(): Promise<string> {
     let iteration = 0;
     let output = "";
@@ -219,11 +229,13 @@ export class Yallma3GenOneAgentRuntime {
 
       // Step 1: Agent generates output
       const prompt = this.buildPrompt(iteration, output, feedback);
+      this.checkAbort();
       output = await this.llm.generateText(prompt);
       console.log("🧠 Agent Response:\n", output);
 
       // Step 2: Review the output
       const reviewPrompt = this.buildReviewPrompt(output);
+      this.checkAbort();
       const reviewRaw = await this.llm.generateText(reviewPrompt);
 
       let review: Review;
