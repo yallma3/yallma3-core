@@ -878,7 +878,10 @@ export class OllamaProvider implements LLMProvider {
     try {
       // Convert messages to Ollama format
       const ollamaMessages = messages.map((msg) => ({
-        role: msg.role === "assistant" ? "assistant" : msg.role === "system" ? "system" : "user",
+        role: msg.role === "assistant" ? "assistant"
+          : msg.role === "system" ? "system"
+          : msg.role === "tool" ? "tool"
+          : "user",
         content: msg.content || "",
       }));
 
