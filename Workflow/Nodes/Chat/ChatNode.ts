@@ -20,7 +20,8 @@ import type {
   Position,
 } from "../../types/types";
 import { NodeRegistry } from "../../NodeRegistry";
-import { AvailableLLMs, type LLMModel } from "../../../LLM/config";
+import type { LLMModel } from "../../../Models/LLM";
+import { AvailableLLMs } from "../../../LLM/config";
 import type { LLMMessage, LLMOption } from "../../../Models/LLM";
 import { getLLMProvider } from "../../../LLM/LLMRunner";
 export interface ChatNode extends BaseNode {
@@ -53,7 +54,8 @@ const metadata: NodeMetadata = {
   title: "LLM Chat",
   nodeType: "LLMChat",
   nodeValue: "Groq",
-  description: "Interfaces with various Large Language Model providers (Groq, OpenAI, Anthropic, Gemini, OpenRouter) to generate text responses. Accepts user prompts and optional system prompts to guide the model's behavior, and returns the generated response along with token usage information.",
+  description:
+    "Interfaces with various Large Language Model providers (Groq, OpenAI, Anthropic, Gemini, OpenRouter) to generate text responses. Accepts user prompts and optional system prompts to guide the model's behavior, and returns the generated response along with token usage information.",
   sockets: [
     { title: "Prompt", type: "input", dataType: "string" },
     { title: "System Prompt", type: "input", dataType: "string" },
@@ -74,13 +76,14 @@ const metadata: NodeMetadata = {
       sourceList: modelSourceList,
       i18n: {
         en: {
-          "Model": {
+          Model: {
             Name: "Model",
-            Description: "Select the language model to use for generating responses",
+            Description:
+              "Select the language model to use for generating responses",
           },
         },
         ar: {
-          "Model": {
+          Model: {
             Name: "النموذج",
             Description: "اختر نموذج اللغة المستخدم لتوليد الاستجابات",
           },
@@ -99,7 +102,8 @@ const metadata: NodeMetadata = {
         en: {
           "API Key": {
             Name: "API Key",
-            Description: "Enter the API key for authenticating with the selected LLM provider",
+            Description:
+              "Enter the API key for authenticating with the selected LLM provider",
           },
         },
         ar: {
@@ -116,13 +120,15 @@ const metadata: NodeMetadata = {
       category: "AI",
       title: "LLM Chat",
       nodeType: "LLM Chat",
-      description: "Interfaces with various Large Language Model providers (Groq, OpenAI, Anthropic, Gemini, OpenRouter) to generate text responses. Accepts user prompts and optional system prompts to guide the model's behavior, and returns the generated response along with token usage information.",
+      description:
+        "Interfaces with various Large Language Model providers (Groq, OpenAI, Anthropic, Gemini, OpenRouter) to generate text responses. Accepts user prompts and optional system prompts to guide the model's behavior, and returns the generated response along with token usage information.",
     },
     ar: {
       category: "الذكاء الاصطناعي",
       title: "دردشة نموذج اللغة",
       nodeType: "دردشة نموذج اللغة",
-      description: "يتواصل مع مزودي نماذج اللغة الكبيرة المختلفة (Groq، OpenAI، Anthropic، Gemini، OpenRouter) لتوليد استجابات نصية. يقبل مطالبات المستخدم ومطالبات النظام الاختيارية لتوجيه سلوك النموذج، ويعيد الاستجابة المُولدة مع معلومات استخدام الرموز.",
+      description:
+        "يتواصل مع مزودي نماذج اللغة الكبيرة المختلفة (Groq، OpenAI، Anthropic، Gemini، OpenRouter) لتوليد استجابات نصية. يقبل مطالبات المستخدم ومطالبات النظام الاختيارية لتوجيه سلوك النموذج، ويعيد الاستجابة المُولدة مع معلومات استخدام الرموز.",
     },
   },
 };
@@ -226,7 +232,14 @@ export function createLLMChatNode(id: number, position: Position): ChatNode {
         if (!model) {
           // Fallback model
           provider = "Groq";
-          model = { name: "Llama 3.1 8B", id: "llama-3.1-8b-instant" };
+          model = {
+            name: "Llama 3.1 8B",
+            id: "llama-3.1-8b-instant",
+            contextWindow: {
+              input: 64000,
+              output: 64000,
+            },
+          };
         }
         const llmOption: LLMOption = {
           provider: provider,

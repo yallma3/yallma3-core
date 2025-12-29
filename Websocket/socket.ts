@@ -1,14 +1,16 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
-import { handleRunWorkspace } from "../Utils/Runtime";
+import { createMainAgent } from "../Utils/Runtime";
 import { executeFlowRuntime } from "../Workflow/runtime";
 
 import { ConsoleInputUtils } from "../Workflow/Nodes/ConsoleInput";
 import type { ConsoleEvent } from "../Models/Workspace";
+import type { MainAgent } from "../Agent/Main/MainAgent";
 export let globalBroadcast: ((message: unknown) => void) | null = null;
 
 export function setupWebSocketServer(wss: WebSocketServer) {
   const clients = new Set<WebSocket>();
+  let currentWorkspaceAgent: MainAgent | null = null;
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     console.log(
@@ -49,8 +51,27 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               })
             );
 
-            handleRunWorkspace(data.data, ws);
+            currentWorkspaceAgent = createMainAgent(data.data, ws);
+            await currentWorkspaceAgent.run();
             break;
+
+          case "abort_workspace":
+            console.log("Abort Message");
+
+            if (currentWorkspaceAgent) {
+              currentWorkspaceAgent.abort();
+            }
+
+            ws.send(
+              JSON.stringify({
+                type: "workspace_aborted",
+                message: "Workspace execution aborted by user.",
+                timestamp: new Date().toISOString(),
+              })
+            );
+
+            break;
+
           case "run_workflow": {
             consoleMessage = {
               id: crypto.randomUUID(),
