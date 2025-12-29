@@ -11,6 +11,7 @@ import type {
   GeminiResponse,
   GeminiPart,
 } from "../Models/LLM";
+import { Ollama } from "ollama";
 export class OpenAIProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
@@ -763,5 +764,171 @@ export class ClaudeProvider implements LLMProvider {
       content: finalContent,
       toolCalls: toolUses?.length ? toolUses : null,
     };
+  }
+}
+
+export class OllamaProvider implements LLMProvider {
+  private model: string;
+  private client: Ollama;
+  private tools: LLMSpecTool[] = [];
+
+  supportsTools = true;
+
+  constructor(model: string, apiKey: string = "", baseUrl: string = "http://localhost:11434") {
+    this.model = model;
+    this.client = new Ollama({ host: baseUrl });
+  }
+
+  /**
+   * Register tools and their executor for tool-augmented reasoning
+   */
+  registerTools(tools: LLMSpecTool[]) {
+    this.tools = tools;
+  }
+
+  /**
+   * Execute tools and return tool messages
+   */
+  private async executeTools(toolCalls: ToolCall[]): Promise<LLMMessage[]> {
+    const toolMessages: LLMMessage[] = [];
+
+    for (const call of toolCalls) {
+      const tool = this.tools.find((t) => t.name === call.name);
+      if (!tool?.executor) {
+        console.warn(`Tool ${call.name} not found or has no executor`);
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: `Tool ${call.name} not found` }),
+        });
+        continue;
+      }
+
+      try {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Tool execution timeout")), 30000)
+        );
+        const result = await Promise.race([
+          tool.executor(call.input),
+          timeoutPromise,
+        ]);
+
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+      } catch (error) {
+        console.error(`Tool ${call.name} execution failed:`, error);
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: String(error) }),
+        });
+      }
+    }
+
+    return toolMessages;
+  }
+
+  /**
+   * Unified entry point for generating text or running tool calls automatically
+   */
+  async generateText(prompt: string): Promise<string> {
+    let messages: LLMMessage[] = [{ role: "user", content: prompt }];
+    let maxIterations = 10;
+    let iteration = 0;
+
+    while (iteration < maxIterations) {
+      const response = await this.callLLM(messages);
+
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        return response.content || "";
+      }
+
+      const toolMessages = await this.executeTools(response.toolCalls);
+
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: response.toolCalls.map((t) => ({
+            id: t.id,
+            type: "function",
+            function: {
+              name: t.name,
+              arguments: JSON.stringify(t.input),
+            },
+          })),
+        } as LLMMessage,
+        ...toolMessages,
+      ];
+
+      iteration++;
+    }
+
+    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+  }
+
+  /**
+   * Makes a raw call to the Ollama API using the official SDK
+   */
+  async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    try {
+      // Convert messages to Ollama format
+      const ollamaMessages = messages.map((msg) => ({
+        role: msg.role === "assistant" ? "assistant" : msg.role === "system" ? "system" : "user",
+        content: msg.content || "",
+      }));
+
+      const options: {
+        model: string;
+        messages: Array<{ role: string; content: string }>;
+        tools?: Array<{
+          type: string;
+          function: {
+            name: string;
+            description: string;
+            parameters: unknown;
+          };
+        }>;
+      } = {
+        model: this.model,
+        messages: ollamaMessages,
+      };
+
+      // Add tools if available and supported
+      if (this.supportsTools && this.tools.length > 0) {
+        options.tools = this.tools.map((t) => ({
+          type: "function",
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
+          },
+        }));
+      }
+
+      const response = await this.client.chat(options);
+
+      // Extract content and tool calls
+      const content = response.message?.content || "";
+      const toolCalls: ToolCall[] | null = response.message?.tool_calls?.map((tc, idx) => ({
+        id: `call_${Date.now()}_${idx}`,
+        name: tc.function?.name || "",
+        input: tc.function?.arguments as Record<string, unknown> || {},
+      })) || null;
+
+      return {
+        content: content || (toolCalls?.length ? `Calling tool ${toolCalls[0]!.name}` : ""),
+        toolCalls,
+      };
+    } catch (error) {
+      console.error("Ollama API error:", error);
+      throw new Error(
+        `Ollama API error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 }

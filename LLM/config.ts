@@ -67,10 +67,16 @@ const AnthropicModels: LLMModel[] = [
   { name: "Claude 3 Haiku", id: "claude-3-haiku-latest" },
 ];
 
+const OllamaModels: LLMModel[] = [
+  { name: "Gemma 3 4B", id: "gemma3:4b" },
+  { name: "Qwen 3 VL 4B", id: "qwen3-vl:4b" },
+  { name: "Deepseek OCR 3B", id: "deepseek-ocr:3b" },
+];
 export const AvailableLLMs: Record<string, LLMModel[]> = {
   Groq: GroqModels,
   OpenAI: OpenAIModels,
   OpenRouter: OpenRouterModels,
   Gemini: GeminiModels,
   Anthropic: AnthropicModels,
+  Ollama: OllamaModels,
 };

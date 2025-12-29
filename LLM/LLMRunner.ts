@@ -5,13 +5,14 @@ import {
   GroqProvider,
   OpenAIProvider,
   OpenRouterProvider,
+  OllamaProvider
 } from "./LLMProvider";
 
 export function runLLM(provider: LLMProvider, prompt: string) {
   return provider.generateText(prompt);
 }
 
-export function getLLMProvider(llmOption: LLMOption, apiKey: string) {
+export function getLLMProvider(llmOption: LLMOption, apiKey: string, baseUrl?: string) {
   switch (llmOption.provider) {
     case "Groq":
       return new GroqProvider(llmOption.model.id, apiKey);
@@ -23,6 +24,8 @@ export function getLLMProvider(llmOption: LLMOption, apiKey: string) {
       return new GeminiProvider(llmOption.model.id, apiKey);
     case "Anthropic":
       return new ClaudeProvider(llmOption.model.id, apiKey);
+    case "Ollama": 
+      return new OllamaProvider(llmOption.model.id, "", baseUrl || "http://localhost:11434");
     default:
       return new GroqProvider(llmOption.model.id, apiKey);
   }
