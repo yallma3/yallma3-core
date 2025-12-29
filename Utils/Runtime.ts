@@ -1,10 +1,16 @@
 import { WebSocket } from "ws";
 import { getMainAgent } from "../Agent/Main/MainAgentRegistry";
 
-export async function handleRunWorkspace(data: string, ws: WebSocket) {
-  const workspaceData = JSON.parse(data);
-
-  // const agent = getMainAgent(workspaceData.mainAgentVersion);
-  const agent = getMainAgent("1.0.0", workspaceData, ws);
-  await agent.run();
+export function createMainAgent(data: string, ws: WebSocket) {
+  try {
+    const workspaceData = JSON.parse(data);
+    const agent = getMainAgent("1.0.0", workspaceData, ws);
+    return agent;
+  } catch (error) {
+    throw new Error(
+      `Invalid workspace data: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
 }

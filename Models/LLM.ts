@@ -1,8 +1,42 @@
 import type { LLMSpecTool, ToolCall } from "./Tool";
 
+export interface ContextWindow {
+  input: number; // Max tokens for the prompt
+  output: number; // Max tokens the model can generate
+}
+
+export interface PricingTier {
+  // The upper limit for this tier (e.g., 200,000).
+  // Use Infinity for the final/unlimited tier.
+  maxTotalTokens: number;
+
+  // The logic for this specific model relies on TOTAL tokens (Input + Output).
+  // Some other models might rely only on Input context length, so we can flag it.
+  measure: "total" | "input";
+
+  // Prices per 1 Million tokens
+  inputPer1MToken: number;
+  outputPer1MToken: number;
+}
+
 export interface LLMModel {
-  name: string;
   id: string;
+  name: string;
+  contextWindow: ContextWindow;
+  mode?: string;
+  pricing?: {
+    currency: string;
+    tiers: PricingTier[];
+  };
+  readonly?: boolean;
+}
+
+export interface ProviderModels {
+  OpenAI: LLMModel[];
+  Anthropic: LLMModel[];
+  Gemini: LLMModel[];
+  Groq: LLMModel[];
+  OpenRouter: LLMModel[];
 }
 
 export interface LLMOption {
