@@ -23,6 +23,7 @@ import { register as registerGeminiChatNode } from "./Nodes/Chat/GeminiChatNode"
 import { register as registerGroqChatNode } from "./Nodes/Chat/GroqChatNode";
 import { register as registerOpenAIChatNode } from "./Nodes/Chat/OpenAiChatNode";
 import { register as registerOpenRouterChatNode } from "./Nodes/Chat/OpenRouterChatNode";
+import { register as registerOllamaChat } from "./Nodes/Chat/OllamaChatNode";
 
 import { register as registerArxivScraperNode } from "./Nodes/ArxivScraperNode";
 import { register as registerMcpDiscoveryNode } from "./Nodes/Mcp/McpDiscoveryNode";
@@ -50,11 +51,12 @@ import { register as registerSearchNode } from "./Nodes/SearchNode";
 import { register as registerScraperNode } from "./Nodes/ScraperNode";
 import { register as registerDataGenerationNode } from "./Nodes/DataGenerationNode";
 import { register as registerPublishToHuggingFaceNode } from "./Nodes/publishToHuggingFaceNode";
-
+import { register as registerImageInputNode } from './Nodes/ImageInputNode';
 export async function initFlowSystem() {
   registerMathNode(nodeRegistry);
   registerTextNode(nodeRegistry);
   registerJoinNode(nodeRegistry);
+  registerImageInputNode(nodeRegistry);
   registerClaudeChatNode(nodeRegistry);
   registerGeminiChatNode(nodeRegistry);
 
@@ -64,6 +66,7 @@ export async function initFlowSystem() {
   registerOpenRouterChatNode(nodeRegistry);
   registerOpenAIChatNode(nodeRegistry);
   registerGroqChatNode(nodeRegistry);
+  registerOllamaChat(nodeRegistry);
 
   registerArxivScraperNode(nodeRegistry);
   registerMcpDiscoveryNode(nodeRegistry);
