@@ -57,15 +57,7 @@ const metadata: NodeMetadata = {
         {
           key: "gemini-2.5-pro",
           label: "Gemini 2.5 Pro",
-        },
-        {
-          key: "claude-3-opus-20240229",
-          label: "Claude 3 Opus",
-        },
-        {
-          key: "claude-3-5-sonnet-20240620",
-          label: "Claude 3.5 Sonnet",
-        },
+        }
       ],
       i18n: {
         en: {
