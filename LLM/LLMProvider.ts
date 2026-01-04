@@ -699,12 +699,14 @@ export class ClaudeProvider implements LLMProvider {
         ...messages,
         {
           role: "assistant",
-          content: response.toolCalls.map((call) => ({
-            type: "tool_use",
-            id: call.id,
-            name: call.name,
-            input: call.input,
-          })),
+          content: JSON.stringify(
+            response.toolCalls.map((call) => ({
+              type: "tool_use",
+              id: call.id,
+              name: call.name,
+              input: call.input,
+            }))
+          ),
         } as OpenAIMessage,
         ...toolMessages,
       ];
@@ -778,14 +780,20 @@ export class ClaudeProvider implements LLMProvider {
 
 export class OllamaProvider implements LLMProvider {
   private model: string;
+  private apiKey: string;
   private client: Ollama;
   private tools: LLMSpecTool[] = [];
 
   supportsTools = true;
 
-  constructor(model: string, apiKey: string = "", baseUrl: string = "http://localhost:11434") {
+  constructor(
+    model: string,
+    apiKey: string = "",
+    baseUrl: string = "http://localhost:11434"
+  ) {
     this.model = model;
     this.client = new Ollama({ host: baseUrl });
+    this.apiKey = apiKey;
   }
 
   /**
@@ -887,7 +895,12 @@ export class OllamaProvider implements LLMProvider {
     try {
       // Convert messages to Ollama format
       const ollamaMessages = messages.map((msg) => ({
-        role: msg.role === "assistant" ? "assistant" : msg.role === "system" ? "system" : "user",
+        role:
+          msg.role === "assistant"
+            ? "assistant"
+            : msg.role === "system"
+            ? "system"
+            : "user",
         content: msg.content || "",
       }));
 
@@ -923,20 +936,25 @@ export class OllamaProvider implements LLMProvider {
 
       // Extract content and tool calls
       const content = response.message?.content || "";
-      const toolCalls: ToolCall[] | null = response.message?.tool_calls?.map((tc, idx) => ({
-        id: `call_${Date.now()}_${idx}`,
-        name: tc.function?.name || "",
-        input: tc.function?.arguments as Record<string, unknown> || {},
-      })) || null;
+      const toolCalls: ToolCall[] | null =
+        response.message?.tool_calls?.map((tc, idx) => ({
+          id: `call_${Date.now()}_${idx}`,
+          name: tc.function?.name || "",
+          input: (tc.function?.arguments as Record<string, unknown>) || {},
+        })) || null;
 
       return {
-        content: content || (toolCalls?.length ? `Calling tool ${toolCalls[0]!.name}` : ""),
+        content:
+          content ||
+          (toolCalls?.length ? `Calling tool ${toolCalls[0]!.name}` : ""),
         toolCalls,
       };
     } catch (error) {
       console.error("Ollama API error:", error);
       throw new Error(
-        `Ollama API error: ${error instanceof Error ? error.message : String(error)}`
+        `Ollama API error: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
     }
   }
