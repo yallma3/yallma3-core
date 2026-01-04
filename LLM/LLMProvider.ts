@@ -894,15 +894,29 @@ export class OllamaProvider implements LLMProvider {
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
     try {
       // Convert messages to Ollama format
-      const ollamaMessages = messages.map((msg) => ({
-        role:
-          msg.role === "assistant"
-            ? "assistant"
-            : msg.role === "system"
-            ? "system"
-            : "user",
-        content: msg.content || "",
-      }));
+      const ollamaMessages = messages.map((msg) => {
+        const baseMsg: {
+          role: string;
+          content: string;
+          tool_calls?: unknown[];
+          tool_call_id?: string;
+        } = {
+          role: msg.role === "assistant" ? "assistant" : msg.role === "system" ? "system" : "user",
+          content: msg.content || "",
+        };
+
+        // Preserve tool_calls for assistant messages
+        if (msg.tool_calls) {
+          baseMsg.tool_calls = msg.tool_calls;
+        }
+
+        // Preserve tool_call_id for tool response messages
+        if (msg.tool_call_id) {
+          baseMsg.tool_call_id = msg.tool_call_id;
+        }
+
+        return baseMsg;
+      });
 
       const options: {
         model: string;
@@ -927,21 +941,22 @@ export class OllamaProvider implements LLMProvider {
           function: {
             name: t.name,
             description: t.description,
-            parameters: t.parameters,
+            parameters: t.parameters as unknown,
           },
         }));
       }
 
-      const response = await this.client.chat(options);
+       // @ts-expect-error - Ollama types are strict about tool parameters
+       const response = await this.client.chat(options);
 
-      // Extract content and tool calls
-      const content = response.message?.content || "";
-      const toolCalls: ToolCall[] | null =
-        response.message?.tool_calls?.map((tc, idx) => ({
-          id: `call_${Date.now()}_${idx}`,
-          name: tc.function?.name || "",
-          input: (tc.function?.arguments as Record<string, unknown>) || {},
-        })) || null;
+       // Extract content and tool calls
+       const content = response.message?.content || "";
+       const toolCalls: ToolCall[] | null =
+         response.message?.tool_calls?.map((tc, idx) => ({
+           id: `call_${Date.now()}_${idx}`,
+           name: tc.function?.name || "",
+           input: (tc.function?.arguments as Record<string, unknown>) || {},
+         })) || null;
 
       return {
         content:
