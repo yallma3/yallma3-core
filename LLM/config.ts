@@ -15,6 +15,7 @@ function loadModels(): ProviderModels {
       Gemini: [],
       Groq: [],
       OpenRouter: [],
+      Ollama: []
     };
   }
   try {
@@ -31,6 +32,7 @@ function loadModels(): ProviderModels {
       Gemini: [],
       Groq: [],
       OpenRouter: [],
+      Ollama: [],
     };
   }
 }

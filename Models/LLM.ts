@@ -37,10 +37,11 @@ export interface ProviderModels {
   Gemini: LLMModel[];
   Groq: LLMModel[];
   OpenRouter: LLMModel[];
+  Ollama: LLMModel[]; 
 }
 
 export interface LLMOption {
-  provider: "Groq" | "OpenAI" | "OpenRouter" | "Gemini" | "Anthropic";
+  provider: "Groq" | "OpenAI" | "OpenRouter" | "Gemini" | "Anthropic" | "Ollama";
   model: LLMModel;
 }
 

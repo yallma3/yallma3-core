@@ -26,10 +26,8 @@
     "@vitest/coverage-v8": "^2.0.0",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
+    "typescript": "^5",
     "vitest": "^2.0.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   },
   "dependencies": {
     "@huggingface/hub": "^2.6.12",
@@ -39,6 +37,7 @@
     "express": "^5.1.0",
     "http": "^0.0.1-security",
     "nodemailer": "^6.10.1",
+    "ollama": "^0.6.3",
     "pdf-parse": "^1.1.1",
     "ws": "^8.18.3"
   },
