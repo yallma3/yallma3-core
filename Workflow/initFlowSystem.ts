@@ -11,7 +11,7 @@
    See the Mozilla Public License for the specific language governing rights and limitations under the License.
 */
 
-import { nodeRegistry } from "./NodeRegistry";
+import { NodeRegistry, nodeRegistry } from "./NodeRegistry";
 
 import { register as registerMathNode } from "./Nodes/mathExpressionNode";
 import { register as registerTextNode } from "./Nodes/textTemplateNode";
@@ -24,6 +24,7 @@ import { register as registerGroqChatNode } from "./Nodes/Chat/GroqChatNode";
 import { register as registerOpenAIChatNode } from "./Nodes/Chat/OpenAiChatNode";
 import { register as registerOpenRouterChatNode } from "./Nodes/Chat/OpenRouterChatNode";
 import { register as registerOllamaChat } from "./Nodes/Chat/OllamaChatNode";
+import {register as registerVisionChat} from "./Nodes/Chat/VisionNode"
 
 import { register as registerArxivScraperNode } from "./Nodes/ArxivScraperNode";
 import { register as registerMcpDiscoveryNode } from "./Nodes/Mcp/McpDiscoveryNode";
@@ -67,6 +68,7 @@ export async function initFlowSystem() {
   registerOpenAIChatNode(nodeRegistry);
   registerGroqChatNode(nodeRegistry);
   registerOllamaChat(nodeRegistry);
+  registerVisionChat(nodeRegistry);
 
   registerArxivScraperNode(nodeRegistry);
   registerMcpDiscoveryNode(nodeRegistry);
