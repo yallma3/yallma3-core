@@ -12,6 +12,8 @@ import type {
   GeminiPart,
 } from "../Models/LLM";
 import { Ollama } from "ollama";
+import type { Tool } from "ollama";
+
 export class OpenAIProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
@@ -175,7 +177,7 @@ export class OpenAIProvider implements LLMProvider {
 
     const content =
       rawContent ||
-      (toolCalls?.length ? `Calling tool ${toolCalls[0]!.name}` : "");
+      (toolCalls?.length && toolCalls[0] ? `Calling tool ${toolCalls[0].name}` : "");
 
     return { content, toolCalls };
   }
@@ -323,7 +325,7 @@ export class GroqProvider implements LLMProvider {
 
     const content =
       rawContent ||
-      (toolCalls?.length ? `calling tool ${toolCalls[0]!.name}` : "");
+      (toolCalls?.length && toolCalls[0] ? `calling tool ${toolCalls[0].name}` : "");
 
     return { content, toolCalls };
   }
@@ -458,13 +460,13 @@ export class OpenRouterProvider implements LLMProvider {
     const toolCalls =
       message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
-        name: t.function?.name,
-        input: JSON.parse(t.function?.arguments || "{}"),
+        name: t.function?.name ?? "",
+        input: JSON.parse(t.function?.arguments ?? "{}") as Record<string, unknown>,
       })) || null;
 
     const content =
       rawContent ||
-      (toolCalls?.length ? `calling tool ${toolCalls[0].name}` : "");
+      (toolCalls?.length && toolCalls[0] ? `calling tool ${toolCalls[0].name}` : "");
 
     return { content, toolCalls };
   }
@@ -613,15 +615,20 @@ export class GeminiProvider implements LLMProvider {
     const functionCalls =
       parts
         .filter((p: GeminiPart) => p.functionCall)
-        .map((p: GeminiPart) => ({
-          id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          name: p.functionCall.name,
-          input: p.functionCall.args,
-        })) || [];
+        .map((p: GeminiPart) => {
+          if (!p.functionCall) {
+            throw new Error("functionCall is undefined");
+          }
+          return {
+            id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            name: p.functionCall.name,
+            input: p.functionCall.args,
+          };
+        }) || [];
 
     const content =
       rawContent ||
-      (functionCalls.length ? `calling tool ${functionCalls[0].name}` : "");
+      (functionCalls.length && functionCalls[0] ? `calling tool ${functionCalls[0].name}` : "");
 
     return {
       content,
@@ -662,13 +669,13 @@ export class ClaudeProvider implements LLMProvider {
 
       toolMessages.push({
         role: "user",
-        content: [
+        content: JSON.stringify([
           {
             type: "tool_result",
             tool_use_id: call.id,
             content: JSON.stringify(result),
           },
-        ],
+        ]),
       } as LLMMessage);
     }
 
@@ -699,13 +706,13 @@ export class ClaudeProvider implements LLMProvider {
         ...messages,
         {
           role: "assistant",
-          content: response.toolCalls.map((call) => ({
+          content: JSON.stringify(response.toolCalls.map((call) => ({
             type: "tool_use",
             id: call.id,
             name: call.name,
             input: call.input,
-          })),
-        } as OpenAIMessage,
+          }))),
+        } as LLMMessage,
         ...toolMessages,
       ];
 
@@ -755,9 +762,9 @@ export class ClaudeProvider implements LLMProvider {
       content
         ?.filter((item: ClaudeContentItem) => item.type === "tool_use")
         ?.map((item: ClaudeContentItem) => ({
-          id: item.id!,
-          name: item.name!,
-          input: item.input!,
+          id: item.id ?? "",
+          name: item.name ?? "",
+          input: item.input ?? {},
         })) || null;
 
     // 🔍 Detect normal text content
@@ -767,7 +774,7 @@ export class ClaudeProvider implements LLMProvider {
     const rawText = textPart?.text ?? null;
 
     const finalContent =
-      rawText || (toolUses?.length ? `calling tool ${toolUses[0].name}` : "");
+      rawText || (toolUses?.length && toolUses[0] ? `calling tool ${toolUses[0].name}` : "");
 
     return {
       content: finalContent,
@@ -783,7 +790,7 @@ export class OllamaProvider implements LLMProvider {
 
   supportsTools = true;
 
-  constructor(model: string, apiKey: string = "", baseUrl: string = "http://localhost:11434") {
+  constructor(model: string, _apiKey?: string, baseUrl: string = "http://localhost:11434") {
     this.model = model;
     this.client = new Ollama({ host: baseUrl });
   }
@@ -894,14 +901,7 @@ export class OllamaProvider implements LLMProvider {
       const options: {
         model: string;
         messages: Array<{ role: string; content: string }>;
-        tools?: Array<{
-          type: string;
-          function: {
-            name: string;
-            description: string;
-            parameters: unknown;
-          };
-        }>;
+        tools?: Tool[];
       } = {
         model: this.model,
         messages: ollamaMessages,
@@ -910,11 +910,22 @@ export class OllamaProvider implements LLMProvider {
       // Add tools if available and supported
       if (this.supportsTools && this.tools.length > 0) {
         options.tools = this.tools.map((t) => ({
-          type: "function",
+          type: "function" as const,
           function: {
             name: t.name,
             description: t.description,
-            parameters: t.parameters,
+            parameters: t.parameters as {
+              type?: string;
+              $defs?: unknown;
+              items?: unknown;
+              required?: string[];
+              properties?: Record<string, {
+                type?: string | string[];
+                items?: unknown;
+                description?: string;
+                enum?: unknown[];
+              }>;
+            },
           },
         }));
       }
@@ -930,7 +941,7 @@ export class OllamaProvider implements LLMProvider {
       })) || null;
 
       return {
-        content: content || (toolCalls?.length ? `Calling tool ${toolCalls[0]!.name}` : ""),
+        content: content || (toolCalls?.length && toolCalls[0] ? `Calling tool ${toolCalls[0].name}` : ""),
         toolCalls,
       };
     } catch (error) {

@@ -99,22 +99,6 @@ interface GeminiResponse {
   usageMetadata: GeminiUsageMetadata;
 }
 
-interface OllamaMessage {
-  role: string;
-  content: string;
-}
-
-interface OllamaChatResponse {
-  model: string;
-  created_at: Date | string;
-  message: OllamaMessage;
-  done: boolean;
-  total_duration?: number;
-  load_duration?: number;
-  prompt_eval_count?: number;
-  eval_count?: number;
-}
-
 const metadata: NodeMetadata = {
   category: "AI",
   title: "Vision AI (Multi-Provider)",
@@ -325,24 +309,29 @@ export function createVisionAINode(id: number, position: Position): VisionNode {
 
         // Route to appropriate provider
         switch (provider.toLowerCase()) {
-          case "openai":
+          case "openai": {
             ({ response, tokens } = await processOpenAI(model, userPrompt, systemMsg, imageBase64, apiKey, detailLevel));
             break;
+          }
 
-          case "claude":
+          case "claude": {
             ({ response, tokens } = await processClaude(model, userPrompt, systemMsg, imageBase64, apiKey));
             break;
+          }
 
-          case "gemini":
+          case "gemini": {
             ({ response, tokens } = await processGemini(model, userPrompt, systemMsg, imageBase64, apiKey));
             break;
+          }
 
-          case "ollama":
+          case "ollama": {
             ({ response, tokens } = await processOllama(model, userPrompt, systemMsg, imageBase64, ollamaBaseUrl));
             break;
+          }
 
-          default:
+          default: {
             throw new Error(`Unsupported provider: ${provider}`);
+          }
         }
 
         return {

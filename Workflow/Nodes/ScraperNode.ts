@@ -4,892 +4,541 @@
  * Copyright (C) 2025 yaLLMa3
  *
  * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
- * If a copy of the MPL was not distributed with this file, You can obtain one at [https://www.mozilla.org/MPL/2.0/](https://www.mozilla.org/MPL/2.0/).
+ * If a copy of the MPL was not distributed with this file, You can obtain one at https://www.mozilla.org/MPL/2.0/.
  *
  * This software is distributed on an "AS IS" basis,
  * WITHOUT WARRANTY OF ANY KIND, either express or implied.
+ * See the Mozilla Public License for the specific language governing rights and limitations under the License.
  */
+
 
 import type {
   BaseNode,
+  Position,
   ConfigParameterType,
   NodeValue,
   NodeExecutionContext,
   NodeMetadata,
-  Position,
-  DataType,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
+import * as cheerio from "cheerio";
+import type { CheerioAPI, Element } from "cheerio";
 
-interface SearchResult {
-  url: string;
-  title: string;
-  snippet: string;
-  relevance_score: number;
-  source_query: string;
-}
 
-interface SearchResultsInput {
-  search_results: SearchResult[];
-  total_count: number;
-}
-
-interface QueryMetadata {
-  parsed_query: {
-    domain_type: string;
-    data_type: string;
-    sample_count: number;
-    language: string;
-    iso_language: string;
-    description?: string;
-    categories?: string[] | null;
-  };
-  required_topics: number;
-  search_stats?: {
-    queries_generated: number;
-    total_urls_found: number;
-    results_per_query: number;
-  };
-}
-
-interface ScrapedContent {
-  url: string;
-  title: string;
-  content: string;
-  word_count: number;
-  success: boolean;
-  error?: string;
-}
-
-interface ContentChunk {
-  chunk_id: string;
-  content: string;
-  source_url: string;
-  chunk_index: number;
-  total_chunks: number;
-  token_count: number;
-}
-
-interface GeminiCandidate {
-  content?: {
-    parts?: Array<{
-      text?: string;
-    }>;
-  };
-  finishReason?: string;
-}
-
-interface GeminiResponse {
-  candidates?: GeminiCandidate[];
-  promptFeedback?: {
-    blockReason?: string;
-  };
-}
-
-export interface ScraperNode extends BaseNode {
+export interface CheerioScraperNode extends BaseNode {
   nodeType: string;
   nodeValue?: NodeValue;
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
 
+
+interface ScraperResult {
+  content: string;
+  structured: string;
+  metadata: string;
+}
+
+
+interface LinkData {
+  text: string;
+  href: string;
+}
+
+
+interface ImageData {
+  src: string;
+  alt: string;
+}
+
+
+interface HeadingData {
+  level: string;
+  text: string;
+}
+
+
+interface MetadataInfo {
+  title: string;
+  description?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  canonical?: string;
+  url?: string;
+}
+
+
 const metadata: NodeMetadata = {
-  category: "Data",
-  title: "Scraper",
-  nodeType: "Scraper",
-  description: "A multi-stage data processing node that scrapes web pages from search results, chunks the content, and uses the Gemini API to extract relevant topics. It requires both ScraperAPI and Gemini API keys.",
-  nodeValue: "",
+  category: "Tools",
+  title: "Web Scraper ",
+  nodeType: "WebScraper",
+  description: "Fast web scraper for static HTML content extraction",
+  nodeValue: "smart-article",
   sockets: [
-    { title: "Search Results", type: "input", dataType: "json" },
-    { title: "Query Metadata", type: "input", dataType: "json" },
-    { title: "Extracted Topics", type: "output", dataType: "json" },
-    { title: "Scraped Data", type: "output", dataType: "json" },
-    { title: "Status", type: "output", dataType: "string" },
+    { title: "URL", type: "input", dataType: "string" },
+    { title: "Content", type: "output", dataType: "string" },
+    { title: "Structured Data", type: "output", dataType: "string" },
+    { title: "Metadata", type: "output", dataType: "string" },
   ],
-  width: 350,
-  height: 300,
+  width: 440,
+  height: 280,
   configParameters: [
     {
-      parameterName: "ScraperAPI Key",
+      parameterName: "Extraction Mode",
       parameterType: "string",
-      defaultValue: "",
+      defaultValue: "smart-article",
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "ScraperAPI key for web scraping",
-      isNodeBodyContent: false,
-      i18n: {
-        en: {
-          "ScraperAPI Key": {
-            Name: "ScraperAPI Key",
-            Description: "ScraperAPI key for web scraping",
-          },
-        },
-        ar: {
-          "ScraperAPI Key": {
-            Name: "مفتاح ScraperAPI",
-            Description: "مفتاح ScraperAPI لكشط الويب",
-          },
-        },
-      },
-    },
-    {
-      parameterName: "Gemini API Key",
-      parameterType: "string",
-      defaultValue: "",
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description: "Google Gemini API key for topic extraction",
-      isNodeBodyContent: false,
-      i18n: {
-        en: {
-          "Gemini API Key": {
-            Name: "Gemini API Key",
-            Description: "Google Gemini API key for topic extraction",
-          },
-        },
-        ar: {
-          "Gemini API Key": {
-            Name: "مفتاح Google Gemini API",
-            Description: "مفتاح Google Gemini API لاستخراج الموضوعات",
-          },
-        },
-      },
-    },
-    {
-      parameterName: "Gemini Model",
-      parameterType: "string",
-      defaultValue: "gemini-2.5-flash",
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description: "Gemini model for topic extraction",
+      description: "What to extract from the page",
       isNodeBodyContent: true,
       sourceList: [
-        { key: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-        { key: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
-        { key: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
+        { key: "smart-article", label: "📰 Article Content" },
+        { key: "metadata", label: "📋 Page Metadata" },
+        { key: "all-text", label: "📄 All Text" },
+        { key: "headings", label: "📑 Headings (H1-H6)" },
+        { key: "links", label: "🔗 All Links" },
+        { key: "images", label: "🖼️ All Images" },
+        { key: "tables", label: "📊 Tables as JSON" },
+        { key: "json-ld", label: "🔧 Schema.org JSON-LD" },
       ],
       i18n: {
         en: {
-          "Gemini Model": {
-            Name: "Gemini Model",
-            Description: "Gemini model for topic extraction",
+          "Extraction Mode": {
+            Name: "Extraction Mode",
+            Description: "What to extract",
           },
         },
         ar: {
-          "Gemini Model": {
-            Name: "نموذج Gemini",
-            Description: "نموذج Gemini لاستخراج الموضوعات",
+          "Extraction Mode": {
+            Name: "نوع الاستخراج",
+            Description: "ماذا تستخرج",
           },
         },
       },
     },
     {
-      parameterName: "Max Chunk Size",
-      parameterType: "number",
-      defaultValue: 7000,
+      parameterName: "Clean Text",
+      parameterType: "boolean",
+      defaultValue: true,
       valueSource: "UserInput",
       UIConfigurable: true,
-      description: "Maximum characters per content chunk (for Gemini token limits)",
+      description: "Remove extra whitespace and clean formatting",
       isNodeBodyContent: false,
-      i18n: {
-        en: {
-          "Max Chunk Size": {
-            Name: "Max Chunk Size",
-            Description: "Maximum characters per content chunk (for Gemini token limits)",
-          },
-        },
-        ar: {
-          "Max Chunk Size": {
-            Name: "الحد الأقصى لحجم الجزء",
-            Description: "الحد الأقصى للأحرف لكل جزء محتوى (لحدود رموز Gemini)",
-          },
-        },
-      },
+    },
+    {
+      parameterName: "Convert URLs",
+      parameterType: "boolean",
+      defaultValue: true,
+      valueSource: "UserInput",
+      UIConfigurable: true,
+      description: "Convert relative URLs to absolute",
+      isNodeBodyContent: false,
+    },
+    {
+      parameterName: "Max Items",
+      parameterType: "number",
+      defaultValue: 100,
+      valueSource: "UserInput",
+      UIConfigurable: true,
+      description: "Maximum items to extract (for links, images, etc.)",
+      isNodeBodyContent: false,
     },
   ],
   i18n: {
     en: {
-      category: "Data",
-      title: "Scraper",
-      nodeType: "Scraper",
-      description: "A multi-stage data processing node that scrapes web pages from search results, chunks the content, and uses the Gemini API to extract relevant topics. It requires both ScraperAPI and Gemini API keys.",
+      category: "Tools",
+      title: "Web Scraper",
+      nodeType: "Web Scraper",
+      description: "Fast scraper for static HTML content.",
     },
     ar: {
-      category: "بيانات",
-      title: "كاشط الويب",
-      nodeType: "كاشط الويب",
-      description: "عقدة معالجة بيانات متعددة المراحل تكشط صفحات الويب من نتائج البحث وتقسم المحتوى وتستخدم Gemini API لاستخراج الموضوعات ذات الصلة. يتطلب مفاتيح API لكل من ScraperAPI و Gemini.",
+      category: "أدوات",
+      title: "مستخرج ويب ",
+      nodeType: "مستخرج ويب ",
+      description: "مستخرج سريع لمحتوى HTML الثابت.",
     },
   },
 };
 
-function getStringConfig(param: ConfigParameterType | undefined): string {
-  if (!param) return "";
-  const value = param.paramValue ?? param.defaultValue;
-  return typeof value === "string" ? value : String(value);
+
+// ==================== HELPER FUNCTIONS ====================
+
+
+function cleanText(text: string, shouldClean: boolean): string {
+  if (!shouldClean) return text;
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/\n+/g, '\n')
+    .trim();
 }
-function getNumberConfig(param: ConfigParameterType | undefined): number {
-  if (!param) return 0;
-  const value = param.paramValue ?? param.defaultValue;
-  return typeof value === "number" ? value : Number(value);
+
+
+function makeAbsoluteUrl(url: string, baseUrl: string): string {
+  try {
+    return new URL(url, baseUrl).href;
+  } catch {
+    return url;
+  }
 }
 
-export function createScraperNode(id: number, position: Position): ScraperNode {
-  return {
-    id,
-    category: metadata.category,
-    title: metadata.title,
-    nodeValue: metadata.nodeValue,
-    nodeType: metadata.nodeType,
-    sockets: metadata.sockets.map((socket, index) => ({
-      id: id * 100 + index + 1,
-      title: socket.title,
-      type: socket.type,
-      nodeId: id,
-      dataType: socket.dataType as DataType,
-    })),
-    x: position.x,
-    y: position.y,
-    width: metadata.width,
-    height: metadata.height,
-    selected: false,
-    processing: false,
-    configParameters: [...metadata.configParameters],
 
-    process: async (context: NodeExecutionContext) => {
-      try {
-        const searchResultsInput = await context.inputs[id * 100 + 1];
-        const queryMetadataInput = await context.inputs[id * 100 + 2];
+function extractArticleContent($: CheerioAPI): string {
+  const selectors = [
+    'article',
+    '[role="main"]',
+    'main',
+    '.article-content',
+    '.post-content',
+    '.entry-content',
+    '.content',
+    '#content',
+  ];
 
-        if (!searchResultsInput || !queryMetadataInput) {
-          throw new Error(
-            "Both Search Results and Query Metadata inputs are required"
-          );
-        }
+  for (const selector of selectors) {
+    const text = $(selector).first().text();
+    if (text && text.length > 100) {
+      return text;
+    }
+  }
+  return $('body').text();
+}
 
-        console.log(
-          `[Scraper Node ${id}] Starting scraping and topic extraction...`
-        );
 
-        const searchResultsData: SearchResultsInput =
-          typeof searchResultsInput === "string"
-            ? JSON.parse(searchResultsInput)
-            : searchResultsInput;
-
-        const queryMetadata: QueryMetadata =
-          typeof queryMetadataInput === "string"
-            ? JSON.parse(queryMetadataInput)
-            : queryMetadataInput;
-
-        const searchResults = searchResultsData.search_results || [];
-
-        if (searchResults.length === 0) {
-          throw new Error("No search results provided to scrape");
-        }
-        const scraperApiKey = getStringConfig(
-          context.node.configParameters?.find(
-            (p) => p.parameterName === "ScraperAPI Key"
-          )
-        );
-        const geminiApiKey = getStringConfig(
-          context.node.configParameters?.find(
-            (p) => p.parameterName === "Gemini API Key"
-          )
-        );
-
-        if (!scraperApiKey) {
-          throw new Error(
-            "ScraperAPI Key is required. Please configure it in node settings."
-          );
-        }
-        if (!geminiApiKey) {
-          throw new Error(
-            "Gemini API Key is required. Please configure it in node settings."
-          );
-        }
-        const geminiModel =
-          getStringConfig(
-            context.node.configParameters?.find(
-              (p) => p.parameterName === "Gemini Model"
-            )
-          ) || "gemini-2.5-flash";
-
-        const maxChunkSize =
-          getNumberConfig(
-            context.node.configParameters?.find(
-              (p) => p.parameterName === "Max Chunk Size"
-            )
-          ) || 7000;
-
-        console.log(
-          `[Scraper Node ${id}] Config: Model=${geminiModel}, MaxChunkSize=${maxChunkSize}`
-        );
-
-        console.log(
-          `[Scraper Node ${id}] Step 1/4: Filtering ${searchResults.length} URLs...`
-        );
-
-        const filteredUrls = await filterUrls(searchResults);
-
-        console.log(
-          `[Scraper Node ${id}] Filtered to ${filteredUrls.length} valid URLs`
-        );
-
-        if (filteredUrls.length === 0) {
-          throw new Error("No valid URLs remaining after filtration");
-        }
-
-        console.log(
-          `[Scraper Node ${id}] Step 2/4: Scraping ${filteredUrls.length} URLs...`
-        );
-
-        const scrapedData = await scrapeUrls(filteredUrls, scraperApiKey);
-
-        const successfulScrapes = scrapedData.filter((d) => d.success).length;
-        console.log(
-          `[Scraper Node ${id}] Successfully scraped ${successfulScrapes}/${scrapedData.length} pages`
-        );
-
-        if (successfulScrapes === 0) {
-          throw new Error(
-            "Failed to scrape any content from the provided URLs"
-          );
-        }
-
-        console.log(`[Scraper Node ${id}] Step 3/4: Chunking content...`);
-
-        const chunks = chunkContent(scrapedData, maxChunkSize);
-
-        console.log(
-          `[Scraper Node ${id}] Created ${chunks.length} content chunks`
-        );
-
-        console.log(
-          `[Scraper Node ${id}] Step 4/4: Extracting topics from chunks...`
-        );
-
-        const extractedTopics = await extractTopics(
-          chunks,
-          queryMetadata.parsed_query.language,
-          queryMetadata.parsed_query.domain_type,
-          queryMetadata.required_topics,
-          geminiApiKey,
-          geminiModel
-        );
-
-        console.log(
-          `[Scraper Node ${id}] Extracted ${extractedTopics.length} unique topics`
-        );
-
-        const topicsOutput = {
-          extracted_topics: extractedTopics,
-          topics_count: extractedTopics.length,
-          required_topics: queryMetadata.required_topics,
-          coverage_ratio:
-            extractedTopics.length / queryMetadata.required_topics,
-        };
-
-        const scrapedDataOutput = {
-          scraped_pages: scrapedData.length,
-          successful_scrapes: successfulScrapes,
-          failed_scrapes: scrapedData.length - successfulScrapes,
-          total_chunks: chunks.length,
-          scraped_content: scrapedData,
-        };
-
-        console.log(
-          `[Scraper Node ${id}]  Scraping and extraction completed successfully`
-        );
-
-        return {
-          [id * 100 + 3]: JSON.stringify(topicsOutput, null, 2),
-          [id * 100 + 4]: JSON.stringify(scrapedDataOutput, null, 2),
-          [id * 100 +
-          5]: `Success: Scraped ${successfulScrapes} pages, extracted ${
-            extractedTopics.length
-          } topics (${(topicsOutput.coverage_ratio * 100).toFixed(
-            1
-          )}% coverage)`,
-        };
-      } catch (error) {
-        console.error(`[Scraper Node ${id}] ❌ Error:`, error);
-
-        return {
-          [id * 100 + 3]: JSON.stringify(
-            {
-              extracted_topics: [],
-              topics_count: 0,
-              required_topics: 0,
-              coverage_ratio: 0,
-            },
-            null,
-            2
-          ),
-          [id * 100 + 4]: JSON.stringify(
-            {
-              scraped_pages: 0,
-              successful_scrapes: 0,
-              failed_scrapes: 0,
-              total_chunks: 0,
-              scraped_content: [],
-            },
-            null,
-            2
-          ),
-          [id * 100 + 5]: `Error: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        };
-      }
-    },
-
-    getConfigParameters(): ConfigParameterType[] {
-      return this.configParameters || [];
-    },
-
-    getConfigParameter(parameterName: string): ConfigParameterType | undefined {
-      return (this.configParameters ?? []).find(
-        (param) => param.parameterName === parameterName
-      );
-    },
-
-    setConfigParameter(
-      parameterName: string,
-      value: string | number | boolean
-    ): void {
-      const parameter = (this.configParameters ?? []).find(
-        (param) => param.parameterName === parameterName
-      );
-      if (parameter) {
-        parameter.paramValue = value;
-      }
-    },
+function extractMetadata($: CheerioAPI): MetadataInfo {
+  const metadata: MetadataInfo = {
+    title: $('title').text(),
+    description: $('meta[name="description"]').attr('content') || '',
+    ogTitle: $('meta[property="og:title"]').attr('content') || '',
+    ogDescription: $('meta[property="og:description"]').attr('content') || '',
+    ogImage: $('meta[property="og:image"]').attr('content') || '',
+    canonical: $('link[rel="canonical"]').attr('href') || '',
   };
+
+  return metadata;
 }
 
-async function filterUrls(searchResults: SearchResult[]): Promise<string[]> {
-  const seenUrls = new Set<string>();
-  const validUrls: string[] = [];
 
-  const binaryExtensions = [
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".ppt",
-    ".pptx",
-    ".xls",
-    ".xlsx",
-    ".zip",
-    ".rar",
-    ".tar",
-    ".gz",
-    ".7z",
-    ".exe",
-    ".dmg",
-    ".mp4",
-    ".avi",
-    ".mkv",
-    ".mov",
-    ".wmv",
-    ".flv",
-    ".mp3",
-    ".wav",
-    ".flac",
-    ".aac",
-    ".ogg",
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".bmp",
-    ".svg",
-    ".webp",
-    ".css",
-    ".js",
-    ".json",
-    ".xml",
-    ".rss",
-  ];
+function extractLinks(
+  $: CheerioAPI,
+  baseUrl: string,
+  convertUrls: boolean,
+  maxItems: number
+): LinkData[] {
+  const links: LinkData[] = [];
 
-  const loginPatterns = [
-    "/login",
-    "/signin",
-    "/signup",
-    "/register",
-    "/auth",
-    "login.",
-    "signin.",
-    "auth.",
-    "account.",
-  ];
+  $('a[href]').each((_index: number, el: Element) => {
+    if (links.length >= maxItems) return false;
+    let href = $(el).attr('href') || '';
+    if (convertUrls) href = makeAbsoluteUrl(href, baseUrl);
+    links.push({
+      text: $(el).text().trim(),
+      href: href,
+    });
+  });
 
-  const excludedDomains = [
-    "twitter.com",
-    "x.com",
-    "facebook.com",
-    "instagram.com",
-    "tiktok.com",
-    "snapchat.com",
-    "pinterest.com",
-  ];
+  return links;
+}
 
-  for (const result of searchResults) {
+
+function extractImages(
+  $: CheerioAPI,
+  baseUrl: string,
+  convertUrls: boolean,
+  maxItems: number
+): ImageData[] {
+  const images: ImageData[] = [];
+
+  $('img[src]').each((_index: number, el: Element) => {
+    if (images.length >= maxItems) return false;
+    let src = $(el).attr('src') || '';
+    if (convertUrls) src = makeAbsoluteUrl(src, baseUrl);
+    images.push({
+      src: src,
+      alt: $(el).attr('alt') || '',
+    });
+  });
+
+  return images;
+}
+
+
+function extractHeadings($: CheerioAPI): HeadingData[] {
+  const headings: HeadingData[] = [];
+
+  $('h1, h2, h3, h4, h5, h6').each((_index: number, el: Element) => {
+    headings.push({
+      level: el.tagName.toLowerCase(),
+      text: $(el).text().trim(),
+    });
+  });
+
+  return headings;
+}
+
+
+function extractTables($: CheerioAPI): string[][][] {
+  const tables: string[][][] = [];
+
+  $('table').each((_index: number, table: Element) => {
+    const tableData: string[][] = [];
+    $(table).find('tr').each((_rowIndex: number, row: Element) => {
+      const rowData: string[] = [];
+      $(row).find('th, td').each((_cellIndex: number, cell: Element) => {
+        rowData.push($(cell).text().trim());
+      });
+      if (rowData.length > 0) tableData.push(rowData);
+    });
+    if (tableData.length > 0) tables.push(tableData);
+  });
+
+  return tables;
+}
+
+
+function extractJsonLd($: CheerioAPI): unknown[] {
+  const jsonLdData: unknown[] = [];
+
+  $('script[type="application/ld+json"]').each((_index: number, el: Element) => {
     try {
-      const url = result.url.toLowerCase();
-
-      if (binaryExtensions.some((ext) => url.endsWith(ext))) {
-        console.log(`  [Filter] Skipped binary file: ${result.url}`);
-        continue;
-      }
-
-      if (loginPatterns.some((pattern) => url.includes(pattern))) {
-        console.log(`  [Filter] Skipped login page: ${result.url}`);
-        continue;
-      }
-
-      if (excludedDomains.some((domain) => url.includes(domain))) {
-        console.log(`  [Filter] Skipped social media: ${result.url}`);
-        continue;
-      }
-
-      const normalizedUrl = url.replace(/\/$/, "");
-      if (seenUrls.has(normalizedUrl)) {
-        console.log(`  [Filter] Skipped duplicate: ${result.url}`);
-        continue;
-      }
-
-      seenUrls.add(normalizedUrl);
-      validUrls.push(result.url);
-    } catch (error) {
-      console.warn(`  [Filter] Error processing URL ${result.url}:`, error);
-      continue;
+      const data = JSON.parse($(el).html() || '{}');
+      jsonLdData.push(data);
+    } catch {
+      // Invalid JSON, skip
     }
-  }
+  });
 
-  return validUrls;
+  return jsonLdData;
 }
 
-async function scrapeUrls(
-  urls: string[],
-  apiKey: string
-): Promise<ScrapedContent[]> {
-  const results: ScrapedContent[] = [];
-  const concurrency = 5;
-  const batches: string[][] = [];
 
-  for (let i = 0; i < urls.length; i += concurrency) {
-    batches.push(urls.slice(i, i + concurrency));
-  }
+// ==================== HTTP FETCHING ====================
 
-  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-    const batch = batches[batchIndex];
 
-    if (!batch || batch.length === 0) {
-      continue;
-    }
-
-    console.log(
-      `  [Scraper] Processing batch ${batchIndex + 1}/${batches.length} (${
-        batch.length
-      } URLs)`
-    );
-
-    const batchPromises = batch.map((url) => scrapeUrl(url, apiKey));
-    const batchResults = await Promise.allSettled(batchPromises);
-
-    for (let i = 0; i < batchResults.length; i++) {
-      const result = batchResults[i];
-      const currentUrl = batch[i];
-      if (!result || !currentUrl || typeof currentUrl !== "string") {
-        continue;
-      }
-
-      if (result.status === "fulfilled") {
-        if (result.value) {
-          results.push(result.value);
-        }
-      } else {
-        console.warn(
-          `  [Scraper] Failed to scrape ${currentUrl}:`,
-          result.reason
-        );
-        results.push({
-          url: currentUrl,
-          title: "",
-          content: "",
-          word_count: 0,
-          success: false,
-          error:
-            result.reason instanceof Error
-              ? result.reason.message
-              : String(result.reason),
-        });
-      }
-    }
-
-    if (batchIndex < batches.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-  }
-
-  return results;
-}
-
-async function scrapeUrl(url: string, apiKey: string): Promise<ScrapedContent> {
-  const scraperApiUrl = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(
-    url
-  )}`;
+async function fetchHtml(url: string): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
   try {
-    const response = await fetch(scraperApiUrl, {
-      method: "GET",
+    const response = await fetch(url, {
+      signal: controller.signal,
       headers: {
-        "Content-Type": "application/json",
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     const html = await response.text();
-    const textContent = extractTextFromHtml(html);
-    const title = extractTitleFromHtml(html);
-
-    return {
-      url,
-      title,
-      content: textContent,
-      word_count: textContent.split(/\s+/).length,
-      success: true,
-    };
+    return html;
   } catch (error) {
-    throw new Error(
-      `Failed to scrape ${url}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-  }
-}
-
-function extractTextFromHtml(html: string): string {
-  let text = html.replace(
-    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
-    ""
-  );
-  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "");
-  text = text.replace(/<[^>]+>/g, " ");
-  text = text.replace(/&nbsp;/g, " ");
-  text = text.replace(/&amp;/g, "&");
-  text = text.replace(/&lt;/g, "<");
-  text = text.replace(/&gt;/g, ">");
-  text = text.replace(/&quot;/g, '"');
-  text = text.replace(/\s+/g, " ").trim();
-
-  return text;
-}
-
-function extractTitleFromHtml(html: string): string {
-  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  return titleMatch?.[1]?.trim() ?? "";
-}
-
-function chunkContent(
-  scrapedData: ScrapedContent[],
-  maxChunkSize: number
-): ContentChunk[] {
-  const chunks: ContentChunk[] = [];
-  let chunkIdCounter = 0;
-
-  for (const data of scrapedData) {
-    if (!data.success || !data.content || data.content.length === 0) {
-      continue;
-    }
-
-    const content = data.content;
-    const contentLength = content.length;
-
-    if (contentLength <= maxChunkSize) {
-      chunks.push({
-        chunk_id: `chunk_${String(chunkIdCounter).padStart(4, "0")}`,
-        content: content,
-        source_url: data.url,
-        chunk_index: 0,
-        total_chunks: 1,
-        token_count: Math.ceil(contentLength / 4),
-      });
-      chunkIdCounter++;
-    } else {
-      const totalChunks = Math.ceil(contentLength / maxChunkSize);
-
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * maxChunkSize;
-        const end = Math.min(start + maxChunkSize, contentLength);
-        const chunkContent = content.substring(start, end);
-
-        chunks.push({
-          chunk_id: `chunk_${String(chunkIdCounter).padStart(4, "0")}`,
-          content: chunkContent,
-          source_url: data.url,
-          chunk_index: i,
-          total_chunks: totalChunks,
-          token_count: Math.ceil(chunkContent.length / 4),
-        });
-        chunkIdCounter++;
+    clearTimeout(timeoutId);
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout after 30 seconds');
       }
+      throw error;
     }
+    throw new Error('Unknown error occurred while fetching URL');
   }
-
-  return chunks;
 }
-async function extractTopics(
-  chunks: ContentChunk[],
-  language: string,
-  domainType: string,
-  requiredTopics: number,
-  apiKey: string,
-  model: string
-): Promise<string[]> {
-  const allTopics: string[] = [];
-  const seenTopics = new Set<string>();
-  const concurrency = 4;
-  const batches: ContentChunk[][] = [];
-  for (let i = 0; i < chunks.length; i += concurrency) {
-    batches.push(chunks.slice(i, i + concurrency));
-  }
 
-  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-    if (allTopics.length >= requiredTopics) {
-      console.log(
-        `  [Topics] Reached required topic count (${requiredTopics}), stopping extraction`
-      );
-      break;
-    }
 
-    const batch = batches[batchIndex];
+// ==================== MAIN NODE ====================
 
-    if (!batch || batch.length === 0) {
-      continue;
-    }
 
-    console.log(
-      `  [Topics] Processing batch ${batchIndex + 1}/${batches.length} (${
-        batch.length
-      } chunks)`
-    );
+export function createCheerioScraperNode(id: number, position: Position): CheerioScraperNode {
+  return {
+    id,
+    category: metadata.category,
+    title: metadata.title,
+    nodeValue: metadata.nodeValue,
+    nodeType: metadata.nodeType,
+    sockets: [
+      { id: id * 100 + 1, title: "URL", type: "input", nodeId: id, dataType: "string" },
+      { id: id * 100 + 3, title: "Content", type: "output", nodeId: id, dataType: "string" },
+      { id: id * 100 + 4, title: "Structured Data", type: "output", nodeId: id, dataType: "string" },
+      { id: id * 100 + 5, title: "Metadata", type: "output", nodeId: id, dataType: "string" },
+    ],
+    x: position.x,
+    y: position.y,
+    width: metadata.width,
+    height: metadata.height,
+    selected: false,
+    processing: false,
+    process: async (context: NodeExecutionContext) => {
+      const n = context.node as CheerioScraperNode;
 
-    const batchPromises = batch.map((chunk) => {
-      if (!chunk || !chunk.content) {
-        return Promise.resolve([]);
+      // Get inputs
+      const urlInput = await context.inputs[n.id * 100 + 1];
+      const url = String(urlInput || "").trim();
+
+      // Validate URL
+      if (!url) {
+        return {
+          [n.id * 100 + 3]: "Error: No URL provided",
+          [n.id * 100 + 4]: "",
+          [n.id * 100 + 5]: "",
+        };
       }
-      return extractTopicsFromChunk(
-        chunk.content,
-        language,
-        domainType,
-        apiKey,
-        model
-      );
-    });
 
-    const batchResults = await Promise.allSettled(batchPromises);
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        return {
+          [n.id * 100 + 3]: "Error: URL must start with http:// or https://",
+          [n.id * 100 + 4]: "",
+          [n.id * 100 + 5]: "",
+        };
+      }
 
-    for (const result of batchResults) {
-      if (result.status === "fulfilled" && result.value) {
-        for (const topic of result.value) {
-          const topicLower = topic.toLowerCase().trim();
-          if (!seenTopics.has(topicLower)) {
-            seenTopics.add(topicLower);
-            allTopics.push(topic);
+      // Get configuration
+      const getConfigParam = n.getConfigParameter?.bind(n);
+      if (!getConfigParam) {
+        throw new Error("Configuration parameters not available");
+      }
+
+      const extractionMode = (getConfigParam("Extraction Mode")?.paramValue as string) || "smart-article";
+      const cleanTextOption = (getConfigParam("Clean Text")?.paramValue as boolean) !== false;
+      const convertUrls = (getConfigParam("Convert URLs")?.paramValue as boolean) !== false;
+      const maxItems = (getConfigParam("Max Items")?.paramValue as number) || 100;
+
+      console.log(`🌐 Cheerio Scraper Node ${n.id}: Scraping ${url}`);
+      console.log(`📋 Extraction mode: ${extractionMode}`);
+
+      // Storage for results
+      const result: ScraperResult = {
+        content: "",
+        structured: "",
+        metadata: "",
+      };
+
+      try {
+        // Fetch HTML
+        console.log(`🔍 Fetching HTML from: ${url}`);
+        const html = await fetchHtml(url);
+        console.log(`✅ HTML fetched successfully (${html.length} bytes)`);
+
+        // Load HTML into Cheerio
+        const $ = cheerio.load(html);
+
+        // Process based on extraction mode
+        switch (extractionMode) {
+          case "smart-article": {
+            result.content = cleanText(extractArticleContent($), cleanTextOption);
+            break;
+          }
+
+          case "metadata": {
+            const meta = extractMetadata($);
+            result.metadata = JSON.stringify(meta, null, 2);
+            result.content = JSON.stringify(meta);
+            break;
+          }
+
+          case "all-text": {
+            result.content = cleanText($('body').text(), cleanTextOption);
+            break;
+          }
+
+          case "headings": {
+            const headings = extractHeadings($);
+            result.structured = JSON.stringify(headings, null, 2);
+            result.content = headings.map(h => `${h.level.toUpperCase()}: ${h.text}`).join('\n');
+            break;
+          }
+
+          case "links": {
+            const links = extractLinks($, url, convertUrls, maxItems);
+            result.structured = JSON.stringify(links, null, 2);
+            result.content = `Found ${links.length} links`;
+            break;
+          }
+
+          case "images": {
+            const images = extractImages($, url, convertUrls, maxItems);
+            result.structured = JSON.stringify(images, null, 2);
+            result.content = `Found ${images.length} images`;
+            break;
+          }
+
+          case "tables": {
+            const tables = extractTables($);
+            result.structured = JSON.stringify(tables, null, 2);
+            result.content = `Found ${tables.length} tables`;
+            break;
+          }
+
+          case "json-ld": {
+            const jsonLd = extractJsonLd($);
+            result.structured = JSON.stringify(jsonLd, null, 2);
+            result.content = `Found ${jsonLd.length} JSON-LD schemas`;
+            break;
+          }
+
+          default: {
+            result.content = cleanText($('body').text(), cleanTextOption);
+            break;
           }
         }
-      } else if (result.status === "rejected") {
-        console.warn(`  [Topics] Chunk extraction failed:`, result.reason);
+
+        // Always extract basic metadata
+        if (extractionMode !== "metadata") {
+          const basicMeta: MetadataInfo = {
+            title: $('title').text(),
+            url: url,
+          };
+          result.metadata = JSON.stringify(basicMeta, null, 2);
+        }
+
+        // Check if we got results
+        if (!result.content && !result.structured && !result.metadata) {
+          return {
+            [n.id * 100 + 3]: "Error: No content was extracted from the URL",
+            [n.id * 100 + 4]: "",
+            [n.id * 100 + 5]: "",
+          };
+        }
+
+        console.log(`✅ Scraper Node ${n.id}: Success`);
+
+        return {
+          [n.id * 100 + 3]: result.content,
+          [n.id * 100 + 4]: result.structured,
+          [n.id * 100 + 5]: result.metadata,
+        };
+
+      } catch (error) {
+        console.error(`❌ Error in Scraper node ${n.id}:`, error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+
+        return {
+          [n.id * 100 + 3]: `Error: ${errorMsg}`,
+          [n.id * 100 + 4]: "",
+          [n.id * 100 + 5]: "",
+        };
       }
-    }
-
-    if (batchIndex < batches.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-  }
-
-  return allTopics;
+    },
+    configParameters: metadata.configParameters,
+    getConfigParameters: function (): ConfigParameterType[] {
+      return this.configParameters || [];
+    },
+    getConfigParameter(parameterName: string): ConfigParameterType | undefined {
+      return (this.configParameters ?? []).find((p) => p.parameterName === parameterName);
+    },
+    setConfigParameter(parameterName: string, value: string | number | boolean): void {
+      const param = (this.configParameters ?? []).find((p) => p.parameterName === parameterName);
+      if (param) {
+        param.paramValue = value;
+      }
+    },
+  };
 }
 
-async function extractTopicsFromChunk(
-  content: string,
-  language: string,
-  domainType: string,
-  apiKey: string,
-  model: string
-): Promise<string[]> {
-  const systemInstruction = `
-  You are an expert content analyst specializing in subtopic extraction for synthetic data generation.
-  
-  ## Task
-  Extract 5-10 focused subtopics from the provided content in ${language} language, ensuring relevance to the ${domainType} domain.
-  
-  ## Guidelines:
-  - Each subtopic should be specific enough to create multiple related examples
-  - Focus only on topics clearly present in the content
-  - Use ${language} for all subtopic names
-  - Keep subtopics relevant to ${domainType}
-  - Avoid vague or overly general topics
-  
-  ## Output Format
-  Return a JSON array of subtopic strings:
-  ["subtopic 1", "subtopic 2", "subtopic 3"]
-  `;
-
-  const prompt = `
-  Extract focused subtopics from this content and express them in ${language}, ensuring relevance to the ${domainType} domain:
-  
-  ${content.substring(0, 3000)} ${content.length > 3000 ? "..." : ""}
-  
-  Return JSON array with subtopics in ${language}: ["subtopic1", "subtopic2", ...]
-  `;
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: `System: ${systemInstruction}\n\nUser: ${prompt}` },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      console.warn(`  [Topics] Gemini API error: ${response.status}`);
-      return [];
-    }
-
-    const data = (await response.json()) as GeminiResponse;
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-    const jsonMatch = generatedText.match(/\[[\s\S]*?\]/);
-    if (!jsonMatch) {
-      return [];
-    }
-
-    const topics = JSON.parse(jsonMatch[0]) as unknown[];
-    return topics.filter((t): t is string => typeof t === "string");
-  } catch (error) {
-    console.warn(`  [Topics] Error extracting topics:`, error);
-    return [];
-  }
-}
 
 export function register(nodeRegistry: NodeRegistry): void {
-  nodeRegistry.registerNodeType(metadata.nodeType, createScraperNode, metadata);
+  nodeRegistry.registerNodeType("WebScraper", createCheerioScraperNode, metadata);
 }

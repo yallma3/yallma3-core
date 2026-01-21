@@ -24,7 +24,8 @@ import { register as registerGroqChatNode } from "./Nodes/Chat/GroqChatNode";
 import { register as registerOpenAIChatNode } from "./Nodes/Chat/OpenAiChatNode";
 import { register as registerOpenRouterChatNode } from "./Nodes/Chat/OpenRouterChatNode";
 import { register as registerOllamaChat } from "./Nodes/Chat/OllamaChatNode";
-import {register as registerVisionChat} from "./Nodes/Chat/VisionNode"
+import {register as registerVisionChat} from "./Nodes/Chat/VisionNode";
+import {register as registerAudioChat} from "./Nodes/Chat/AudioNode";
 
 import { register as registerArxivScraperNode } from "./Nodes/ArxivScraperNode";
 import { register as registerMcpDiscoveryNode } from "./Nodes/Mcp/McpDiscoveryNode";
@@ -53,13 +54,13 @@ import { register as registerScraperNode } from "./Nodes/ScraperNode";
 import { register as registerDataGenerationNode } from "./Nodes/DataGenerationNode";
 import { register as registerPublishToHuggingFaceNode } from "./Nodes/publishToHuggingFaceNode";
 import { register as registerImageInputNode } from './Nodes/ImageInputNode';
+import {register as registerSoundInputNode} from "./Nodes/soundInputNode";
 export async function initFlowSystem() {
   registerMathNode(nodeRegistry);
   registerTextNode(nodeRegistry);
   registerJoinNode(nodeRegistry);
   registerImageInputNode(nodeRegistry);
-  registerClaudeChatNode(nodeRegistry);
-  registerGeminiChatNode(nodeRegistry);
+  registerSoundInputNode(nodeRegistry);
 
   registerConsoleInputNode(nodeRegistry);
 
@@ -69,6 +70,9 @@ export async function initFlowSystem() {
   registerGroqChatNode(nodeRegistry);
   registerOllamaChat(nodeRegistry);
   registerVisionChat(nodeRegistry);
+  registerClaudeChatNode(nodeRegistry);
+  registerGeminiChatNode(nodeRegistry);
+  registerAudioChat(nodeRegistry);
 
   registerArxivScraperNode(nodeRegistry);
   registerMcpDiscoveryNode(nodeRegistry);
