@@ -91,7 +91,7 @@ interface GeminiCandidate {
 interface GeminiUsageMetadata {
   promptTokenCount: number;
   candidatesTokenCount: number;
-  totalTokens: number;
+  totalTokenCount: number;
 }
 
 interface GeminiResponse {
@@ -546,7 +546,7 @@ async function processGemini(
   
   return {
     response: json.candidates?.[0]?.content?.parts?.[0]?.text || "",
-    tokens: json.usageMetadata?.totalTokens || 0,
+    tokens: json.usageMetadata?.totalTokenCount || 0,
   };
 }
 
