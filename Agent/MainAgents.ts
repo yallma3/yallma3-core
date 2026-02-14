@@ -13,7 +13,6 @@ import {
 import { assignBestFit } from "./Utls/MainAgentHelper";
 import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
-import { workflowExecutor } from "./Utls/ToolCallingHelper";
 
 interface FlowResult {
   layers: unknown;
@@ -21,51 +20,19 @@ interface FlowResult {
   finalResult: unknown;
 }
 
-export function sendWorkflow(ws: WebSocket, workflow: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const requestId = crypto.randomUUID();
-
-    const listener = (message: WebSocket.RawData) => {
-      try {
-        const data = JSON.parse(message.toString());
-        const workflowJson = JSON.stringify(data.data);
-        if (data.type === "workflow_json" && data.id === requestId) {
-          ws.off("message", listener); // cleanup
-          resolve(workflowJson); // return result to caller
-        }
-      } catch (err) {
-        reject(err);
-      }
-    };
-    console.log("Executing Workflow:", workflow);
-
-    ws.on("message", listener);
-
-    // send request
-    ws.send(
-      JSON.stringify({
-        id: requestId,
-        type: "run_workflow",
-        requestId,
-        data: workflow,
-        timestamp: new Date().toISOString(),
-      })
-    );
-  });
-}
 
 function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
   const prompt = `
   You are an expert AI project planner. Given the following project metadata, return a structured execution plan in **valid JSON**.
-  
+ 
   ---
-  
+ 
   Project Info:
   {
     "name": "${workspaceData.name}",
     "description": "${workspaceData.description}"
   }
-  
+ 
   Agents:
   ${JSON.stringify(
     workspaceData.agents.map((agent) => ({
@@ -81,7 +48,7 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
     null,
     2
   )}
-  
+ 
   Tasks:
   ${JSON.stringify(
     workspaceData.tasks.map((task) => ({
@@ -95,7 +62,7 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
     null,
     2
   )}
-  
+ 
   Workflows:
   ${JSON.stringify(
     workspaceData.workflows.map((wf) => ({
@@ -106,14 +73,14 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
     null,
     2
   )}
-  
+ 
   ---
-  
+ 
   Instructions:
   Based on the above context, return a project execution plan as valid JSON only.
-  
+ 
   ### JSON Format to Return:
-  
+ 
   {
     "project": {
       "name": "string",
@@ -150,7 +117,7 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
       }
     ]
   }
-  
+ 
   Notes:
   - Each step must have either an "agent" (for agentic tasks) or a "workflow" (for automated tasks), never both.
   - For steps where "type" is "agentic":
@@ -160,7 +127,7 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
   - Fill in "toolsUsed" only if relevant tools are needed from the agent’s toolset.
   - Use "dependsOn" to specify step order or prerequisites if necessary.
   - Output a clean and valid JSON object only — no markdown or extra explanation.
-  
+ 
   Only return the JSON object — no additional text, markdown, or explanation.
   No Notes at the end.
   No Text Before the json.
@@ -168,7 +135,8 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
   `;
   return prompt;
 }
-// Handle running workspace (placeholder for future implementation)
+
+
 export const BasicAgentRuntime = async (
   workspaceData: WorkspaceData,
   ws: WebSocket
@@ -177,7 +145,7 @@ export const BasicAgentRuntime = async (
 
   // prepare prompt
   const propmt = generateWorkspacePrompt(workspaceData);
-  // Main workspace LLM
+    // Main workspace LLM
   const MainLLM = getLLMProvider(workspaceData.mainLLM, workspaceData.apiKey);
 
   // event for creating plan
@@ -239,29 +207,35 @@ export const BasicAgentRuntime = async (
       const json: Workflow = JSON.parse(step.workflow);
 
       console.log("Parsed workflow:", json);
-      const result = await executeFlowRuntime(json, ws);
-      if (result && typeof result === 'object' && 'finalResult' in result) {
-        const flowResult = result as FlowResult;
-        if (flowResult.finalResult) {
-          prevResults.push(String(flowResult.finalResult));
-        }
-      } else {
-        console.error("Workflow execution failed:", result);
-        ws.send(
-          JSON.stringify({
+        const workflow = workspaceData.workflows.find((w) => {
+        const targetId = typeof json === 'string' ? json : json.id;
+        return w.id === targetId;
+      });
+     
+      if (workflow) {
+        try {
+          const result = await executeFlowRuntime(workflow, ws);
+          if (result && typeof result === 'object' && 'finalResult' in result) {
+            const flowResult = result as FlowResult;
+            if (flowResult.finalResult) {
+              prevResults.push(String(flowResult.finalResult));
+            }
+          }
+         
+          ws.send(JSON.stringify({
+             type: "message",
+             data: `Step ${prevResults.length} completed`,
+             timestamp: new Date().toISOString()
+          }));
+        } catch (err) {
+          console.error("Workflow execution failed:", err);
+          ws.send(JSON.stringify({
             type: "error",
-            data: `Workflow execution failed: ${result}`,
-            timestamp: new Date().toISOString(),
-          })
-        );
+            data: `Workflow execution failed: ${err}`,
+            timestamp: new Date().toISOString()
+          }));
+        }
       }
-      ws.send(
-        JSON.stringify({
-          type: "message",
-          data: `Step ${prevResults.length} completed`,
-          timestamp: new Date().toISOString(),
-        })
-      );
       continue;
     }
 
@@ -333,7 +307,7 @@ export const yallma3GenSeqential = async (
     }
 
     let bestFit = null;
-    // Auto assigne best Tool, Workflow, Or Agent for the task
+      // Auto assigne best Tool, Workflow, Or Agent for the task
     if (task.type == "agentic") {
       consoleMessage = {
         id: crypto.randomUUID(),
@@ -391,33 +365,59 @@ export const yallma3GenSeqential = async (
         })
       );
 
-      const finalResult = await workflowExecutor(ws, workflowId, taskContext);
-
-      if (finalResult) {
-        results[task.id] = finalResult;
-
-        const consoleMessage: ConsoleEvent = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          type: "success",
-          message: `[${step}/${layers.length}] Task '${task.title}' completed successfully.`,
-          results: finalResult,
-        };
-        console.log("Console event with result example: ", consoleMessage);
-        ws.send(
-          JSON.stringify({
-            type: "message",
-            data: consoleMessage,
-            timestamp: new Date().toISOString(),
-          })
-        );
-        step++;
-      } else {
+      const workflow = workspaceData.workflows.find((w) => w.id === workflowId);
+     
+      if (!workflow) {
         consoleMessage = {
           id: crypto.randomUUID(),
           timestamp: Date.now(),
           type: "error",
-          message: `[${step}/${layers.length}] Task '${task.title}' failed.`,
+          message: `[${step}/${layers.length}] Workflow not found: ${workflowId}`,
+        };
+        ws.send(JSON.stringify({
+          type: "message",
+          data: consoleMessage,
+          timestamp: new Date().toISOString(),
+        }));
+        continue;
+      }
+
+
+      try {
+        const result = await executeFlowRuntime(workflow, ws, taskContext);
+       
+        let finalResult = result;
+        if (result && typeof result === 'object' && 'finalResult' in result) {
+          finalResult = (result as FlowResult).finalResult;
+        }
+
+        if (finalResult) {
+          results[task.id] = String(finalResult);
+
+          const consoleMessage: ConsoleEvent = {
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+            type: "success",
+            message: `[${step}/${layers.length}] Task '${task.title}' completed successfully.`,
+            results: String(finalResult),
+          };
+          ws.send(
+            JSON.stringify({
+              type: "message",
+              data: consoleMessage,
+              timestamp: new Date().toISOString(),
+            })
+          );
+          step++;
+        } else {
+           throw new Error("Empty result");
+        }
+      } catch (err) {
+        consoleMessage = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: "error",
+          message: `[${step}/${layers.length}] Task '${task.title}' failed: ${err}`,
         };
         ws.send(
           JSON.stringify({
@@ -492,7 +492,7 @@ export const yallma3GenSeqential = async (
       );
 
       try {
-        // Simple task execute through agent directly
+         // Simple task execute through agent directly
         agentPlan = await planAgenticTask(
           MainLLM,
           coreAnalysis,
@@ -595,7 +595,7 @@ export const yallma3GenSeqential = async (
     }
 
     console.log("Result for task:", task.id, ":", results[task.id]);
-  }
+  } 
   let finalResult: string;
   const finalTaskId = layers[layers.length - 1]?.taskId ?? "";
 
