@@ -262,7 +262,10 @@ export function createAudioAINode(id: number, position: Position): AudioNode {
       // Get configuration
       const getConfigParam = n.getConfigParameter?.bind(n);
       if (!getConfigParam) {
-        throw new Error("Configuration parameters not available");
+        return {
+          [n.id * 100 + 4]: "Error: Configuration parameters not available",
+          [n.id * 100 + 5]: "Status: Failed",
+        };
       }
 
       const provider = (getConfigParam("Provider")?.paramValue as string) || "openai";
@@ -319,7 +322,8 @@ export function createAudioAINode(id: number, position: Position): AudioNode {
               task,
               audioBase64,
               apiKey,
-              prompt
+              prompt,
+              audioFormat
             ));
             break;
           }
@@ -446,7 +450,8 @@ async function processGemini(
   task: string,
   audioBase64: string,
   apiKey: string,
-  prompt: string
+  prompt: string,
+  audioFormat: string
 ): Promise<{ transcription: string; metadata: string }> {
   const userPrompt = task === 'analyze' 
     ? (prompt || "Analyze this audio and provide a detailed description of its content.")
@@ -459,7 +464,7 @@ async function processGemini(
         parts: [
           {
             inline_data: {
-              mime_type: "audio/mp3",
+              mime_type: `audio/${audioFormat}`,
               data: audioBase64,
             },
           },

@@ -276,7 +276,10 @@ export function createVisionAINode(id: number, position: Position): VisionNode {
       // Get configuration
       const getConfigParam = n.getConfigParameter?.bind(n);
       if (!getConfigParam) {
-        throw new Error("Configuration parameters not available");
+        return {
+          [n.id * 100 + 4]: "Error: Configuration parameters not available",
+          [n.id * 100 + 5]: 0,
+        };
       }
 
       const provider = (getConfigParam("Provider")?.paramValue as string) || "openai";
