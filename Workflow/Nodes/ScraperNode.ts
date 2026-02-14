@@ -70,7 +70,7 @@ interface MetadataInfo {
 
 const metadata: NodeMetadata = {
   category: "Tools",
-  title: "Web Scraper ",
+  title: "Web Scraper",
   nodeType: "WebScraper",
   description: "Fast web scraper for static HTML content extraction",
   nodeValue: "smart-article",
@@ -153,8 +153,8 @@ const metadata: NodeMetadata = {
     },
     ar: {
       category: "أدوات",
-      title: "مستخرج ويب ",
-      nodeType: "مستخرج ويب ",
+      title: "مستخرج ويب",
+      nodeType: "مستخرج ويب",
       description: "مستخرج سريع لمحتوى HTML الثابت.",
     },
   },
@@ -178,6 +178,29 @@ function makeAbsoluteUrl(url: string, baseUrl: string): string {
     return new URL(url, baseUrl).href;
   } catch {
     return url;
+  }
+}
+
+function isPrivateHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h === "localhost" ||
+    h === "127.0.0.1" ||
+    h === "::1" ||
+    h === "0.0.0.0" ||
+    h === "169.254.169.254" ||
+    /^10\./.test(h) ||
+    /^192\.168\./.test(h) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(h)
+  );
+}
+
+function isSafeUrl(rawUrl: string): boolean {
+  try {
+    const { hostname } = new URL(rawUrl);
+    return !isPrivateHostname(hostname);
+  } catch {
+    return false;
   }
 }
 
@@ -395,10 +418,22 @@ export function createCheerioScraperNode(id: number, position: Position): Cheeri
         };
       }
 
+      if (!isSafeUrl(url)) {
+        return {
+          [n.id * 100 + 3]: "Error: URL host is not allowed",
+          [n.id * 100 + 4]: "",
+          [n.id * 100 + 5]: "",
+        };
+      }
+
       // Get configuration
       const getConfigParam = n.getConfigParameter?.bind(n);
       if (!getConfigParam) {
-        throw new Error("Configuration parameters not available");
+        return {
+          [n.id * 100 + 3]: "Error: Configuration parameters not available",
+          [n.id * 100 + 4]: "",
+          [n.id * 100 + 5]: "",
+        };
       }
 
       const extractionMode = (getConfigParam("Extraction Mode")?.paramValue as string) || "smart-article";

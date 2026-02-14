@@ -33,17 +33,6 @@ interface GeminiResponse {
   };
 }
 
-interface ClaudeResponse {
-  content: Array<{
-    type: string;
-    text: string;
-  }>;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-  };
-}
-
 interface GroqTranscriptionResponse {
   text: string;
   language?: string;
@@ -62,7 +51,7 @@ const metadata: NodeMetadata = {
   category: "AI",
   title: "Audio AI (Multi-Provider)",
   nodeType: "AudioAI",
-  description: "Multi-provider audio AI node for speech-to-text transcription and audio analysis. Works with OpenAI, Claude, Gemini, Groq, and Ollama.",
+  description: "Multi-provider audio AI node for speech-to-text transcription and audio analysis. Works with OpenAI, Gemini, Groq, and Ollama.",
   nodeValue: "openai|gpt-4o-transcribe",
   sockets: [
     { title: "Audio (Base64)", type: "input", dataType: "string" },
@@ -84,7 +73,6 @@ const metadata: NodeMetadata = {
       isNodeBodyContent: true,
       sourceList: [
         { key: "openai", label: "OpenAI" },
-        { key: "claude", label: "Anthropic Claude" },
         { key: "gemini", label: "Google Gemini" },
         { key: "groq", label: "Groq" },
         { key: "ollama", label: "Ollama (Local)" },
@@ -143,7 +131,7 @@ const metadata: NodeMetadata = {
       sourceList: [
         { key: "transcribe", label: "Transcribe (Same Language)" },
         { key: "translate", label: "Translate to English" },
-        { key: "analyze", label: "Analyze Audio (Claude/Gemini)" },
+        { key: "analyze", label: "Analyze Audio (Gemini)" },
       ],
       i18n: {
         en: { "Task": { Name: "Task", Description: "Task to perform" } },
@@ -306,17 +294,6 @@ export function createAudioAINode(id: number, position: Position): AudioNode {
             break;
           }
 
-          case "claude": {
-            ({ transcription, metadata } = await processClaude(
-              model,
-              task,
-              audioBase64,
-              apiKey,
-              prompt
-            ));
-            break;
-          }
-
           case "gemini": {
             ({ transcription, metadata } = await processGemini(
               model,
@@ -415,13 +392,19 @@ async function processOpenAI(
     ? 'https://api.openai.com/v1/audio/translations'
     : 'https://api.openai.com/v1/audio/transcriptions';
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: formData,
+    signal: controller.signal,
   });
+
+  clearTimeout(timeoutId);
 
   if (!res.ok) {
     const errorText = await res.text();
@@ -433,59 +416,6 @@ async function processOpenAI(
   return {
     transcription: json.text || "",
     metadata: `Provider: OpenAI | Model: ${model} | Task: ${task}`,
-  };
-}
-
-async function processClaude(
-  model: string,
-  task: string,
-  _audioBase64: string,
-  apiKey: string,
-  prompt: string
-): Promise<{ transcription: string; metadata: string }> {
-  // Claude doesn't have native audio transcription, but can analyze audio as a document
-  // For transcription tasks, we need to use a transcription service first
-  
-  if (task === 'transcribe' || task === 'translate') {
-    throw new Error("Claude doesn't support direct audio transcription. Please use OpenAI, Gemini, or Groq for transcription, then send the text to Claude for analysis.");
-  }
-
-  // For analysis task, treat audio as a document-like input
-  const userPrompt = prompt || "Analyze this audio and provide insights about its content, tone, and any notable features.";
-
-  const body = {
-    model,
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: userPrompt + "\n\nNote: This is an audio file provided as base64.",
-          },
-        ],
-      },
-    ],
-  };
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(`Claude API error: ${res.status}`);
-  
-  const json = await res.json() as ClaudeResponse;
-  
-  return {
-    transcription: json.content?.[0]?.text || "",
-    metadata: `Provider: Claude | Model: ${model} | Note: Audio analysis (not transcription)`,
   };
 }
 
@@ -517,6 +447,9 @@ async function processGemini(
     ],
   };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -526,8 +459,11 @@ async function processGemini(
         "x-goog-api-key": apiKey,
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     }
   );
+
+  clearTimeout(timeoutId);
 
   if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
   
@@ -567,13 +503,19 @@ async function processGroq(
     ? 'https://api.groq.com/openai/v1/audio/translations'
     : 'https://api.groq.com/openai/v1/audio/transcriptions';
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: formData,
+    signal: controller.signal,
   });
+
+  clearTimeout(timeoutId);
 
   if (!res.ok) {
     const errorText = await res.text();
@@ -591,32 +533,57 @@ async function processGroq(
 async function processOllama(
   model: string,
   task: string,
-  _audioBase64: string,
+  audioBase64: string,
   baseUrl: string,
   prompt: string
 ): Promise<{ transcription: string; metadata: string }> {
   const ollama = new Ollama({ host: baseUrl });
 
-  const userPrompt = task === 'analyze'
-    ? (prompt || "Analyze this audio and describe its content in detail.")
-    : (prompt || "Transcribe this audio accurately.");
+  if (task === "analyze") {
+    const userPrompt = prompt || "Analyze this audio and describe its content in detail.";
+    const response = await ollama.chat({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: userPrompt,
+          images: [audioBase64],
+        },
+      ],
+    }) as OllamaChatResponse;
 
-  const messages = [
-    {
-      role: "user",
-      content: userPrompt,
-      // Note: Ollama's audio support varies by model
-    },
-  ];
+    return {
+      transcription: response.message?.content || "",
+      metadata: `Provider: Ollama | Model: ${model} | Local | Task: ${task}`,
+    };
+  }
 
-  const response = await ollama.chat({
-    model,
-    messages,
-  }) as OllamaChatResponse;
+  const audioBuffer = Buffer.from(audioBase64, "base64");
+  const formData = new FormData();
+  formData.append("file", new Blob([audioBuffer]), "audio.wav");
+  formData.append("model", model);
+  if (prompt) formData.append("prompt", prompt);
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+  const res = await fetch(`${baseUrl}/api/transcribe`, {
+    method: "POST",
+    body: formData,
+    signal: controller.signal,
+  });
+
+  clearTimeout(timeoutId);
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Ollama transcription error: ${res.status} - ${errorText}`);
+  }
+
+  const json = await res.json() as { text?: string };
   return {
-    transcription: response.message?.content || "",
-    metadata: `Provider: Ollama | Model: ${model} | Local`,
+    transcription: json.text || "",
+    metadata: `Provider: Ollama | Model: ${model} | Local | Task: ${task}`,
   };
 }
 
