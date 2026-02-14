@@ -185,6 +185,23 @@ const metadata: NodeMetadata = {
       },
     },
     {
+      parameterName: "Audio Format",
+      parameterType: "string",
+      defaultValue: "mp3",
+      valueSource: "UserInput",
+      UIConfigurable: true,
+      description: "Input audio format (mp3, wav, ogg, m4a, webm, flac)",
+      isNodeBodyContent: false,
+      sourceList: [
+        { key: "mp3", label: "MP3" },
+        { key: "wav", label: "WAV" },
+        { key: "ogg", label: "OGG" },
+        { key: "m4a", label: "M4A" },
+        { key: "webm", label: "WebM" },
+        { key: "flac", label: "FLAC" },
+      ],
+    },
+    {
       parameterName: "Ollama Base URL",
       parameterType: "string",
       defaultValue: "http://localhost:11434",
@@ -254,6 +271,7 @@ export function createAudioAINode(id: number, position: Position): AudioNode {
       const apiKey = (getConfigParam("API Key")?.paramValue as string) || "";
       const temperature = (getConfigParam("Temperature")?.paramValue as number) || 0;
       const responseFormat = (getConfigParam("Response Format")?.paramValue as string) || "text";
+      const audioFormat = (getConfigParam("Audio Format")?.paramValue as string) || "mp3";
       const ollamaBaseUrl = (getConfigParam("Ollama Base URL")?.paramValue as string) || "http://localhost:11434";
 
       const prompt = String(promptValue || "");
@@ -289,7 +307,8 @@ export function createAudioAINode(id: number, position: Position): AudioNode {
               prompt,
               language,
               temperature,
-              responseFormat
+              responseFormat,
+              audioFormat
             ));
             break;
           }
@@ -314,7 +333,8 @@ export function createAudioAINode(id: number, position: Position): AudioNode {
               prompt,
               language,
               temperature,
-              responseFormat
+              responseFormat,
+              audioFormat
             ));
             break;
           }
@@ -374,13 +394,15 @@ async function processOpenAI(
   prompt: string,
   language: string,
   temperature: number,
-  responseFormat: string
+  responseFormat: string,
+  audioFormat: string
 ): Promise<{ transcription: string; metadata: string }> {
+  const mimeType = `audio/${audioFormat}`;
   const audioBuffer = Buffer.from(audioBase64, 'base64');
-  const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+  const blob = new Blob([audioBuffer], { type: mimeType });
   
   const formData = new FormData();
-  formData.append('file', blob, 'audio.mp3');
+  formData.append('file', blob, `audio.${audioFormat}`);
   formData.append('model', model);
   
   if (prompt) formData.append('prompt', prompt);
@@ -485,13 +507,15 @@ async function processGroq(
   prompt: string,
   language: string,
   temperature: number,
-  responseFormat: string
+  responseFormat: string,
+  audioFormat: string
 ): Promise<{ transcription: string; metadata: string }> {
+  const mimeType = `audio/${audioFormat}`;
   const audioBuffer = Buffer.from(audioBase64, 'base64');
-  const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+  const blob = new Blob([audioBuffer], { type: mimeType });
   
   const formData = new FormData();
-  formData.append('file', blob, 'audio.mp3');
+  formData.append('file', blob, `audio.${audioFormat}`);
   formData.append('model', model);
   
   if (prompt) formData.append('prompt', prompt);
