@@ -90,10 +90,22 @@ export async function workflowExecutor(
    
     const result = await executeFlowRuntime(json, ws, input);
     
-    return (result as { finalResult: unknown }).finalResult;
+    // Handle error case
+    if (result instanceof Error) {
+      console.error(`[ToolCalling] Workflow execution failed for ${workflowId}:`, result);
+      throw result;
+    }
+    
+    // Check for finalResult property
+    if (result && typeof result === 'object' && 'finalResult' in result) {
+      return (result as { finalResult: unknown }).finalResult;
+    }
+    
+    // Return result directly if no finalResult
+    return result;
    
   } else {
-   
+    // Triggered execution path
     if (!cachedWorkspaceData || !cachedWorkspaceData.workflows) {
       throw new Error("Workspace data not available for workflow execution");
     }
@@ -106,6 +118,13 @@ export async function workflowExecutor(
    
     const result = await executeFlowRuntime(workflow, ws, input);
    
+    // Handle error case
+    if (result instanceof Error) {
+      console.error(`[ToolCalling] Workflow execution failed for ${workflowId}:`, result);
+      throw result;
+    }
+   
+    // Check for finalResult property
     if (result && typeof result === 'object' && 'finalResult' in result) {
       return result.finalResult;
     }

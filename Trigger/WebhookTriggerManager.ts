@@ -112,6 +112,7 @@ export class WebhookTriggerManager {
     }
 
     const expectedSecret = registration.trigger.config.secret;
+    //if (expectedSecret && expectedSecret !== providedSecret)
     if (expectedSecret && providedSecret && providedSecret !== expectedSecret) {
       console.warn(`⚠️  Invalid secret for workspace webhook: ${workspaceId}`);
       return null;

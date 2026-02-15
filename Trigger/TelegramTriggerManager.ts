@@ -2,6 +2,21 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import type { TelegramTrigger, TelegramUpdateType } from '../Models/Trigger';
 
+type TelegramUpdate = {
+  update_id: number;
+  message?: any;
+  edited_message?: any;
+  channel_post?: any;
+  edited_channel_post?: any;
+  inline_query?: any;
+  callback_query?: any;
+  poll?: any;
+  poll_answer?: any;
+  pre_checkout_query?: any;
+  shipping_query?: any;
+  [key: string]: any;
+};
+
 interface TelegramRegistration {
   workspaceId: string;
   trigger: TelegramTrigger;
@@ -17,14 +32,14 @@ interface TelegramRegistration {
 
 export class TelegramTriggerManager {
   private bots: Map<string, TelegramRegistration> = new Map();
-  private onTelegramUpdate?: (workspaceId: string, update: any) => void;
+  private onTelegramUpdate?: (workspaceId: string, update: TelegramUpdate) => Promise<void>;
   private baseUrl: string = 'http://localhost:3001';
 
   constructor(baseUrl?: string) {
     if (baseUrl) this.baseUrl = baseUrl;
   }
 
-  setExecutionCallback(callback: (workspaceId: string, update: any) => void) {
+  setExecutionCallback(callback: (workspaceId: string, update: TelegramUpdate) => Promise<void>) {
     this.onTelegramUpdate = callback;
   }
 
@@ -250,7 +265,7 @@ export class TelegramTriggerManager {
   /**
    * Execute workspace with Telegram update (called by queue)
    */
-  directExecute(workspaceId: string, update: any): boolean {
+  async directExecute(workspaceId: string, update: TelegramUpdate): Promise<boolean> {
     const registration = this.bots.get(workspaceId);
     
     if (!registration) {
@@ -305,7 +320,7 @@ export class TelegramTriggerManager {
       console.log(`[Telegram]    Bot: @${registration.botInfo.username}`);
       console.log(`[Telegram]    Update ID: ${update.update_id}`);
       
-      this.onTelegramUpdate(workspaceId, update);
+      await this.onTelegramUpdate(workspaceId, update);
       return true;
     } catch (error) {
       console.error(`[Telegram]  Execution error:`, error);
@@ -316,7 +331,7 @@ export class TelegramTriggerManager {
   /**
    * Get update type from Telegram update object
    */
-  private getUpdateType(update: any): TelegramUpdateType | null {
+  private getUpdateType(update: TelegramUpdate): TelegramUpdateType | null {
     const possibleTypes: TelegramUpdateType[] = [
       'message',
       'edited_message',
@@ -342,7 +357,7 @@ export class TelegramTriggerManager {
   /**
    * Extract chat ID from various update types
    */
-  private extractChatId(update: any): number | null {
+  private extractChatId(update: TelegramUpdate): number | null {
     return update.message?.chat?.id ||
            update.edited_message?.chat?.id ||
            update.channel_post?.chat?.id ||
@@ -354,7 +369,7 @@ export class TelegramTriggerManager {
   /**
    * Extract chat type from update
    */
-  private extractChatType(update: any): string | null {
+  private extractChatType(update: TelegramUpdate): string | null {
     return update.message?.chat?.type ||
            update.edited_message?.chat?.type ||
            update.channel_post?.chat?.type ||

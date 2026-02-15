@@ -1,8 +1,23 @@
 import { telegramTriggerManager } from './TelegramTriggerManager';
 
+type TelegramUpdate = {
+  update_id: number;
+  message?: any;
+  edited_message?: any;
+  channel_post?: any;
+  edited_channel_post?: any;
+  inline_query?: any;
+  callback_query?: any;
+  poll?: any;
+  poll_answer?: any;
+  pre_checkout_query?: any;
+  shipping_query?: any;
+  [key: string]: any;
+};
+
 type TelegramJob = {
   workspaceId: string;
-  update: any;
+  update: TelegramUpdate;
 };
 
 class TelegramQueue {
@@ -24,7 +39,7 @@ class TelegramQueue {
     console.log(`[TelegramQueue]  Processing update for workspace ${job.workspaceId}`);
 
     try {
-      const success = telegramTriggerManager.directExecute(job.workspaceId, job.update);
+      const success = await telegramTriggerManager.directExecute(job.workspaceId, job.update);
       
       if (success) {
         console.log(`[TelegramQueue]  Update processed successfully`);

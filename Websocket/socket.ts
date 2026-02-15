@@ -7,7 +7,7 @@ import { createMainAgent } from "../Utils/Runtime";
 import { executeFlowRuntime } from "../Workflow/runtime";
 
 import { ConsoleInputUtils } from "../Workflow/Nodes/ConsoleInput";
-import { resolveUserPrompt } from "../Workflow/Nodes/UserPromptNode"; // ✅ NEW - ADD THIS LINE
+import { resolveUserPrompt } from "../Workflow/Nodes/UserPromptNode";
 import type { ConsoleEvent, WorkspaceData } from "../Models/Workspace";
 import type { MainAgent } from "../Agent/Main/MainAgent";
 import { scheduledTriggerManager } from "../Trigger/ScheduledTriggerManager";
@@ -16,6 +16,33 @@ import { telegramTriggerManager } from "../Trigger/TelegramTriggerManager";
 import { telegramQueue } from "../Trigger/TelegramQueue";
 
 export let globalBroadcast: ((message: unknown) => void) | null = null;
+
+/**
+ * Sanitize filename to prevent path traversal attacks
+ */
+function safeName(name: string): string {
+  if (!name) return '_';
+  return name
+    .replace(/[\/\\]/g, '_')
+    .replace(/\.\./g, '_')
+    .replace(/\0/g, '')
+    .replace(/^\.+/, '_')
+    .trim() || '_';
+}
+
+/**
+ * Verify resolved path is within expected base directory
+ */
+function isPathSafe(resolvedPath: string, basePath: string): boolean {
+  try {
+    const normalizedResolved = path.resolve(resolvedPath);
+    const normalizedBase = path.resolve(basePath);
+    return normalizedResolved.startsWith(normalizedBase + path.sep) || 
+           normalizedResolved === normalizedBase;
+  } catch {
+    return false;
+  }
+}
 
 export function setupWebSocketServer(wss: WebSocketServer) {
   const clients = new Set<WebSocket>();
@@ -49,8 +76,13 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
     data.workflows.forEach((wf: any) => {
       try {
-        const flowsPath = path.join(basePath, "flows", `${wf.id}.json`);
-        const rootPath = path.join(basePath, `${wf.name}.json`);
+        const flowsPath = path.join(basePath, "flows", `${safeName(wf.id)}.json`);
+        const rootPath = path.join(basePath, `${safeName(wf.name)}.json`);
+
+        if (!isPathSafe(flowsPath, basePath) || !isPathSafe(rootPath, basePath)) {
+          console.error(` Path traversal attempt detected: ${wf.id} / ${wf.name}`);
+          return;
+        }
 
         let fullPath: string | null = null;
         if (fs.existsSync(flowsPath)) fullPath = flowsPath;
@@ -190,11 +222,18 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                   const flowsPath = path.join(
                     basePath,
                     "flows",
-                    `${workflow.id}.json`
+                    `${safeName(workflow.id)}.json`
                   );
                   const rootNamePath = workflow.name
-                    ? path.join(basePath, `${workflow.name}.json`)
+                    ? path.join(basePath, `${safeName(workflow.name)}.json`)
                     : null;
+
+                  if (!isPathSafe(flowsPath, basePath) || 
+                      (rootNamePath && !isPathSafe(rootNamePath, basePath))) {
+                    console.error(" Path traversal attempt detected");
+                    return;
+                  }
+
                   let fullPath =
                     fs.existsSync(flowsPath) && flowsPath
                       ? flowsPath
@@ -453,11 +492,18 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                     const flowsPath = path.join(
                       basePath,
                       "flows",
-                      `${workflow.id}.json`
+                      `${safeName(workflow.id)}.json`
                     );
                     const rootNamePath = workflow.name
-                      ? path.join(basePath, `${workflow.name}.json`)
+                      ? path.join(basePath, `${safeName(workflow.name)}.json`)
                       : null;
+
+                    if (!isPathSafe(flowsPath, basePath) || 
+                        (rootNamePath && !isPathSafe(rootNamePath, basePath))) {
+                      console.error(" Path traversal attempt detected");
+                      return;
+                    }
+
                     let fullPath =
                       fs.existsSync(flowsPath) && flowsPath
                         ? flowsPath
@@ -719,11 +765,18 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                     const flowsPath = path.join(
                       basePath,
                       "flows",
-                      `${workflow.id}.json`
+                      `${safeName(workflow.id)}.json`
                     );
                     const rootNamePath = workflow.name
-                      ? path.join(basePath, `${workflow.name}.json`)
+                      ? path.join(basePath, `${safeName(workflow.name)}.json`)
                       : null;
+
+                    if (!isPathSafe(flowsPath, basePath) || 
+                        (rootNamePath && !isPathSafe(rootNamePath, basePath))) {
+                      console.error(" Path traversal attempt detected");
+                      return;
+                    }
+
                     let fullPath =
                       fs.existsSync(flowsPath) && flowsPath
                         ? flowsPath
@@ -897,7 +950,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
     );
     clients.add(ws);
 
-     // Handle incoming messages from frontend
+    // Handle incoming messages from frontend
     ws.on("message", async (message: WebSocket.RawData) => {
       try {
         const data = JSON.parse(message.toString());
@@ -1377,7 +1430,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               const { promptId, message: inputMessage } = event;
 
               if (promptId && inputMessage) {
-                 // Resolve the specific prompt
+                // Resolve the specific prompt
                 const resolved = ConsoleInputUtils.resolvePrompt(
                   promptId,
                   inputMessage
@@ -1388,10 +1441,10 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                     `Resolved prompt ${promptId} with input: ${inputMessage}`
                   );
 
-                 // Add the event to console history
+                  // Add the event to console history
                   ConsoleInputUtils.addEvent(event);
 
-                // Broadcast confirmation to all clients
+                  // Broadcast confirmation to all clients
                   broadcast({
                     type: "console_input_resolved",
                     data: {
@@ -1406,7 +1459,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                     `Failed to resolve prompt ${promptId} - prompt not found or already resolved`
                   );
 
-                // Send error back to client
+                  // Send error back to client
                   ws.send(
                     JSON.stringify({
                       type: "error",
@@ -1432,7 +1485,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             break;
 
           case "get_pending_prompts": {
-           // Allow frontend to request current pending prompts
+            // Allow frontend to request current pending prompts
             const pendingPrompts = ConsoleInputUtils.getPendingPrompts();
             ws.send(
               JSON.stringify({
@@ -1469,7 +1522,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
       clients.delete(ws);
     });
 
-      // Send initial confirmation
+    // Send initial confirmation
     ws.send(
       JSON.stringify({
         type: "connected",
@@ -1486,7 +1539,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
     }
   }
 
-    // Broadcast a command
+  // Broadcast a command
   function broadcastCommand(commandData: {
     id: string;
     command: string;

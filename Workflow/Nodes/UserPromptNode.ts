@@ -227,7 +227,7 @@ function createUserPromptNode(id: number, position: Position): UserPromptNode {
       }
 
       // Get timeout config
-      const timeoutSeconds = (n.getConfigParameter?.("Timeout (seconds)")?.paramValue as number) || 300;
+     const timeoutSeconds = (n.getConfigParameter?.("Timeout (seconds)")?.paramValue as number) ?? 300;
 
       const executionStartTime = Date.now();
       const promptId = `user_prompt_${executionStartTime}_${Math.random().toString(36).slice(2, 9)}`;
