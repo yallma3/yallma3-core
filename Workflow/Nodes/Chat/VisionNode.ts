@@ -91,7 +91,7 @@ interface GeminiCandidate {
 interface GeminiUsageMetadata {
   promptTokenCount: number;
   candidatesTokenCount: number;
-  totalTokens: number;
+  totalTokenCount: number;
 }
 
 interface GeminiResponse {
@@ -276,7 +276,10 @@ export function createVisionAINode(id: number, position: Position): VisionNode {
       // Get configuration
       const getConfigParam = n.getConfigParameter?.bind(n);
       if (!getConfigParam) {
-        throw new Error("Configuration parameters not available");
+        return {
+          [n.id * 100 + 4]: "Error: Configuration parameters not available",
+          [n.id * 100 + 5]: 0,
+        };
       }
 
       const provider = (getConfigParam("Provider")?.paramValue as string) || "openai";
@@ -290,7 +293,12 @@ export function createVisionAINode(id: number, position: Position): VisionNode {
 
       // Process image input
       let imageBase64 = "";
+      let mimeType = "image/jpeg";
       if (typeof imageInput === "string") {
+        const mimeMatch = imageInput.match(/^data:(image\/[a-z+]+);base64,/i);
+        if (mimeMatch?.[1]) {
+          mimeType = mimeMatch[1];
+        }
         imageBase64 = imageInput.replace(/^data:image\/[a-z]+;base64,/i, "").trim();
       }
 
@@ -310,22 +318,22 @@ export function createVisionAINode(id: number, position: Position): VisionNode {
         // Route to appropriate provider
         switch (provider.toLowerCase()) {
           case "openai": {
-            ({ response, tokens } = await processOpenAI(model, userPrompt, systemMsg, imageBase64, apiKey, detailLevel));
+            ({ response, tokens } = await processOpenAI(model, userPrompt, systemMsg, imageBase64, mimeType, apiKey, detailLevel));
             break;
           }
 
           case "claude": {
-            ({ response, tokens } = await processClaude(model, userPrompt, systemMsg, imageBase64, apiKey));
+            ({ response, tokens } = await processClaude(model, userPrompt, systemMsg, imageBase64, mimeType, apiKey));
             break;
           }
 
           case "gemini": {
-            ({ response, tokens } = await processGemini(model, userPrompt, systemMsg, imageBase64, apiKey));
+            ({ response, tokens } = await processGemini(model, userPrompt, systemMsg, imageBase64, mimeType, apiKey));
             break;
           }
 
           case "ollama": {
-            ({ response, tokens } = await processOllama(model, userPrompt, systemMsg, imageBase64, ollamaBaseUrl));
+            ({ response, tokens } = await processOllama(model, userPrompt, systemMsg, imageBase64, mimeType, ollamaBaseUrl));
             break;
           }
 
@@ -370,6 +378,7 @@ async function processOpenAI(
   prompt: string,
   system: string,
   imageBase64: string,
+  mimeType: string,
   apiKey: string,
   detail: string
 ): Promise<{ response: string; tokens: number }> {
@@ -386,12 +395,15 @@ async function processOpenAI(
       {
         type: "image_url",
         image_url: {
-          url: `data:image/jpeg;base64,${imageBase64}`,
+          url: `data:${mimeType};base64,${imageBase64}`,
           detail: detail,
         },
       },
     ],
   });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -404,7 +416,10 @@ async function processOpenAI(
       messages,
       max_tokens: 4096,
     }),
+    signal: controller.signal,
   });
+
+  clearTimeout(timeoutId);
 
   if (!res.ok) throw new Error(`OpenAI API error: ${res.status}`);
   
@@ -421,6 +436,7 @@ async function processClaude(
   prompt: string,
   system: string,
   imageBase64: string,
+  mimeType: string,
   apiKey: string
 ): Promise<{ response: string; tokens: number }> {
   const body: Record<string, unknown> = {
@@ -434,7 +450,7 @@ async function processClaude(
             type: "image",
             source: {
               type: "base64",
-              media_type: "image/jpeg",
+              media_type: mimeType,
               data: imageBase64,
             },
           },
@@ -451,6 +467,9 @@ async function processClaude(
     body.system = system;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -459,7 +478,10 @@ async function processClaude(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify(body),
+    signal: controller.signal,
   });
+
+  clearTimeout(timeoutId);
 
   if (!res.ok) throw new Error(`Claude API error: ${res.status}`);
   
@@ -476,6 +498,7 @@ async function processGemini(
   prompt: string,
   system: string,
   imageBase64: string,
+  mimeType: string,
   apiKey: string
 ): Promise<{ response: string; tokens: number }> {
   const body: Record<string, unknown> = {
@@ -485,7 +508,7 @@ async function processGemini(
         parts: [
           {
             inline_data: {
-              mime_type: "image/jpeg",
+              mime_type: mimeType,
               data: imageBase64,
             },
           },
@@ -499,6 +522,9 @@ async function processGemini(
     body.systemInstruction = { parts: [{ text: system }] };
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
+
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -508,8 +534,11 @@ async function processGemini(
         "x-goog-api-key": apiKey,
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     }
   );
+
+  clearTimeout(timeoutId);
 
   if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
   
@@ -517,7 +546,7 @@ async function processGemini(
   
   return {
     response: json.candidates?.[0]?.content?.parts?.[0]?.text || "",
-    tokens: json.usageMetadata?.totalTokens || 0,
+    tokens: json.usageMetadata?.totalTokenCount || 0,
   };
 }
 
@@ -526,6 +555,7 @@ async function processOllama(
   prompt: string,
   system: string,
   imageBase64: string,
+  mimeType: string,
   baseUrl: string
 ): Promise<{ response: string; tokens: number }> {
   const ollama = new Ollama({ host: baseUrl });

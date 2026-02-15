@@ -669,14 +669,14 @@ export class ClaudeProvider implements LLMProvider {
 
       toolMessages.push({
         role: "user",
-        content: JSON.stringify([
+        content: [
           {
             type: "tool_result",
             tool_use_id: call.id,
             content: JSON.stringify(result),
           },
-        ]),
-      } as LLMMessage);
+        ],
+      } as unknown as LLMMessage);
     }
 
     return toolMessages;
