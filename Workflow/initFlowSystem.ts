@@ -11,6 +11,7 @@
    See the Mozilla Public License for the specific language governing rights and limitations under the License.
 */
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { NodeRegistry, nodeRegistry } from "./NodeRegistry";
 
 import { register as registerMathNode } from "./Nodes/mathExpressionNode";
@@ -24,8 +25,8 @@ import { register as registerGroqChatNode } from "./Nodes/Chat/GroqChatNode";
 import { register as registerOpenAIChatNode } from "./Nodes/Chat/OpenAiChatNode";
 import { register as registerOpenRouterChatNode } from "./Nodes/Chat/OpenRouterChatNode";
 import { register as registerOllamaChat } from "./Nodes/Chat/OllamaChatNode";
-import {register as registerVisionChat} from "./Nodes/Chat/VisionNode";
-import {register as registerAudioChat} from "./Nodes/Chat/AudioNode";
+import { register as registerVisionChat } from "./Nodes/Chat/VisionNode";
+import { register as registerAudioChat } from "./Nodes/Chat/AudioNode";
 
 import { register as registerArxivScraperNode } from "./Nodes/ArxivScraperNode";
 import { register as registerMcpDiscoveryNode } from "./Nodes/Mcp/McpDiscoveryNode";
@@ -54,8 +55,8 @@ import { register as registerSearchNode } from "./Nodes/SearchNode";
 import { register as registerScraperNode } from "./Nodes/ScraperNode";
 import { register as registerDataGenerationNode } from "./Nodes/DataGenerationNode";
 import { register as registerPublishToHuggingFaceNode } from "./Nodes/publishToHuggingFaceNode";
-import { register as registerImageInputNode } from './Nodes/ImageInputNode';
-import {register as registerSoundInputNode} from "./Nodes/soundInputNode";
+import { register as registerImageInputNode } from "./Nodes/ImageInputNode";
+import { register as registerSoundInputNode } from "./Nodes/soundInputNode";
 export async function initFlowSystem() {
   registerMathNode(nodeRegistry);
   registerTextNode(nodeRegistry);
