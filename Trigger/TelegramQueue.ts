@@ -1,18 +1,27 @@
 import { telegramTriggerManager } from './TelegramTriggerManager';
 
+type TelegramMessage = {
+  message_id: number;
+  from?: Record<string, unknown>;
+  chat: Record<string, unknown>;
+  date: number;
+  text?: string;
+  [key: string]: unknown;
+};
+
 type TelegramUpdate = {
   update_id: number;
-  message?: any;
-  edited_message?: any;
-  channel_post?: any;
-  edited_channel_post?: any;
-  inline_query?: any;
-  callback_query?: any;
-  poll?: any;
-  poll_answer?: any;
-  pre_checkout_query?: any;
-  shipping_query?: any;
-  [key: string]: any;
+  message?: TelegramMessage;
+  edited_message?: TelegramMessage;
+  channel_post?: TelegramMessage;
+  edited_channel_post?: TelegramMessage;
+  inline_query?: Record<string, unknown>;
+  callback_query?: Record<string, unknown>;
+  poll?: Record<string, unknown>;
+  poll_answer?: Record<string, unknown>;
+  pre_checkout_query?: Record<string, unknown>;
+  shipping_query?: Record<string, unknown>;
+  [key: string]: unknown;
 };
 
 type TelegramJob = {

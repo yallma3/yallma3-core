@@ -2,19 +2,46 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import type { TelegramTrigger, TelegramUpdateType } from '../Models/Trigger';
 
+type TelegramChat = {
+  id: number;
+  type: string;
+  title?: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  [key: string]: unknown;
+};
+
+type TelegramMessage = {
+  message_id: number;
+  from?: Record<string, unknown>;
+  chat: TelegramChat;
+  date: number;
+  text?: string;
+  [key: string]: unknown;
+};
+
+type TelegramCallbackQuery = {
+  id: string;
+  from?: Record<string, unknown>;
+  message?: TelegramMessage;
+  data?: string;
+  [key: string]: unknown;
+};
+
 type TelegramUpdate = {
   update_id: number;
-  message?: any;
-  edited_message?: any;
-  channel_post?: any;
-  edited_channel_post?: any;
-  inline_query?: any;
-  callback_query?: any;
-  poll?: any;
-  poll_answer?: any;
-  pre_checkout_query?: any;
-  shipping_query?: any;
-  [key: string]: any;
+  message?: TelegramMessage;
+  edited_message?: TelegramMessage;
+  channel_post?: TelegramMessage;
+  edited_channel_post?: TelegramMessage;
+  inline_query?: Record<string, unknown>;
+  callback_query?: TelegramCallbackQuery;
+  poll?: Record<string, unknown>;
+  poll_answer?: Record<string, unknown>;
+  pre_checkout_query?: Record<string, unknown>;
+  shipping_query?: Record<string, unknown>;
+  [key: string]: unknown;
 };
 
 interface TelegramRegistration {
@@ -58,7 +85,7 @@ export class TelegramTriggerManager {
     error?: string;
     webhookUrl?: string;
     secretToken?: string;
-    botInfo?: any;
+    botInfo?: Record<string, unknown>;
   }> {
     try {
       const botToken = trigger.config.botToken;
@@ -385,7 +412,7 @@ export class TelegramTriggerManager {
     exists: boolean;
     workspaceId?: string;
     webhookUrl?: string;
-    botInfo?: any;
+    botInfo?: Record<string, unknown>;
     updateTypes?: TelegramUpdateType[];
     filters?: {
       chatId?: string;
@@ -420,7 +447,7 @@ export class TelegramTriggerManager {
     webhookUrl: string;
     updateTypes: TelegramUpdateType[];
   }[] {
-    const bots: any[] = [];
+    const bots: { workspaceId: string; botUsername: string; webhookUrl: string; updateTypes: TelegramUpdateType[] }[] = [];
     
     this.bots.forEach((registration) => {
       bots.push({

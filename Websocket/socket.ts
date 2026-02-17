@@ -13,7 +13,8 @@ import type { MainAgent } from "../Agent/Main/MainAgent";
 import { scheduledTriggerManager } from "../Trigger/ScheduledTriggerManager";
 import { webhookTriggerManager } from "../Trigger/WebhookTriggerManager";
 import { telegramTriggerManager } from "../Trigger/TelegramTriggerManager";
-import { telegramQueue } from "../Trigger/TelegramQueue";
+
+type EventCallback = (...args: unknown[]) => void;
 
 export let globalBroadcast: ((message: unknown) => void) | null = null;
 
@@ -23,7 +24,7 @@ export let globalBroadcast: ((message: unknown) => void) | null = null;
 function safeName(name: string): string {
   if (!name) return '_';
   return name
-    .replace(/[\/\\]/g, '_')
+    .replace(/[/\\]/g, '_')
     .replace(/\.\./g, '_')
     .replace(/\0/g, '')
     .replace(/^\.+/, '_')
@@ -50,7 +51,6 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
   const workspaceDataCache = new Map<string, string>();
   const workspacePathsCache = new Map<string, string>();
-  const workflowRequestsMap = new Map<string, string>();
 
   function broadcast(message: unknown) {
     const messageStr = JSON.stringify(message);
@@ -74,7 +74,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
     console.log(`[SERVER STDOUT] 💧 Hydrating workspace ${workspaceId}...`);
 
-    data.workflows.forEach((wf: any) => {
+    data.workflows.forEach((wf: { id: string; name: string; nodes?: unknown[]; connections?: unknown[] }) => {
       try {
         const flowsPath = path.join(basePath, "flows", `${safeName(wf.id)}.json`);
         const rootPath = path.join(basePath, `${safeName(wf.name)}.json`);
@@ -108,10 +108,10 @@ export function setupWebSocketServer(wss: WebSocketServer) {
     });
 
     if (data.tasks) {
-      data.tasks.forEach((task: any) => {
+      (data.tasks as unknown as { workflow?: { id: string } }[]).forEach((task) => {
         if (task.workflow && task.workflow.id) {
           const hydratedWf = data.workflows.find(
-            (w: any) => w.id === task.workflow.id
+            (w) => w.id === task.workflow!.id
           );
           if (hydratedWf && hydratedWf.nodes && hydratedWf.nodes.length > 0) {
             task.workflow = hydratedWf;
@@ -167,7 +167,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
         timestamp: new Date().toISOString(),
       });
 
-      const listeners: Record<string, Function[]> = {};
+      const listeners: Record<string, EventCallback[]> = {};
 
       const mockWs = {
         send: async (msg: string) => {
@@ -191,11 +191,11 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               let workflow = data.data;
               let workflowId = data.id || data.requestId;
 
-              if (typeof workflow === "string") {
-                try {
-                  workflow = JSON.parse(workflow);
-                } catch (e) {}
-              }
+                if (typeof workflow === "string") {
+                  try {
+                    workflow = JSON.parse(workflow);
+                  } catch { /* ignore - workflow already parsed */ }
+                }
               if (workflow.workflow) workflow = workflow.workflow;
               else if (workflow.data) workflow = workflow.data;
 
@@ -206,7 +206,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 const targetId = data.data;
                 const wsData: WorkspaceData = JSON.parse(workspaceDataStr);
                 const foundWf = wsData.workflows.find(
-                  (w: any) => w.id === targetId
+                  (w: { id: string }) => w.id === targetId
                 );
                 if (foundWf) {
                   workflow = foundWf;
@@ -286,7 +286,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 const context = data.context || "";
                 const result = await executeFlowRuntime(
                   workflow,
-                  mockWs as any,
+                  mockWs as unknown as WebSocket,
                   context
                 );
 
@@ -330,20 +330,20 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             );
           }
         },
-        on: (event: string, callback: Function) => {
+        on: (event: string, callback: EventCallback) => {
           if (!listeners[event]) listeners[event] = [];
           listeners[event].push(callback);
         },
-        off: (event: string, callback: Function) => {
+        off: (event: string, callback: EventCallback) => {
           if (!listeners[event]) return;
           listeners[event] = listeners[event].filter((cb) => cb !== callback);
         },
-        removeListener: (event: string, callback: Function) => {
+        removeListener: (event: string, callback: EventCallback) => {
           if (!listeners[event]) return;
           listeners[event] = listeners[event].filter((cb) => cb !== callback);
         },
-        once: (event: string, callback: Function) => {
-          const onceWrapper = (...args: any[]) => {
+        once: (event: string, callback: EventCallback) => {
+          const onceWrapper = (...args: unknown[]) => {
             callback(...args);
             if (listeners[event])
               listeners[event] = listeners[event].filter(
@@ -353,7 +353,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
           if (!listeners[event]) listeners[event] = [];
           listeners[event].push(onceWrapper);
         },
-        emit: (event: string, ...args: any[]) => {
+        emit: (event: string, ...args: unknown[]) => {
           if (listeners[event])
             listeners[event].forEach((cb) => cb(...args));
         },
@@ -413,7 +413,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
   });
   // WEBHOOK TRIGGER LOGIC (uses queue via directExecute)
   webhookTriggerManager.setExecutionCallback(
-    async (workspaceId: string, payload: any) => {
+    async (workspaceId: string, payload: Record<string, unknown>) => {
       console.log(` Executing workspace ${workspaceId} via webhook`);
       console.log(`   Payload:`, payload);
 
@@ -436,7 +436,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
           timestamp: new Date().toISOString(),
         });
 
-        const listeners: Record<string, Function[]> = {};
+        const listeners: Record<string, EventCallback[]> = {};
 
         const mockWs = {
           send: async (msg: string) => {
@@ -463,7 +463,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 if (typeof workflow === "string") {
                   try {
                     workflow = JSON.parse(workflow);
-                  } catch (e) {}
+                  } catch { /* ignore - workflow already parsed */ }
                 }
                 if (workflow.workflow) workflow = workflow.workflow;
                 else if (workflow.data) workflow = workflow.data;
@@ -476,7 +476,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                   const wsData: WorkspaceData =
                     JSON.parse(workspaceDataStr);
                   const foundWf = wsData.workflows.find(
-                    (w: any) => w.id === targetId
+                    (w: { id: string }) => w.id === targetId
                   );
                   if (foundWf) {
                     workflow = foundWf;
@@ -562,7 +562,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                   const context = JSON.stringify(payload);
                   const result = await executeFlowRuntime(
                     workflow,
-                    mockWs as any,
+                    mockWs as unknown as WebSocket,
                     context
                   );
 
@@ -609,24 +609,24 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               );
             }
           },
-          on: (event: string, callback: Function) => {
+          on: (event: string, callback: EventCallback) => {
             if (!listeners[event]) listeners[event] = [];
             listeners[event].push(callback);
           },
-          off: (event: string, callback: Function) => {
+          off: (event: string, callback: EventCallback) => {
             if (!listeners[event]) return;
             listeners[event] = listeners[event].filter(
               (cb) => cb !== callback
             );
           },
-          removeListener: (event: string, callback: Function) => {
+          removeListener: (event: string, callback: EventCallback) => {
             if (!listeners[event]) return;
             listeners[event] = listeners[event].filter(
               (cb) => cb !== callback
             );
           },
-          once: (event: string, callback: Function) => {
-            const onceWrapper = (...args: any[]) => {
+          once: (event: string, callback: EventCallback) => {
+            const onceWrapper = (...args: unknown[]) => {
               callback(...args);
               if (listeners[event])
                 listeners[event] = listeners[event].filter(
@@ -636,9 +636,9 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             if (!listeners[event]) listeners[event] = [];
             listeners[event].push(onceWrapper);
           },
-          emit: (event: string, ...args: any[]) => {
+          emit: (event: string, ...args: unknown[]) => {
             if (listeners[event])
-              listeners[event].forEach((cb) => cb(...args));
+              listeners[event].forEach((cb) => cb(...(args as Parameters<EventCallback>)));
           },
           readyState: 1,
           close: () => {},
@@ -679,7 +679,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
 
   // TELEGRAM TRIGGER LOGIC (uses queue via directExecute)
   telegramTriggerManager.setExecutionCallback(
-    async (workspaceId: string, update: any) => {
+    async (workspaceId: string, update: Record<string, unknown>) => {
       console.log(` Executing workspace ${workspaceId} via Telegram`);
       console.log(`   Update type:`, Object.keys(update).filter(k => k !== 'update_id'));
 
@@ -710,7 +710,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
           timestamp: new Date().toISOString(),
         });
 
-        const listeners: Record<string, Function[]> = {};
+        const listeners: Record<string, EventCallback[]> = {};
 
         const mockWs = {
           send: async (msg: string) => {
@@ -737,7 +737,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                 if (typeof workflow === "string") {
                   try {
                     workflow = JSON.parse(workflow);
-                  } catch (e) {}
+                  } catch { /* ignore - workflow already parsed */ }
                 }
                 if (workflow.workflow) workflow = workflow.workflow;
                 else if (workflow.data) workflow = workflow.data;
@@ -749,7 +749,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                   const targetId = data.data;
                   const wsData: WorkspaceData = JSON.parse(workspaceDataStr);
                   const foundWf = wsData.workflows.find(
-                    (w: any) => w.id === targetId
+                    (w: { id: string }) => w.id === targetId
                   );
                   if (foundWf) {
                     workflow = foundWf;
@@ -829,7 +829,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
                   const context = JSON.stringify(update);
                   const result = await executeFlowRuntime(
                     workflow,
-                    mockWs as any,
+                    mockWs as unknown as WebSocket,
                     context
                   );
 
@@ -873,24 +873,24 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               );
             }
           },
-          on: (event: string, callback: Function) => {
+          on: (event: string, callback: EventCallback) => {
             if (!listeners[event]) listeners[event] = [];
             listeners[event].push(callback);
           },
-          off: (event: string, callback: Function) => {
+          off: (event: string, callback: EventCallback) => {
             if (!listeners[event]) return;
             listeners[event] = listeners[event].filter(
               (cb) => cb !== callback
             );
           },
-          removeListener: (event: string, callback: Function) => {
+          removeListener: (event: string, callback: EventCallback) => {
             if (!listeners[event]) return;
             listeners[event] = listeners[event].filter(
               (cb) => cb !== callback
             );
           },
-          once: (event: string, callback: Function) => {
-            const onceWrapper = (...args: any[]) => {
+          once: (event: string, callback: EventCallback) => {
+            const onceWrapper = (...args: unknown[]) => {
               callback(...args);
               if (listeners[event])
                 listeners[event] = listeners[event].filter(
@@ -900,9 +900,9 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             if (!listeners[event]) listeners[event] = [];
             listeners[event].push(onceWrapper);
           },
-          emit: (event: string, ...args: any[]) => {
+          emit: (event: string, ...args: unknown[]) => {
             if (listeners[event])
-              listeners[event].forEach((cb) => cb(...args));
+              listeners[event].forEach((cb) => cb(...(args as Parameters<EventCallback>)));
           },
           readyState: 1,
           close: () => {},
@@ -972,7 +972,7 @@ export function setupWebSocketServer(wss: WebSocketServer) {
             if (typeof data.data === 'string') {
               try {
                 payload = JSON.parse(data.data);
-              } catch (e) {
+              } catch {
                 payload = data.data;
               }
             } else {
@@ -1045,7 +1045,19 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               break;
             }
 
-            const payload = JSON.parse(data.data);
+            let payload;
+            try {
+              payload = JSON.parse(data.data);
+            } catch {
+              ws.send(
+                JSON.stringify({
+                  type: "error",
+                  message: "Invalid trigger data format (malformed JSON)",
+                  timestamp: new Date().toISOString(),
+                })
+              );
+              break;
+            }
             const { workspaceId, trigger, workspaceData, baseWorkflowsPath } =
               payload;
 
@@ -1399,7 +1411,19 @@ export function setupWebSocketServer(wss: WebSocketServer) {
               })
             );
 
-            const workflow = JSON.parse(data.data);
+            let workflow;
+            try {
+              workflow = JSON.parse(data.data);
+            } catch {
+              ws.send(
+                JSON.stringify({
+                  type: "error",
+                  message: "Invalid workflow data format (malformed JSON)",
+                  timestamp: new Date().toISOString(),
+                })
+              );
+              break;
+            }
             const result = await executeFlowRuntime(workflow, ws);
 
             ws.send(

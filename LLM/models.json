@@ -77,6 +77,15 @@
         "output": 0
       },
       "readonly": true
+    },
+    {
+      "id": "test-model-id-12345",
+      "name": "Readonly Model",
+      "contextWindow": {
+        "input": 100,
+        "output": 100
+      },
+      "readonly": true
     }
   ],
   "OpenAI": [

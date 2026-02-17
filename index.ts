@@ -66,7 +66,7 @@ app.post("/telegram/:workspaceId", async (req, res) => {
   const { workspaceId } = req.params;
   const secretToken = req.headers['x-telegram-bot-api-secret-token'] as string | undefined;
   const update = req.body;
-  const updateTypes = Object.keys(update).filter(k => k !== 'update_id');
+  const _updateTypes = Object.keys(update).filter(k => k !== 'update_id');
   const registration = telegramTriggerManager.validateUpdate(workspaceId, secretToken);
 
   if (!registration) {

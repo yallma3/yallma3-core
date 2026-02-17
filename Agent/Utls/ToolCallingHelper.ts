@@ -8,19 +8,23 @@ import {
   normalizeTool,
 } from "./McpUtils";
 
-let cachedWorkspaceData: any = null;
+type WorkspaceData = {
+  workflows: { id: string }[];
+};
+
+let cachedWorkspaceData: WorkspaceData | null = null;
 
 
-export function setWorkspaceDataForTools(workspaceData: any) {
+export function setWorkspaceDataForTools(workspaceData: WorkspaceData) {
   cachedWorkspaceData = workspaceData;
 }
 
 
 //  Detect if WebSocket is real or mock
 function isRealWebSocket(ws: WebSocket): boolean {
-  return typeof (ws as any).on === 'function' &&
-         typeof (ws as any).off === 'function' &&
-         typeof (ws as any).ping === 'function';
+  return typeof (ws as unknown as Record<string, unknown>).on === 'function' &&
+         typeof (ws as unknown as Record<string, unknown>).off === 'function' &&
+         typeof (ws as unknown as Record<string, unknown>).ping === 'function';
 }
 
 
@@ -28,27 +32,30 @@ function isRealWebSocket(ws: WebSocket): boolean {
 async function sendWorkflow(ws: WebSocket, workflowId: string, context?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
+    let timeoutId: ReturnType<typeof setTimeout>;
 
+    const cleanup = () => {
+      ws.off("message", listener);
+      clearTimeout(timeoutId);
+    };
 
     const listener = (message: WebSocket.RawData) => {
       try {
         const data = JSON.parse(message.toString());
         if (data.type === "workflow_json" && data.id === requestId) {
-          ws.off("message", listener);
+          cleanup();
           resolve(JSON.stringify(data.data));
         }
         if (data.type === "error" && data.requestId === requestId) {
-           ws.off("message", listener);
+           cleanup();
            reject(data.message || "Workflow execution failed");
         }
-      } catch (err) {
+      } catch {
         // Ignore parse errors
       }
     };
 
-
     ws.on("message", listener);
-
 
     ws.send(
       JSON.stringify({
@@ -61,9 +68,8 @@ async function sendWorkflow(ws: WebSocket, workflowId: string, context?: string)
       })
     );
 
-
-    setTimeout(() => {
-        ws.off("message", listener);
+    timeoutId = setTimeout(() => {
+        cleanup();
         reject(new Error("Workflow execution timed out"));
     }, 60000);
   });
@@ -110,13 +116,13 @@ export async function workflowExecutor(
       throw new Error("Workspace data not available for workflow execution");
     }
    
-    const workflow = cachedWorkspaceData.workflows.find((w: any) => w.id === workflowId);
-   
+    const workflow = cachedWorkspaceData.workflows.find((w) => w.id === workflowId);
+    
     if (!workflow) {
       throw new Error(`Workflow not found: ${workflowId}`);
     }
-   
-    const result = await executeFlowRuntime(workflow, ws, input);
+    
+    const result = await executeFlowRuntime(workflow as Workflow, ws, input);
    
     // Handle error case
     if (result instanceof Error) {

@@ -209,12 +209,12 @@ function createUserPromptNode(id: number, position: Position): UserPromptNode {
       const n = context.node as UserPromptNode;
 
       // Get dialog title from input socket or config
-      let dialogTitle: string;
+      let _dialogTitle: string;
       const titleInput = context.inputs[id * 100 + 1];
       if (titleInput !== undefined && titleInput !== null) {
-        dialogTitle = typeof titleInput === 'string' ? titleInput : String(titleInput);
+        _dialogTitle = typeof titleInput === 'string' ? titleInput : String(titleInput);
       } else {
-        dialogTitle = (n.getConfigParameter?.("Dialog Title")?.paramValue as string) || "User Input Required";
+        _dialogTitle = (n.getConfigParameter?.("Dialog Title")?.paramValue as string) || "User Input Required";
       }
 
       // Get prompt message from input socket or config
@@ -260,17 +260,40 @@ function createUserPromptNode(id: number, position: Position): UserPromptNode {
       return new Promise<string>((resolve, reject) => {
         const startTime = Date.now();
         
-        const checkInterval = setInterval(() => {
+        let checkInterval: ReturnType<typeof setInterval>;
+        
+        const cleanup = () => {
+          clearInterval(checkInterval);
+          pendingUserPrompts.delete(promptId);
+        };
+
+        const handleWsDisconnect = () => {
+          cleanup();
+          if (context.ws) {
+            context.ws.removeListener("close", handleWsDisconnect);
+            context.ws.removeListener("error", handleWsDisconnect);
+          }
+          console.error(`🔌 WebSocket disconnected for user prompt ${promptId}`);
+          reject(new Error("WebSocket disconnected"));
+        };
+
+        if (context.ws) {
+          context.ws.on("close", handleWsDisconnect);
+          context.ws.on("error", handleWsDisconnect);
+        }
+        
+        checkInterval = setInterval(() => {
           // Check for timeout
           if (timeoutSeconds > 0) {
             const elapsed = (Date.now() - startTime) / 1000;
             if (elapsed >= timeoutSeconds) {
-              clearInterval(checkInterval);
-              pendingUserPrompts.delete(promptId);
+              cleanup();
               
               console.error(`⏱️ User prompt ${promptId} timed out after ${timeoutSeconds}s`);
               
               if (context.ws) {
+                context.ws.removeListener("close", handleWsDisconnect);
+                context.ws.removeListener("error", handleWsDisconnect);
                 context.ws.send(
                   JSON.stringify({
                     type: "user_prompt_timeout",
@@ -288,12 +311,13 @@ function createUserPromptNode(id: number, position: Position): UserPromptNode {
           // Check for response
           const response = getUserPromptResponse(promptId);
           if (response !== null) {
-            clearInterval(checkInterval);
-            pendingUserPrompts.delete(promptId);
+            cleanup();
             
             console.log(`✅ User prompt ${promptId} resolved with response: "${response}"`);
             
             if (context.ws) {
+              context.ws.removeListener("close", handleWsDisconnect);
+              context.ws.removeListener("error", handleWsDisconnect);
               context.ws.send(
                 JSON.stringify({
                   type: "user_prompt_resolved",

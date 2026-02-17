@@ -2,7 +2,7 @@ import { webhookTriggerManager } from "./WebhookTriggerManager";
 
 type WebhookJob = {
   workspaceId: string;
-  payload: any;
+  payload: Record<string, unknown>;
 };
 
 class WebhookQueue {

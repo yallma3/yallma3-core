@@ -9,14 +9,14 @@ interface WebhookRegistration {
 
 export class WebhookTriggerManager {
   private webhooks: Map<string, WebhookRegistration> = new Map();
-  private onWebhookTrigger?: (workspaceId: string, payload: any) => void;
+  private onWebhookTrigger?: (workspaceId: string, payload: Record<string, unknown>) => void | Promise<void>;
   private baseUrl: string = "http://localhost:3001";
 
   constructor(baseUrl?: string) {
     if (baseUrl) this.baseUrl = baseUrl;
   }
 
-  setExecutionCallback(callback: (workspaceId: string, payload: any) => void) {
+  setExecutionCallback(callback: (workspaceId: string, payload: Record<string, unknown>) => void | Promise<void>) {
     this.onWebhookTrigger = callback;
   }
 
@@ -65,7 +65,7 @@ export class WebhookTriggerManager {
 
       console.log(` Webhook registered for workspace: ${workspaceId}`);
       console.log(`   URL: ${webhookUrl}`);
-      console.log(`   Secret: ${secret}`);
+      console.log(`   Secret: ${secret.slice(0, 8)}...`);
 
       return {
         success: true,
@@ -124,7 +124,7 @@ export class WebhookTriggerManager {
   /**
    * Used by the queue worker: execute without re‑validation
    */
-  directExecute(workspaceId: string, payload: any): boolean {
+  async directExecute(workspaceId: string, payload: Record<string, unknown>): Promise<boolean> {
     if (!this.onWebhookTrigger) {
       console.warn(
         `⚠️  No execution callback set for workspace webhook: ${workspaceId}`
@@ -133,7 +133,7 @@ export class WebhookTriggerManager {
     }
 
     console.log(`🔗 Webhook job executing for workspace: ${workspaceId}`);
-    this.onWebhookTrigger(workspaceId, payload);
+    await this.onWebhookTrigger(workspaceId, payload);
     return true;
   }
 
