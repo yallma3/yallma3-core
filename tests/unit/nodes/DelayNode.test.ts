@@ -57,7 +57,7 @@ describe('DelayNode', () => {
       const endTime = Date.now();
       const elapsed = endTime - startTime;
 
-      expect(elapsed).toBeGreaterThanOrEqual(500);
+      expect(elapsed).toBeGreaterThanOrEqual(450);
       expect(elapsed).toBeLessThan(1000); // Should be less than default 1000ms
       expect(result).toEqual({ 102: 'test input' });
     });

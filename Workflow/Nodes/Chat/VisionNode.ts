@@ -299,7 +299,7 @@ export function createVisionAINode(id: number, position: Position): VisionNode {
         if (mimeMatch?.[1]) {
           mimeType = mimeMatch[1];
         }
-        imageBase64 = imageInput.replace(/^data:image\/[a-z]+;base64,/i, "").trim();
+        imageBase64 = imageInput.replace(/^data:image\/[a-z+]+;base64,/i, "").trim();
       }
 
       if (!imageBase64) {

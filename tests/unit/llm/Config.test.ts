@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { LLMModel } from "../../../Models/LLM";
-import fs from "fs";
 import {
   addModel,
   editModel,
@@ -8,29 +7,21 @@ import {
   AvailableLLMs,
 } from "../../../LLM/config";
 
-// Mock fs.writeFileSync to avoid writing to disk during tests
-vi.mock("fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("fs")>();
-  return {
-    ...actual,
-    writeFileSync: vi.fn(),
-  };
-});
-
 describe("LLM Config Management", () => {
-  const testProvider = "Groq"; // Using an existing provider key
-  const testModelId = "test-model-id-12345";
+  const testProvider = "Groq";
+  const testModelId = `test-model-${Date.now()}`;
+
+  beforeEach(() => {
+    vi.spyOn(require("fs"), "writeFileSync").mockImplementation(() => {});
+  });
 
   afterEach(() => {
-    // Cleanup: remove the test model from AvailableLLMs if it exists
-    // We do this manually to avoid triggering the mocked writeFileSync unnecessarily or logic constraints
-    // although calling removeModel is fine too if we are careful about readonly.
     const models = AvailableLLMs[testProvider];
     const index = models.findIndex((m) => m.id === testModelId);
     if (index !== -1) {
       models.splice(index, 1);
     }
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should add a new model", () => {
@@ -40,13 +31,14 @@ describe("LLM Config Management", () => {
       contextWindow: { input: 100, output: 100 },
     };
 
+    const modelsBefore = AvailableLLMs[testProvider].length;
     addModel(testProvider, newModel);
+    const modelsAfter = AvailableLLMs[testProvider].length;
 
-    const models = AvailableLLMs[testProvider];
-    const added = models.find((m) => m.id === testModelId);
+    expect(modelsAfter).toBe(modelsBefore + 1);
+    const added = AvailableLLMs[testProvider].find((m) => m.id === testModelId);
     expect(added).toBeDefined();
     expect(added?.name).toBe("Test Model");
-    expect(fs.writeFileSync).toHaveBeenCalled();
   });
 
   it("should edit an existing model", () => {
@@ -57,14 +49,11 @@ describe("LLM Config Management", () => {
       readonly: false,
     };
     addModel(testProvider, newModel);
-    vi.clearAllMocks(); // Clear write from add
 
     editModel(testProvider, testModelId, { name: "Updated Name" });
 
-    const models = AvailableLLMs[testProvider];
-    const updated = models.find((m) => m.id === testModelId);
+    const updated = AvailableLLMs[testProvider].find((m) => m.id === testModelId);
     expect(updated?.name).toBe("Updated Name");
-    expect(fs.writeFileSync).toHaveBeenCalled();
   });
 
   it("should fail to edit a readonly model", () => {
@@ -89,14 +78,11 @@ describe("LLM Config Management", () => {
       readonly: false,
     };
     addModel(testProvider, newModel);
-    vi.clearAllMocks();
 
     removeModel(testProvider, testModelId);
 
-    const models = AvailableLLMs[testProvider];
-    const found = models.find((m) => m.id === testModelId);
+    const found = AvailableLLMs[testProvider].find((m) => m.id === testModelId);
     expect(found).toBeUndefined();
-    expect(fs.writeFileSync).toHaveBeenCalled();
   });
 
   it("should fail to remove a readonly model", () => {

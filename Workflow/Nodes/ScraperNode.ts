@@ -181,6 +181,62 @@ function makeAbsoluteUrl(url: string, baseUrl: string): string {
   }
 }
 
+import * as dns from "dns/promises";
+
+function isPrivateIP(ip: string): boolean {
+  if (ip.startsWith("fe80:") || ip.startsWith("::ffff:")) return true;
+  if (ip.startsWith("fc") || ip.startsWith("fd")) return true;
+  if (ip === "::1" || ip === "::") return true;
+  if (ip.startsWith("0.0.0.0")) return true;
+
+  const parts = ip.split(".");
+  if (parts.length === 4) {
+    const p0 = parseInt(parts[0] ?? "", 10);
+    const p1 = parseInt(parts[1] ?? "", 10);
+    const p2 = parseInt(parts[2] ?? "", 10);
+    const p3 = parseInt(parts[3] ?? "", 10);
+
+    if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2) && !isNaN(p3)) {
+      const num = p0 * 16777216 + p1 * 65536 + p2 * 256 + p3;
+
+      return (
+        ip.startsWith("127.") ||
+        ip.startsWith("10.") ||
+        ip.startsWith("192.168.") ||
+        ip.startsWith("169.254.") ||
+        (num >= 0xAC100000 && num <= 0xAC1FFFFF)
+      );
+    }
+  }
+
+  return false;
+}
+
+async function resolveAndValidateIP(hostname: string): Promise<void> {
+  try {
+    const addresses = await dns.resolve4(hostname);
+    for (const ip of addresses) {
+      if (isPrivateIP(ip)) {
+        throw new Error(`Resolved to private IP: ${ip}`);
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("private IP")) {
+      throw error;
+    }
+    try {
+      const addresses = await dns.resolve6(hostname);
+      for (const ip of addresses) {
+        if (isPrivateIP(ip)) {
+          throw new Error(`Resolved to private IP: ${ip}`);
+        }
+      }
+    } catch {
+      // IPv4 resolution succeeded, or both failed - let fetch handle it
+    }
+  }
+}
+
 function isPrivateHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
@@ -191,7 +247,11 @@ function isPrivateHostname(hostname: string): boolean {
     h === "169.254.169.254" ||
     /^10\./.test(h) ||
     /^192\.168\./.test(h) ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(h)
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(h) ||
+    /^fc00:/i.test(h) ||
+    /^fd/i.test(h) ||
+    /^fe80:/i.test(h) ||
+    /^::ffff:(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.|127\.)/.test(h)
   );
 }
 
@@ -338,10 +398,14 @@ function extractJsonLd($: CheerioAPI): unknown[] {
 
 
 async function fetchHtml(url: string): Promise<string> {
+  const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5 MB limit
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
+    const { hostname } = new URL(url);
+    await resolveAndValidateIP(hostname);
+
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
@@ -357,7 +421,31 @@ async function fetchHtml(url: string): Promise<string> {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const html = await response.text();
+    const contentLength = response.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+      throw new Error(`Response too large: ${contentLength} bytes (max ${MAX_BODY_BYTES})`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_BODY_BYTES) {
+        reader.cancel();
+        throw new Error(`Response exceeded ${MAX_BODY_BYTES} byte limit`);
+      }
+      chunks.push(value);
+    }
+
+    const html = new TextDecoder().decode(Buffer.concat(chunks));
     return html;
   } catch (error) {
     clearTimeout(timeoutId);
