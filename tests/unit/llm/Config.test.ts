@@ -7,12 +7,29 @@ import {
   AvailableLLMs,
 } from "../../../LLM/config";
 
+vi.mock("fs", () => ({
+  default: {
+    existsSync: vi.fn().mockReturnValue(true),
+    readFileSync: vi.fn().mockReturnValue(JSON.stringify({
+      Groq: [{ id: "test-model", name: "Test Model", contextWindow: { input: 100, output: 100 } }]
+    })),
+    writeFileSync: vi.fn(),
+  },
+  existsSync: vi.fn().mockReturnValue(true),
+  readFileSync: vi.fn().mockReturnValue(JSON.stringify({
+    Groq: [{ id: "test-model", name: "Test Model", contextWindow: { input: 100, output: 100 } }]
+  })),
+  writeFileSync: vi.fn(),
+}));
+
+import fs from "fs";
+
 describe("LLM Config Management", () => {
   const testProvider = "Groq";
   const testModelId = `test-model-${Date.now()}`;
 
   beforeEach(() => {
-    vi.spyOn(require("fs"), "writeFileSync").mockImplementation(() => {});
+    vi.mocked(fs.writeFileSync).mockClear();
   });
 
   afterEach(() => {

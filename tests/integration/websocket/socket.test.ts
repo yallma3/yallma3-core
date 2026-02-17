@@ -42,6 +42,7 @@ vi.mock("../../../Agent/Utls/ToolCallingHelper", () => ({
 import { planAgenticTask } from "../../../Task/TaskIntrepreter";
 import { workflowExecutor } from "../../../Agent/Utls/ToolCallingHelper";
 import { createMainAgent } from "../../../Utils/Runtime";
+import type { MainAgent } from "../../../Agent/Main/MainAgent";
 
 describe("WebSocket Server", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -430,7 +431,7 @@ describe("WebSocket Server", () => {
     vi.mocked(workflowExecutor).mockResolvedValue("Test output");
     vi.mocked(createMainAgent).mockResolvedValue({
       run: vi.fn().mockResolvedValue("Test result"),
-    } as any);
+    } as unknown as MainAgent);
 
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(`ws://localhost:${port}`);
@@ -530,7 +531,7 @@ describe("WebSocket Server", () => {
     vi.mocked(workflowExecutor).mockResolvedValue(mockError);
     vi.mocked(createMainAgent).mockResolvedValue({
       run: vi.fn().mockRejectedValue(mockError),
-    } as any);
+    } as unknown as MainAgent);
 
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(`ws://localhost:${port}`);
