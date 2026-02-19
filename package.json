@@ -3,11 +3,11 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "scripts": {
     "start": "bun run --watch index.ts",
-    "build": "bun build index.ts --compile --outfile server",
-    "serve": "./server",
+    "build": "bun build index.ts --compile --outfile bin/yallma3",
+    "serve": "./bin/yallma3",
     "lint": "eslint . --ext .ts,.tsx",
     "test": "vitest",
     "test:coverage": "vitest run --coverage"

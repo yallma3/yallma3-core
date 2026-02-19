@@ -2,6 +2,32 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
+import pkg from "./package.json" with { type: "json" };
+
+const VERSION = pkg.version;
+
+const args = process.argv.slice(2);
+
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(`yallma3 v${VERSION}
+
+Usage: yallma3 [options]
+
+Options:
+  -h, --help     Show this help message
+  -v, --version  Show version number
+
+Environment Variables:
+  YALLMA3_AGENT_HOST    Server host (default: localhost)
+  YALLMA3_AGENT_PORT    Server port (default: 3001, auto-increment if busy)
+`);
+  process.exit(0);
+}
+
+if (args.includes("--version") || args.includes("-v")) {
+  console.log(VERSION);
+  process.exit(0);
+}
 
 // import mcpRoutes from "./Routes/Mcp.route";
 import workflowRoute from "./Routes/workflow.route";
@@ -15,7 +41,25 @@ import { telegramTriggerManager } from "./Trigger/TelegramTriggerManager";
 import { telegramQueue } from "./Trigger/TelegramQueue"; 
 
 const app = express();
-const PORT = 3001;
+
+function getPort(): number | undefined {
+  const envPort = process.env.YALLMA3_AGENT_PORT;
+  if (envPort !== undefined) {
+    const parsed = parseInt(envPort, 10);
+    if (isNaN(parsed) || parsed <= 0 || parsed > 65535) {
+      throw new Error(`Invalid YALLMA3_AGENT_PORT environment variable: ${envPort}`);
+    }
+    return parsed;
+  }
+  return undefined;
+}
+
+function getHost(): string {
+  return process.env.YALLMA3_AGENT_HOST || "localhost";
+}
+
+const explicitPort = getPort();
+const host = getHost();
 
 // Middleware
 app.use(cors({ origin: "*" }));
@@ -143,20 +187,52 @@ const wss = new WebSocketServer({ server });
 const wsUtils = setupWebSocketServer(wss);
 initFlowSystem();
 
-// Configure base URLs for trigger managers
-webhookTriggerManager.setBaseUrl(`http://localhost:${PORT}`);
-telegramTriggerManager.setBaseUrl(`http://localhost:${PORT}`); 
+async function startServer() {
+  let boundPort: number;
 
-// Example: trigger broadcast from API
-app.post("/broadcast", (req, res) => {
-  wsUtils.broadcast({ type: "announcement", text: "Hello clients 🎉" });
-  res.json({ success: true });
-});
+  if (explicitPort !== undefined) {
+    boundPort = explicitPort;
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') {
+          reject(new Error(`Port ${boundPort} is already in use`));
+        } else {
+          reject(err);
+        }
+      });
+      server.listen(boundPort, host, () => resolve());
+    });
+  } else {
+    const tryPort = (port: number): Promise<number> => {
+      return new Promise((resolve, reject) => {
+        server.once('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE') {
+            if (port < 65535) {
+              resolve(tryPort(port + 1));
+            } else {
+              reject(new Error('No available port found'));
+            }
+          } else {
+            reject(err);
+          }
+        });
+        server.listen(port, host, () => resolve(port));
+      });
+    };
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`✅ Server is running at http://localhost:${PORT}`);
-  console.log(`🌐 WebSocket is available at ws://localhost:${PORT}`);
-  console.log(`🔗 Webhooks available at http://localhost:${PORT}/webhook/:workspaceId`);
-  console.log(`📱 Telegram webhooks at http://localhost:${PORT}/telegram/:workspaceId`);
+    boundPort = await tryPort(3001);
+  }
+
+  webhookTriggerManager.setBaseUrl(`http://${host}:${boundPort}`);
+  telegramTriggerManager.setBaseUrl(`http://${host}:${boundPort}`);
+
+  console.log(`✅ Server is running at http://${host}:${boundPort}`);
+  console.log(`🌐 WebSocket is available at ws://${host}:${boundPort}`);
+  console.log(`🔗 Webhooks available at http://${host}:${boundPort}/webhook/:workspaceId`);
+  console.log(`📱 Telegram webhooks at http://${host}:${boundPort}/telegram/:workspaceId`);
+}
+
+startServer().catch((err) => {
+  console.error('Failed to start server:', err.message);
+  process.exit(1);
 });
