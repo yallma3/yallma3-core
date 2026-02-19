@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.2.0)'
+        required: false
+        type: string
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.inputs.version }}" ]; then
+            VERSION="${{ github.inputs.version }}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  build:
+    needs: get-version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: bun-darwin-arm64
+            os: macos-latest
+            ext: ""
+          - target: bun-darwin-x64
+            os: macos-latest
+            ext: ""
+          - target: bun-linux-x64
+            os: ubuntu-latest
+            ext: ""
+          - target: bun-windows-x64
+            os: ubuntu-latest
+            ext: ".exe"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build ${{ matrix.target }}
+        run: |
+          bun build index.ts --compile --target=${{ matrix.target }} --outfile=bin/yallma3${{ matrix.ext }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yallma3-${{ matrix.target }}
+          path: bin/yallma3${{ matrix.ext }}
+
+  release:
+    needs: [get-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.get-version.outputs.version }}
+          name: Release v${{ needs.get-version.outputs.version }}
+          draft: true
+          files: |
+            artifacts/yallma3-bun-darwin-arm64/bin/*
+            artifacts/yallma3-bun-darwin-x64/bin/*
+            artifacts/yallma3-bun-linux-x64/bin/*
+            artifacts/yallma3-bun-windows-x64/bin/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
