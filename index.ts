@@ -39,6 +39,8 @@ import { webhookTriggerManager } from "./Trigger/WebhookTriggerManager";
 import { webhookQueue } from "./Trigger/WebhookQueue";
 import { telegramTriggerManager } from "./Trigger/TelegramTriggerManager";
 import { telegramQueue } from "./Trigger/TelegramQueue";
+import { telegramTriggerManager } from "./Trigger/TelegramTriggerManager";
+import { telegramQueue } from "./Trigger/TelegramQueue";
 
 const app = express();
 
