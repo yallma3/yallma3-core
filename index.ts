@@ -39,8 +39,6 @@ import { webhookTriggerManager } from "./Trigger/WebhookTriggerManager";
 import { webhookQueue } from "./Trigger/WebhookQueue";
 import { telegramTriggerManager } from "./Trigger/TelegramTriggerManager";
 import { telegramQueue } from "./Trigger/TelegramQueue";
-import { telegramTriggerManager } from "./Trigger/TelegramTriggerManager";
-import { telegramQueue } from "./Trigger/TelegramQueue";
 
 const app = express();
 
@@ -199,7 +197,7 @@ async function startServer() {
   if (explicitPort !== undefined) {
     boundPort = explicitPort;
     await new Promise<void>((resolve, reject) => {
-      server.once('error', (err: NodeJS.ErrnoException) => {
+      server.once('error', (err: Error & {code?: string}) => {
         if (err.code === 'EADDRINUSE') {
           reject(new Error(`Port ${boundPort} is already in use`));
         } else {
@@ -211,7 +209,7 @@ async function startServer() {
   } else {
     const tryPort = (port: number): Promise<number> => {
       return new Promise((resolve, reject) => {
-        server.once('error', (err: NodeJS.ErrnoException) => {
+        server.once('error', (err: Error & {code?: string}) => {
           if (err.code === 'EADDRINUSE') {
             if (port < 65535) {
               resolve(tryPort(port + 1));
