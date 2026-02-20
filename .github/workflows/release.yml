@@ -76,6 +76,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -84,9 +85,6 @@ jobs:
           name: Release v${{ needs.get-version.outputs.version }}
           draft: true
           files: |
-            artifacts/yallma3-bun-darwin-arm64/bin/*
-            artifacts/yallma3-bun-darwin-x64/bin/*
-            artifacts/yallma3-bun-linux-x64/bin/*
-            artifacts/yallma3-bun-windows-x64/bin/*
+            artifacts/yallma3-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
