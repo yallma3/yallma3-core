@@ -84,7 +84,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: yallma3-*
+
+      - name: Prepare release files
+        run: |
+          mv artifacts/yallma3-darwin-arm64-*/* yallma3-darwin-arm64
+          mv artifacts/yallma3-darwin-x64-*/* yallma3-darwin-x64
+          mv artifacts/yallma3-linux-x64-*/* yallma3-linux-x64
+          mv artifacts/yallma3-windows-x64-*/* yallma3-windows-x64
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -95,6 +101,9 @@ jobs:
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-b') || contains(github.ref, '-a') }}
           generate_release_notes: true
           files: |
-            artifacts/**/*
+            yallma3-darwin-arm64
+            yallma3-darwin-x64
+            yallma3-linux-x64
+            yallma3-windows-x64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
