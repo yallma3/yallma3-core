@@ -64,7 +64,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: yallma3-${{ matrix.target }}
+          name: yallma3-${{ matrix.target }}-${{ github.ref_name }}
           path: bin/yallma3${{ matrix.ext }}
 
   release:
@@ -91,6 +91,6 @@ jobs:
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-b') || contains(github.ref, '-a') }}
           generate_release_notes: true
           files: |
-            artifacts/yallma3-*
+            artifacts/yallma3-*${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
