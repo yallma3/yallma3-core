@@ -90,7 +90,7 @@ jobs:
           mv artifacts/yallma3-darwin-arm64-*/* yallma3-darwin-arm64
           mv artifacts/yallma3-darwin-x64-*/* yallma3-darwin-x64
           mv artifacts/yallma3-linux-x64-*/* yallma3-linux-x64
-          mv artifacts/yallma3-windows-x64-*/* yallma3-windows-x64
+          mv artifacts/yallma3-windows-x64-*/* yallma3-windows-x64.exe
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -104,6 +104,6 @@ jobs:
             yallma3-darwin-arm64
             yallma3-darwin-x64
             yallma3-linux-x64
-            yallma3-windows-x64
+            yallma3-windows-x64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
