@@ -3,6 +3,8 @@ import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import pkg from "./package.json" with { type: "json" };
 
 const VERSION = pkg.version;
@@ -33,7 +35,8 @@ if (args.includes("--version") || args.includes("-v")) {
 
 const instanceIdArg = args.find(arg => arg.startsWith("--instance-id="));
 const instanceId = instanceIdArg?.split("=")[1];
-const bindFile = instanceId ? `yallma3-bind.${instanceId}` : null;
+const binaryDir = path.dirname(fileURLToPath(import.meta.url));
+const bindFile = instanceId ? path.join(binaryDir, `yallma3-bind.${instanceId}`) : null;
 
 // import mcpRoutes from "./Routes/Mcp.route";
 import workflowRoute from "./Routes/workflow.route";
