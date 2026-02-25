@@ -65,6 +65,17 @@ bun run test
 bun run test:coverage
 ```
 
+### 5. Instance Binding File
+
+When running as a child process, use `--instance-id` to create a binding file that contains the host and port:
+
+```bash
+bun run serve --instance-id=abc
+# Creates: yallma3-bind.abc with {"host":"localhost","port":3001}
+```
+
+The file is automatically removed on process exit.
+
 ## Server Information
 
 The application starts an HTTP server with WebSocket support. The host and port are determined by the environment variables (see above).

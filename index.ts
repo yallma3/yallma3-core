@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
+import fs from "fs";
 import pkg from "./package.json" with { type: "json" };
 
 const VERSION = pkg.version;
@@ -16,6 +17,7 @@ Usage: yallma3 [options]
 Options:
   -h, --help     Show this help message
   -v, --version  Show version number
+  --instance-id  Unique identifier for this instance (creates binding file)
 
 Environment Variables:
   YALLMA3_AGENT_HOST    Server host (default: localhost)
@@ -28,6 +30,10 @@ if (args.includes("--version") || args.includes("-v")) {
   console.log(VERSION);
   process.exit(0);
 }
+
+const instanceIdArg = args.find(arg => arg.startsWith("--instance-id="));
+const instanceId = instanceIdArg?.split("=")[1];
+const bindFile = instanceId ? `yallma3-bind.${instanceId}` : null;
 
 // import mcpRoutes from "./Routes/Mcp.route";
 import workflowRoute from "./Routes/workflow.route";
@@ -230,6 +236,10 @@ async function startServer() {
   webhookTriggerManager.setBaseUrl(`http://${host}:${boundPort}`);
   telegramTriggerManager.setBaseUrl(`http://${host}:${boundPort}`);
 
+  if (bindFile) {
+    fs.writeFileSync(bindFile, JSON.stringify({ host, port: boundPort }));
+  }
+
   console.log(`✅ Server is running at http://${host}:${boundPort}`);
   console.log(`🌐 WebSocket is available at ws://${host}:${boundPort}`);
   console.log(`🔗 Webhooks available at http://${host}:${boundPort}/webhook/:workspaceId`);
@@ -240,3 +250,17 @@ startServer().catch((err) => {
   console.error('Failed to start server:', err.message);
   process.exit(1);
 });
+
+const cleanup = () => {
+  if (bindFile) {
+    try {
+      fs.unlinkSync(bindFile);
+    } catch {
+      // best effort cleanup
+    }
+  }
+};
+
+process.on("exit", cleanup);
+process.on("SIGINT", cleanup);
+process.on("SIGTERM", cleanup);
