@@ -45,7 +45,7 @@ function isPathSafe(resolvedPath: string, basePath: string): boolean {
   }
 }
 
-export function setupWebSocketServer(wss: WebSocketServer) {
+export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) {
   const clients = new Set<WebSocket>();
   let currentWorkspaceAgent: MainAgent | null = null;
 
@@ -944,9 +944,12 @@ export function setupWebSocketServer(wss: WebSocketServer) {
   // MAIN CLIENT CONNECTION HANDLER
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+    const wsProtocol = req.headers["sec-websocket-protocol"] as string | undefined;
+    const clientId = instanceId ? `instance-id=${instanceId}` : (wsProtocol ? `subprotocol=${wsProtocol}` : "unauthenticated");
     console.log(
       "New WebSocket connection established:",
-      req.socket.remoteAddress
+      req.socket.remoteAddress,
+      clientId
     );
     clients.add(ws);
 

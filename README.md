@@ -21,8 +21,28 @@ Bun is used as the runtime, package manager, and TypeScript executor.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `YALLMA3_AGENT_PORT` | `3001` (auto-increment if busy) | Server port. If set, fails if port unavailable. |
+| `YALLMA3_AGENT_PORT` | `3001` (auto-increment if busy) | Server port. If set, fails if port unavailable. Can be overridden by `--port` CLI option. |
 | `YALLMA3_AGENT_HOST` | `localhost` | Server host |
+
+### Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `-h`, `--help` | Show help message |
+| `-v`, `--version` | Show version number |
+| `--port <port>` | Server port (default: 3001, auto-increment if busy). Takes precedence over `YALLMA3_AGENT_PORT`. |
+| `--instance-id <id>` | Unique identifier for this instance (creates binding file). Also serves as API key for authentication. |
+
+### Authentication
+
+When `--instance-id` is specified, all HTTP and WebSocket requests must include the `x-api-key` header with the instance ID as the value:
+
+```bash
+# Authorized request example
+curl -H "x-api-key: myinstance" http://localhost:3001/health
+```
+
+If `--instance-id` is not specified, the server accepts requests without authentication.
 
 ## Getting Started
 
@@ -51,8 +71,11 @@ bun run build
 # Run with default settings (localhost:3001)
 bun run serve
 
-# Or specify custom host/port
+# Or specify custom host/port via environment variable
 YALLMA3_AGENT_HOST=0.0.0.0 YALLMA3_AGENT_PORT=8080 bun run serve
+
+# Or specify port via command line (takes precedence over env var)
+bun run serve --port=8080
 ```
 
 ### 4. Run Tests
@@ -71,10 +94,10 @@ When running as a child process, use `--instance-id` to create a binding file th
 
 ```bash
 bun run serve --instance-id=abc
-# Creates: bin/yallma3-bind.abc with {"host":"localhost","port":3001}
+# Creates: yallma3-bind.abc with {"host":"localhost","port":3001}
 ```
 
-The file is created in the same directory as the binary and is automatically removed on process exit.
+The file is created in the current working directory and is automatically removed on process exit.
 
 ## Server Information
 
