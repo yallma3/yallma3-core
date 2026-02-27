@@ -384,7 +384,7 @@ const cleanup = (signal: string) => {
   console.log(`\nReceived ${signal}, shutting down...`);
   if (bindFile) {
     try {
-      fs.unlinkSync(bindFile);
+      fs.rmSync(bindFile, { force: true });
     } catch {
       // best effort cleanup
     }
@@ -405,7 +405,7 @@ process.on("SIGTERM", () => cleanup("SIGTERM"));
 process.on("exit", () => {
   if (bindFile) {
     try {
-      fs.unlinkSync(bindFile);
+      fs.rmSync(bindFile, { force: true });
     } catch {
       // best effort cleanup
     }
