@@ -3,6 +3,7 @@ import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import fs from "fs";
+import path from "path";
 import pkg from "./package.json" with { type: "json" };
 
 const VERSION = pkg.version;
@@ -10,7 +11,7 @@ const VERSION = pkg.version;
 const args = process.argv.slice(2);
 
 const KNOWN_FLAGS = ["--help", "-h", "--version", "-v"];
-const KNOWN_OPTIONS = ["--instance-id", "--port"];
+const KNOWN_OPTIONS = ["--instance-id", "--port", "--bind-file"];
 
 function parseArgs() {
   const parsed: Record<string, string | boolean> = {};
@@ -25,10 +26,14 @@ function parseArgs() {
       parsed["--instance-id"] = arg.split("=")[1]!;
     } else if (arg.startsWith("--port=")) {
       parsed["--port"] = arg.split("=")[1]!;
+    } else if (arg.startsWith("--bind-file=")) {
+      parsed["--bind-file"] = arg.split("=")[1]!;
     } else if (arg === "--instance-id" && args[i + 1] !== undefined && !args[i + 1]!.startsWith("--")) {
       parsed["--instance-id"] = args[++i]!;
     } else if (arg === "--port" && args[i + 1] !== undefined && !args[i + 1]!.startsWith("--")) {
       parsed["--port"] = args[++i]!;
+    } else if (arg === "--bind-file" && args[i + 1] !== undefined && !args[i + 1]!.startsWith("--")) {
+      parsed["--bind-file"] = args[++i]!;
     } else {
       unknown.push(arg);
     }
@@ -55,6 +60,7 @@ Options:
   -v, --version    Show version number
   --instance-id    Unique identifier for this instance (creates binding file, also serves as API key)
   --port           Server port (default: 3001, auto-increment if busy)
+  --bind-file      Path where the binding file should be written (default: cwd/yallma3-bind.<instance-id>, or cwd/yallma3-bind if only --bind-file is specified)
 
 Environment Variables:
   YALLMA3_AGENT_HOST    Server host (default: localhost)
@@ -71,7 +77,8 @@ if (parsedArgs["--version"] || parsedArgs["-v"]) {
 }
 
 const instanceId = parsedArgs["--instance-id"] as string | undefined;
-const bindFile = instanceId ? `yallma3-bind.${instanceId}` : null;
+const bindFilePath = parsedArgs["--bind-file"] as string | undefined;
+const bindFile = bindFilePath || (instanceId ? `yallma3-bind.${instanceId}` : null);
 
 const cliPort = parsedArgs["--port"] as string | undefined;
 
@@ -350,6 +357,10 @@ async function startServer() {
   telegramTriggerManager.setBaseUrl(`http://${host}:${boundPort}`);
 
   if (bindFile) {
+    const dir = path.dirname(bindFile);
+    if (dir && dir !== '.') {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.writeFileSync(bindFile, JSON.stringify({ host, port: boundPort }));
   }
 

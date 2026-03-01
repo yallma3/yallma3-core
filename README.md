@@ -32,6 +32,7 @@ Bun is used as the runtime, package manager, and TypeScript executor.
 | `-v`, `--version` | Show version number |
 | `--port <port>` | Server port (default: 3001, auto-increment if busy). Takes precedence over `YALLMA3_AGENT_PORT`. |
 | `--instance-id <id>` | Unique identifier for this instance (creates binding file). Also serves as API key for authentication. |
+| `--bind-file <path>` | Path where the binding file should be written. Default: `yallma3-bind.<instance-id>` in cwd (or `yallma3-bind` if only --bind-file is specified). |
 
 ### Authentication
 
@@ -97,7 +98,18 @@ bun run serve --instance-id=abc
 # Creates: yallma3-bind.abc with {"host":"localhost","port":3001}
 ```
 
-The file is created in the current working directory and is automatically removed on process exit.
+You can also specify a custom path for the binding file:
+
+```bash
+bun run serve --instance-id=abc --bind-file=/var/run/yallma3-bind.abc
+# Creates: /var/run/yallma3-bind.abc
+
+# Or without instance-id (for non-authenticated mode):
+bun run serve --bind-file=/tmp/yallma3-bind
+# Creates: /tmp/yallma3-bind
+```
+
+The file is created in the current working directory (or custom path) and is automatically removed on process exit.
 
 ## Server Information
 
