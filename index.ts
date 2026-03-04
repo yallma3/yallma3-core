@@ -11,7 +11,7 @@ const VERSION = pkg.version;
 const args = process.argv.slice(2);
 
 const KNOWN_FLAGS = ["--help", "-h", "--version", "-v"];
-const KNOWN_OPTIONS = ["--instance-id", "--port", "--bind-file"];
+//const KNOWN_OPTIONS = ["--instance-id", "--port", "--bind-file"];
 
 function parseArgs() {
   const parsed: Record<string, string | boolean> = {};
@@ -298,7 +298,7 @@ async function startServer() {
       });
       try {
         server.listen(boundPort, host, () => resolve());
-      } catch (err: any) {
+      } catch (err: unknown) {
         reject(err);
       }
     });
@@ -312,7 +312,7 @@ async function startServer() {
             res.end('OK');
           });
           
-          testServer.on('error', (err: any) => {
+          testServer.on('error', (err: Error & { code?: string }) => {
             if (err.code === 'EADDRINUSE') {
               resolve(false);
             } else {

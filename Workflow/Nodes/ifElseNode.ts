@@ -64,7 +64,7 @@ function toNum(val: unknown): number {
 
 function containsVal(haystack: unknown, needle: unknown): boolean {
   if (typeof haystack === "string") return haystack.includes(String(needle));
-  if (Array.isArray(haystack)) return haystack.some((item) => item == needle); // eslint-disable-line eqeqeq
+  if (Array.isArray(haystack)) return haystack.some((item) => item == needle);
   return false;
 }
 
