@@ -8,23 +8,19 @@ import {
   normalizeTool,
 } from "./McpUtils";
 
-type WorkspaceData = {
-  workflows: { id: string }[];
-};
-
-let cachedWorkspaceData: WorkspaceData | null = null;
+let cachedWorkspaceData: any = null;
 
 
-export function setWorkspaceDataForTools(workspaceData: WorkspaceData) {
+export function setWorkspaceDataForTools(workspaceData: any) {
   cachedWorkspaceData = workspaceData;
 }
 
 
 //  Detect if WebSocket is real or mock
 function isRealWebSocket(ws: WebSocket): boolean {
-  return typeof (ws as unknown as Record<string, unknown>).on === 'function' &&
-         typeof (ws as unknown as Record<string, unknown>).off === 'function' &&
-         typeof (ws as unknown as Record<string, unknown>).ping === 'function';
+  return typeof (ws as any).on === 'function' &&
+         typeof (ws as any).off === 'function' &&
+         typeof (ws as any).ping === 'function';
 }
 
 
@@ -32,25 +28,20 @@ function isRealWebSocket(ws: WebSocket): boolean {
 async function sendWorkflow(ws: WebSocket, workflowId: string, context?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
-    let timeoutId: ReturnType<typeof setTimeout>;
 
-    const cleanup = () => {
-      ws.off("message", listener);
-      clearTimeout(timeoutId);
-    };
 
     const listener = (message: WebSocket.RawData) => {
       try {
         const data = JSON.parse(message.toString());
         if (data.type === "workflow_json" && data.id === requestId) {
-          cleanup();
+          ws.off("message", listener);
           resolve(JSON.stringify(data.data));
         }
         if (data.type === "error" && data.requestId === requestId) {
-           cleanup();
+           ws.off("message", listener);
            reject(data.message || "Workflow execution failed");
         }
-      } catch {
+      } catch (err) {
         // Ignore parse errors
       }
     };
@@ -68,8 +59,8 @@ async function sendWorkflow(ws: WebSocket, workflowId: string, context?: string)
       })
     );
 
-    timeoutId = setTimeout(() => {
-        cleanup();
+    setTimeout(() => {
+        ws.off("message", listener);
         reject(new Error("Workflow execution timed out"));
     }, 60000);
   });
@@ -80,6 +71,7 @@ export async function workflowExecutor(
   ws: WebSocket,
   workflowId: string,
   input?: string,
+  triggerData?: unknown 
 ) {
   //  SMART DETECTION
  
@@ -94,7 +86,7 @@ export async function workflowExecutor(
       ? JSON.parse(wrapper.data)
       : wrapper?.data ?? wrapper;
    
-    const result = await executeFlowRuntime(json, ws, input);
+    const result = await executeFlowRuntime(json, ws, input, triggerData);
     
     // Handle error case
     if (result instanceof Error) {
@@ -116,13 +108,13 @@ export async function workflowExecutor(
       throw new Error("Workspace data not available for workflow execution");
     }
    
-    const workflow = cachedWorkspaceData.workflows.find((w) => w.id === workflowId);
-    
+    const workflow = cachedWorkspaceData.workflows.find((w: any) => w.id === workflowId);
+   
     if (!workflow) {
       throw new Error(`Workflow not found: ${workflowId}`);
     }
-    
-    const result = await executeFlowRuntime(workflow as Workflow, ws, input);
+   
+    const result = await executeFlowRuntime(workflow, ws, input, triggerData); 
    
     // Handle error case
     if (result instanceof Error) {
@@ -205,7 +197,7 @@ export const toolExecutorAttacher = async (ws: WebSocket, tools: Tool[]) => {
         },
         executor: async (args: Record<string, unknown>) => {
           const workflowInput = args.workflowInput as string;
-          const result = await workflowExecutor(ws, workflowID, workflowInput);
+          const result = await workflowExecutor(ws, workflowID, workflowInput); 
           return result;
         },
       };

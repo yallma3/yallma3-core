@@ -14,6 +14,7 @@ export type NodeExecutionContext = {
   node: NodeType;
   inputs: Record<string, unknown>;
   ws?: WebSocket;
+  triggerData?: unknown; 
 };
 export type SourceListOption = {
   key: string;

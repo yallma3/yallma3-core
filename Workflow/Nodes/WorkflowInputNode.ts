@@ -80,9 +80,21 @@ export function register(nodeRegistry: NodeRegistry): void {
       selected: false,
       processing: false,
       process: async (context: NodeExecutionContext) => {
-        const input = context.inputs[0];
         let output: string;
         
+        if (context.triggerData !== undefined && context.triggerData !== null) {
+          if (typeof context.triggerData === 'string') {
+            output = context.triggerData;
+          } else if (typeof context.triggerData === 'object') {
+            output = JSON.stringify(context.triggerData, null, 2);
+          } else {
+            output = String(context.triggerData);
+          }
+          console.log("📥 Workflow Input (from trigger):", output.substring(0, 200) + "...");
+          return output;
+        }
+        
+        const input = context.inputs[0];
         if (input !== undefined && input !== null) {
           // Convert input to string based on its type
           if (typeof input === 'string') {
@@ -90,15 +102,16 @@ export function register(nodeRegistry: NodeRegistry): void {
           } else if (typeof input === 'number' || typeof input === 'boolean') {
             output = String(input);
           } else if (typeof input === 'object') {
-            output = JSON.stringify(input);
+            output = JSON.stringify(input, null, 2);
           } else {
             output = String(input);
           }
-        } else {
-          output = "No Workflow Input";
+          console.log("📥 Workflow Input (from context):", output);
+          return output;
         }
         
-        console.log("Task Input:", output);
+        output = "No Workflow Input";
+        console.log("No workflow input provided");
         return output;
       },
       configParameters: metadata.configParameters,
