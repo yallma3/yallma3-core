@@ -92,7 +92,7 @@ export function hydrateWorkflowNodes(workflow: Workflow): BaseNode[] {
 
 export function remapConnections(
   workflow: Workflow
-): Array<{ fromSocket: number; toSocket: number }> {
+): Array<{ fromSocket: number; toSocket: number; label?: string }> {
   type Direction = "input" | "output";
 
   const savedSocketInfo = new Map<
@@ -142,6 +142,6 @@ export function remapConnections(
       ? freshSocketId.get(`${toInfo.nodeId}:${toInfo.direction}:${toInfo.index}`) ?? conn.toSocket
       : conn.toSocket;
 
-    return { fromSocket: newFrom, toSocket: newTo };
+    return { fromSocket: newFrom, toSocket: newTo, label: conn.label };
   });
 }

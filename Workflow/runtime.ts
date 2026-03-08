@@ -78,6 +78,10 @@ export const executeFlowRuntime = async (
       currentLayer2 = nextLayer2;
     }
 
+    if (executionLayers.flat().length !== nodes.length) {
+      throw new Error("Cycle detected in graph - topological sort incomplete");
+    }
+
     const results = new Map<number, unknown>();
     const skippedNodes = new Set<number>();
     for (const layer of executionLayers) {
@@ -133,7 +137,7 @@ export const executeFlowRuntime = async (
           }
         }
         if (myUpstream.length > 0) {
-          const fedBySkipped = myUpstream.some(e => skippedNodes.has(e.fromNodeId));
+          const fedBySkipped = myUpstream.every(e => skippedNodes.has(e.fromNodeId));
           const allUndefined = myUpstream.every(e => {
             const srcNode = nodes.find(n => n.id === e.fromNodeId);
             const sock = srcNode?.sockets.find(s => s.title === e.fromSocketTitle && s.type === "output");
@@ -206,7 +210,11 @@ export const executeFlowRuntime = async (
     const resultsObject = Object.fromEntries(results.entries());
     return { layers: executionLayers, results: resultsObject, finalResult };
   } catch (error) {
-    console.log(error);
-    return error;
+    console.error(error);
+    return {
+      error: true,
+      message: error instanceof Error ? error.message : "Unknown error",
+      code: "EXECUTION_ERROR",
+    };
   }
 };

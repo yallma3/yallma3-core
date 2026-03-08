@@ -93,7 +93,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
     configParameters: JSON.parse(JSON.stringify(metadata.configParameters)),
 
     sockets: SOCKETS.map((socket, index) => ({
-      id: id * 100 + (socket.type === "input" ? index + 1 : index - 2 + 101),
+      id: id * 100 + (socket.type === "input" ? index + 1 : index - 3 + 101),
       title: socket.title,
       type: socket.type,
       nodeId: id,
@@ -112,6 +112,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
       const timeout = (n.getConfigParameter?.("Timeout (ms)")?.paramValue ?? 10000) as number;
 
       if (!url?.trim()) {
+        n.nodeValue = null;
         return {
           [base + 101]: null,
           [base + 102]: 0,
