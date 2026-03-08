@@ -45,7 +45,7 @@ function isPathSafe(resolvedPath: string, basePath: string): boolean {
   }
 }
 
-export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) {
+export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string) {
   const clients = new Set<WebSocket>();
   let currentWorkspaceAgent: MainAgent | null = null;
 
@@ -191,11 +191,11 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
               let workflow = data.data;
               let workflowId = data.id || data.requestId;
 
-                if (typeof workflow === "string") {
-                  try {
-                    workflow = JSON.parse(workflow);
-                  } catch { /* ignore - workflow already parsed */ }
-                }
+              if (typeof workflow === "string") {
+                try {
+                  workflow = JSON.parse(workflow);
+                } catch { /* ignore - workflow already parsed */ }
+              }
               if (workflow.workflow) workflow = workflow.workflow;
               else if (workflow.data) workflow = workflow.data;
 
@@ -411,6 +411,7 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
       });
     }
   });
+
   // WEBHOOK TRIGGER LOGIC (uses queue via directExecute)
   webhookTriggerManager.setExecutionCallback(
     async (workspaceId: string, payload: Record<string, unknown>) => {
@@ -563,7 +564,8 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
                   const result = await executeFlowRuntime(
                     workflow,
                     mockWs as unknown as WebSocket,
-                    context
+                    context,
+                    payload
                   );
 
                   console.log(` [MockWS] Execution finished.`);
@@ -638,14 +640,14 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
           },
           emit: (event: string, ...args: unknown[]) => {
             if (listeners[event])
-              listeners[event].forEach((cb) => cb(...(args as Parameters<EventCallback>)));
+              listeners[event].forEach((cb) => cb(...args));
           },
           readyState: 1,
           close: () => {},
           terminate: () => {},
         } as unknown as WebSocket;
 
-        const workspaceAgent = createMainAgent(workspaceDataStr, mockWs);
+        const workspaceAgent = createMainAgent(workspaceDataStr, mockWs, payload);
         await workspaceAgent.run();
 
         console.log(` Webhook execution completed successfully`);
@@ -830,7 +832,8 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
                   const result = await executeFlowRuntime(
                     workflow,
                     mockWs as unknown as WebSocket,
-                    context
+                    context,
+                    update
                   );
 
                   console.log(` [MockWS] Execution finished.`);
@@ -902,14 +905,14 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
           },
           emit: (event: string, ...args: unknown[]) => {
             if (listeners[event])
-              listeners[event].forEach((cb) => cb(...(args as Parameters<EventCallback>)));
+              listeners[event].forEach((cb) => cb(...args));
           },
           readyState: 1,
           close: () => {},
           terminate: () => {},
         } as unknown as WebSocket;
 
-        const workspaceAgent = createMainAgent(workspaceDataStr, mockWs);
+        const workspaceAgent = createMainAgent(workspaceDataStr, mockWs, update);
         await workspaceAgent.run();
 
         console.log(` Telegram execution completed successfully`);
@@ -945,7 +948,7 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const wsProtocol = req.headers["sec-websocket-protocol"] as string | undefined;
-    const clientId = instanceId ? `instance-id=${instanceId}` : (wsProtocol ? `subprotocol=${wsProtocol}` : "unauthenticated");
+    const clientId = _instanceId ? `instance-id=${_instanceId}` : (wsProtocol ? `subprotocol=${wsProtocol}` : "unauthenticated");
     console.log(
       "New WebSocket connection established:",
       req.socket.remoteAddress,
@@ -1048,19 +1051,7 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
               break;
             }
 
-            let payload;
-            try {
-              payload = JSON.parse(data.data);
-            } catch {
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: "Invalid trigger data format (malformed JSON)",
-                  timestamp: new Date().toISOString(),
-                })
-              );
-              break;
-            }
+            const payload = JSON.parse(data.data);
             const { workspaceId, trigger, workspaceData, baseWorkflowsPath } =
               payload;
 
@@ -1414,19 +1405,7 @@ export function setupWebSocketServer(wss: WebSocketServer, instanceId?: string) 
               })
             );
 
-            let workflow;
-            try {
-              workflow = JSON.parse(data.data);
-            } catch {
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: "Invalid workflow data format (malformed JSON)",
-                  timestamp: new Date().toISOString(),
-                })
-              );
-              break;
-            }
+            const workflow = JSON.parse(data.data);
             const result = await executeFlowRuntime(workflow, ws);
 
             ws.send(

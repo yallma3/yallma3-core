@@ -37,7 +37,7 @@ const processTextTemplate = async (
 
   if (inputRegex.test(template)) {
     // Replace {{input}} with the actual input value, or empty string if undefined
-    result = template.replace(inputRegex, input);
+    result = template.replace(inputRegex, () => input);
   }
 
   return result;

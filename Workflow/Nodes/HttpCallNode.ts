@@ -2,7 +2,10 @@ import type {
   BaseNode,
   NodeMetadata,
   Position,
+  ConfigParameterType,
+  NodeValue,
   NodeExecutionContext,
+  DataType,
 } from "../types/types";
 import { nodeRegistry } from "../NodeRegistry";
 
@@ -10,81 +13,67 @@ interface HttpCallNode extends BaseNode {
   nodeType: "HttpCall";
 }
 
+type SocketDef = {
+  title: string;
+  type: "input" | "output";
+  dataType: DataType;
+};
+
+const SOCKETS: SocketDef[] = [
+  { title: "URL",           type: "input",  dataType: "string"  },
+  { title: "Headers",       type: "input",  dataType: "json"    },
+  { title: "Body",          type: "input",  dataType: "unknown" },
+  { title: "Response Body", type: "output", dataType: "unknown" },
+  { title: "Status Code",   type: "output", dataType: "number"  },
+  { title: "OK?",           type: "output", dataType: "boolean" },
+  { title: "Error",         type: "output", dataType: "string"  },
+];
+
 const metadata: NodeMetadata = {
   nodeType: "HttpCall",
-  description: "Performs a customizable HTTP request, supporting various methods, headers, and body content. Includes configurable options for request timeout and handling of redirects.",
+  description: "Performs an HTTP request and returns the response body, status code, and any error.",
   category: "Tools",
   title: "HTTP Call",
-  sockets: [
-    { title: "URL", type: "input", dataType: "string" },
-    { title: "Method", type: "input", dataType: "string" },
-    { title: "Headers", type: "input", dataType: "json" },
-    { title: "Body", type: "input", dataType: "string" },
-    { title: "Response", type: "output", dataType: "json" },
-    { title: "Status", type: "output", dataType: "number" },
-    { title: "Error", type: "output", dataType: "string" },
-  ],
+  nodeValue: "",
+  sockets: SOCKETS,
   width: 300,
   height: 250,
   configParameters: [
     {
-      parameterName: "timeout",
-      parameterType: "number",
-      defaultValue: 5000,
-      description: "Request timeout in milliseconds",
+      parameterName: "Method",
+      parameterType: "string",
+      defaultValue: "GET",
       valueSource: "UserInput",
       UIConfigurable: true,
+      description: "HTTP method to use.",
+      sourceList: [
+        { key: "GET",    label: "GET"    },
+        { key: "POST",   label: "POST"   },
+        { key: "PUT",    label: "PUT"    },
+        { key: "PATCH",  label: "PATCH"  },
+        { key: "DELETE", label: "DELETE" },
+      ],
       i18n: {
-        en: {
-          "timeout": {
-            Name: "Timeout",
-            Description: "Request timeout in milliseconds",
-          },
-        },
-        ar: {
-          "timeout": {
-            Name: "المهلة الزمنية",
-            Description: "المهلة الزمنية للطلب بالملي ثانية",
-          },
-        },
+        en: { Method: { Name: "Method",       Description: "HTTP method." } },
+        ar: { Method: { Name: "طريقة الطلب", Description: "طريقة HTTP." } },
       },
     },
     {
-      parameterName: "followRedirects",
-      parameterType: "boolean",
-      defaultValue: true,
-      description: "Follow HTTP redirects",
+      parameterName: "Timeout (ms)",
+      parameterType: "number",
+      defaultValue: 10000,
       valueSource: "UserInput",
       UIConfigurable: true,
+      description: "Request timeout in milliseconds.",
       i18n: {
-        en: {
-          "followRedirects": {
-            Name: "Follow Redirects",
-            Description: "Follow HTTP redirects",
-          },
-        },
-        ar: {
-          "followRedirects": {
-            Name: "متابعة إعادة التوجيه",
-            Description: "متابعة إعادات توجيه HTTP",
-          },
-        },
+        en: { "Timeout (ms)": { Name: "Timeout (ms)",     Description: "Request timeout in milliseconds." } },
+        ar: { "Timeout (ms)": { Name: "المهلة (مللي ث)",  Description: "مهلة الطلب بالملي ثانية." } },
       },
     },
   ],
   i18n: {
-    en: {
-      category: "Tools",
-      title: "HTTP Call",
-      nodeType: "HTTP Call",
-      description: "Performs a customizable HTTP request, supporting various methods, headers, and body content. Includes configurable options for request timeout and handling of redirects.",
-    },
-    ar: {
-      category: "أدوات",
-      title: "استدعاء HTTP",
-      nodeType: "استدعاء HTTP",
-      description: "يُنفذ طلب HTTP قابل للتخصيص، يدعم طرقاً ورؤوساً ومحتوى نصي متنوع. يتضمن خيارات قابلة للتكوين للمهلة الزمنية للطلب ومعالجة إعادات التوجيه.",
-    },
+    en: { category: "Tools",  title: "HTTP Call",    nodeType: "HTTP Call",    description: "Performs an HTTP request." },
+    ar: { category: "أدوات", title: "استدعاء HTTP", nodeType: "استدعاء HTTP", description: "يُنفذ طلب HTTP." },
   },
 };
 
@@ -98,200 +87,105 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
     y: position.y,
     width: metadata.width,
     height: metadata.height,
-    sockets: [
-      {
-        id: id * 100 + 1,
-        title: "URL",
-        type: "input",
-        nodeId: id,
-        dataType: "string",
-      },
-      {
-        id: id * 100 + 2,
-        title: "Method",
-        type: "input",
-        nodeId: id,
-        dataType: "string",
-      },
-      {
-        id: id * 100 + 3,
-        title: "Headers",
-        type: "input",
-        nodeId: id,
-        dataType: "json",
-      },
-      {
-        id: id * 100 + 4,
-        title: "Body",
-        type: "input",
-        nodeId: id,
-        dataType: "string",
-      },
-      {
-        id: id * 100 + 5,
-        title: "Response",
-        type: "output",
-        nodeId: id,
-        dataType: "json",
-      },
-      {
-        id: id * 100 + 6,
-        title: "Status",
-        type: "output",
-        nodeId: id,
-        dataType: "number",
-      },
-      {
-        id: id * 100 + 7,
-        title: "Error",
-        type: "output",
-        nodeId: id,
-        dataType: "string",
-      },
-    ],
     selected: false,
     processing: false,
-    configParameters: metadata.configParameters,
+    nodeValue: null,
+    configParameters: JSON.parse(JSON.stringify(metadata.configParameters)),
+
+    sockets: SOCKETS.map((socket, index) => ({
+      id: id * 100 + (socket.type === "input" ? index + 1 : index - 3 + 101),
+      title: socket.title,
+      type: socket.type,
+      nodeId: id,
+      dataType: socket.dataType,
+    })),
+
     process: async (context: NodeExecutionContext) => {
-      const n = context.node as HttpCallNode;
+      const n    = context.node as HttpCallNode;
+      const base = n.id * 100;
+
+      const url     = context.inputs[base + 1] as string | undefined;
+      const headers = context.inputs[base + 2] as Record<string, string> | undefined;
+      const body    = context.inputs[base + 3];
+
+      const method  = (n.getConfigParameter?.("Method")?.paramValue      ?? "GET")  as string;
+      const timeout = (n.getConfigParameter?.("Timeout (ms)")?.paramValue ?? 10000) as number;
+
+      if (!url?.trim()) {
+        n.nodeValue = null;
+        return {
+          [base + 101]: null,
+          [base + 102]: 0,
+          [base + 103]: false,
+          [base + 104]: "URL is required",
+        };
+      }
+
+      const controller = new AbortController();
+      const timeoutId  = setTimeout(() => controller.abort(), timeout);
 
       try {
-        // Get input values
-        const url = context.inputs[n.id * 100 + 1] as string;
-        const method = (context.inputs[n.id * 100 + 2] as string) || "GET";
-        const headers =
-          (context.inputs[n.id * 100 + 3] as Record<string, string>) || {};
-        const body = context.inputs[n.id * 100 + 4] as string;
+        const hasBody = body != null && method !== "GET" && method !== "HEAD";
 
-        // Get configuration parameters
-        const timeoutConfig = n.getConfigParameter?.("timeout");
-        const timeout = (timeoutConfig?.paramValue as number) || 5000;
-        const followRedirectsConfig = n.getConfigParameter?.("followRedirects");
-        const followRedirects =
-          (followRedirectsConfig?.paramValue as boolean) || true;
-
-        if (!url) {
-          return {
-            [n.id * 100 + 105]: {
-              data: null,
-              headers: {},
-              url: "",
-              redirected: false,
-            },
-            [n.id * 100 + 106]: 0,
-            [n.id * 100 + 107]: "URL is required",
-          };
-        }
-
-        // Prepare fetch options
-        const fetchOptions: RequestInit = {
+        const response = await fetch(url.trim(), {
           method: method.toUpperCase(),
           headers: {
-            "Content-Type": "application/json",
+            ...(hasBody ? { "Content-Type": "application/json" } : {}),
             ...headers,
           },
-          redirect: followRedirects ? "follow" : "manual",
+          body: hasBody
+            ? (typeof body === "string" ? body : JSON.stringify(body))
+            : undefined,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        const contentType = response.headers.get("content-type") ?? "";
+        const data = contentType.includes("application/json")
+          ? await response.json()
+          : await response.text();
+
+        n.nodeValue = data as NodeValue;
+
+        return {
+          [base + 101]: data,
+          [base + 102]: response.status,
+          [base + 103]: response.ok,
+          [base + 104]: response.ok ? "" : `HTTP ${response.status}: ${response.statusText}`,
         };
 
-        // Add body for non-GET requests
-        if (method.toUpperCase() !== "GET" && body) {
-          fetchOptions.body = body;
-        }
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
 
-        // Create AbortController for timeout
-         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        fetchOptions.signal = controller.signal;
+        const message = err instanceof Error && err.name === "AbortError"
+          ? `Request timed out after ${timeout}ms`
+          : `Network error: ${err instanceof Error ? err.message : String(err)}`;
 
-        try {
-          const response = await fetch(url, fetchOptions);
-          clearTimeout(timeoutId);
+        n.nodeValue = null;
 
-          // Get response data
-          let responseData: unknown;
-          const contentType = response.headers.get("content-type");
-
-          if (contentType && contentType.includes("application/json")) {
-            responseData = await response.json();
-          } else {
-            responseData = await response.text();
-          }
-
-          // Return outputs
-          const responseHeaders: Record<string, string> = {};
-          response.headers.forEach((value, key) => {
-            responseHeaders[key] = value;
-          });
-
-          const res = {
-            data: responseData,
-            headers: responseHeaders,
-            url: response.url,
-            redirected: response.redirected,
-          };
-
-          console.log("RESPONSE TYPE:", typeof res);
-          console.log("RESPONSE TYPE:", typeof JSON.stringify(res));
-
-          const result = {
-            [n.id * 100 + 5]: res,
-            [n.id * 100 + 6]: response.status,
-            [n.id * 100 + 7]: response.ok
-              ? ""
-              : `HTTP ${response.status}: ${response.statusText}`,
-          };
-
-          return result;
-         } catch (fetchError: unknown) {
-          clearTimeout(timeoutId);
-
-          const errorMessage =
-            fetchError instanceof Error && fetchError.name === "AbortError"
-              ? `Request timeout after ${timeout}ms`
-              : `Network error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`;
-
-          return {
-            [n.id * 100 + 105]: {
-              data: null,
-              headers: {},
-              url: "",
-              redirected: false,
-            },
-            [n.id * 100 + 106]: 0,
-            [n.id * 100 + 107]: errorMessage,
-          };
-        }
-      } catch (error: unknown) {
         return {
-          [n.id * 100 + 105]: {
-            data: null,
-            headers: {},
-            url: "",
-            redirected: false,
-          },
-          [n.id * 100 + 106]: 0,
-          [n.id * 100 + 107]: `HTTP Call error: ${error instanceof Error ? error.message : String(error)}`,
+          [base + 101]: null,
+          [base + 102]: 0,
+          [base + 103]: false,
+          [base + 104]: message,
         };
       }
     },
-    getConfigParameters: function () {
+
+    getConfigParameters: function (): ConfigParameterType[] {
       return this.configParameters || [];
     },
-    getConfigParameter: function (parameterName: string) {
+    getConfigParameter: function (parameterName: string): ConfigParameterType | undefined {
       return (this.configParameters || []).find(
-        (param) => param.parameterName === parameterName
+        (p: ConfigParameterType) => p.parameterName === parameterName
       );
     },
-    setConfigParameter: function (
-      parameterName: string,
-      value: string | number | boolean
-    ) {
-      const parameter = (this.configParameters || []).find(
-        (param) => param.parameterName === parameterName
+    setConfigParameter: function (parameterName: string, value: string | number | boolean): void {
+      const param = (this.configParameters || []).find(
+        (p: ConfigParameterType) => p.parameterName === parameterName
       );
-      if (parameter) {
-        parameter.paramValue = value;
-      }
+      if (param) param.paramValue = value;
     },
   };
 }

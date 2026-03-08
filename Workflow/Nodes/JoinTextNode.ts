@@ -26,13 +26,38 @@ export interface JoinNode extends BaseNode {
   nodeValue?: NodeValue;
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
 }
+function buildSockets(id: number, inputCount: number): BaseNode["sockets"] {
+  const sockets: BaseNode["sockets"] = [];
+  for (let i = 1; i <= inputCount; i++) {
+    sockets.push({
+      id: id * 100 + i,
+      title: `Input ${i}`,
+      type: "input",
+      nodeId: id,
+      dataType: "unknown",
+    });
+  }
+  sockets.push({
+    id: id * 100 + 111,
+    title: "Output",
+    type: "output",
+    nodeId: id,
+    dataType: "string",
+  });
+  return sockets;
+}
+function computeHeight(inputCount: number): number {
+  return 180 + inputCount * 40;
+}
 
 export function register(nodeRegistry: NodeRegistry): void {
+  const DEFAULT_INPUT_COUNT = 2;
   const metadata: NodeMetadata = {
     category: "Text",
     title: "Join",
     nodeType: "Join",
-    description: "Combines two text inputs into a single string, using a configurable separator. Special characters like newlines are supported.",
+    description:
+      "Combines multiple text inputs. In Concatenate mode, joins them with a separator. In Substitute mode, replaces {{input1}}, {{input2}}, … placeholders inside a template.",
     nodeValue: " ",
     sockets: [
       { title: "Input 1", type: "input", dataType: "unknown" },
@@ -40,27 +65,74 @@ export function register(nodeRegistry: NodeRegistry): void {
       { title: "Output", type: "output", dataType: "string" },
     ],
     width: 240,
-    height: 230,
+    height: computeHeight(DEFAULT_INPUT_COUNT),
     configParameters: [
+      {
+        parameterName: "Mode",
+        parameterType: "string",
+        defaultValue: "concatenate",
+        valueSource: "UserInput",
+        UIConfigurable: true,
+        description: "Join mode: concatenate or substitute",
+        isNodeBodyContent: false,
+        sourceList: [
+          { key: "concatenate", label: "Concatenate" },
+          { key: "substitute", label: "Substitute" },
+        ],
+        i18n: {
+          en: {
+            Mode: { Name: "Mode", Description: "Join mode: concatenate or substitute" },
+          },
+          ar: {
+            Mode: { Name: "الوضع", Description: "وضع الدمج: تسلسل أو استبدال" },
+          },
+        },
+      },
+      {
+        parameterName: "Input Count",
+        parameterType: "number",
+        defaultValue: DEFAULT_INPUT_COUNT,
+        valueSource: "UserInput",
+        UIConfigurable: true,
+        description: "Number of input sockets (1–7)",
+        isNodeBodyContent: false,
+        i18n: {
+          en: {
+            "Input Count": {
+              Name: "Input Count",
+              Description: "Number of input sockets (1–7)",
+            },
+          },
+          ar: {
+            "Input Count": {
+              Name: "عدد المدخلات",
+              Description: "عدد مقابس الإدخال (١–٧)",
+            },
+          },
+        },
+      },
       {
         parameterName: "Separator",
         parameterType: "text",
         defaultValue: " ",
         valueSource: "UserInput",
         UIConfigurable: true,
-        description: "Separator to join the inputs",
+        description:
+          "In Concatenate mode: separator string (use (new line) for newline). " +
+          "In Substitute mode: template text with {{input1}}, {{input2}}, … placeholders.",
         isNodeBodyContent: true,
         i18n: {
           en: {
             Separator: {
-              Name: "Separator",
-              Description: "Separator to join the inputs",
+              Name: "Separator / Template",
+              Description:
+                "Separator (concatenate) or template with {{inputN}} (substitute)",
             },
           },
           ar: {
             Separator: {
-              Name: "الفاصلة",
-              Description: "فاصلة للدمج بين المدخلات",
+              Name: "الفاصلة / القالب",
+              Description: "فاصل (تسلسل) أو قالب مع {{inputN}} (استبدال)",
             },
           },
         },
@@ -71,96 +143,136 @@ export function register(nodeRegistry: NodeRegistry): void {
         category: "Text",
         title: "Join",
         nodeType: "Join",
-        description: "Combines two text inputs into a single string, using a configurable separator. Special characters like newlines are supported.",
+        description:
+          "Combines multiple text inputs. In Concatenate mode, joins them with a separator. In Substitute mode, replaces {{input1}}, {{input2}}, … placeholders inside a template.",
       },
       ar: {
         category: "نص",
         title: "دمج",
         nodeType: "دمج",
-        description: "يدمج إدخالين نصيين في سلسلة واحدة باستخدام فاصل قابل للتكوين. يدعم الأحرف الخاصة مثل السطر الجديد.",
+        description:
+          "يدمج عدة مدخلات نصية. في وضع التسلسل يضمها بفاصل. في وضع الاستبدال يحل {{input1}}، {{input2}}، … في قالب نصي.",
       },
     },
   };
 
   function createJoinNode(id: number, position: Position): JoinNode {
+    const inputCount = DEFAULT_INPUT_COUNT;
+
     return {
       id,
       category: metadata.category,
       title: metadata.title,
       nodeValue: metadata.nodeValue,
       nodeType: metadata.nodeType,
-      sockets: [
-        {
-          id: id * 100 + 1,
-          title: "Input 1",
-          type: "input",
-          nodeId: id,
-          dataType: "unknown",
-        },
-        {
-          id: id * 100 + 2,
-          title: "Input 2",
-          type: "input",
-          nodeId: id,
-          dataType: "unknown",
-        },
-        {
-          id: id * 100 + 111,
-          title: "Output",
-          type: "output",
-          nodeId: id,
-          dataType: "string",
-        },
-      ],
+      sockets: buildSockets(id, inputCount),
       x: position.x,
       y: position.y,
       width: metadata.width,
-      height: metadata.height,
+      height: computeHeight(inputCount),
       selected: false,
       processing: false,
       process: async (context: NodeExecutionContext) => {
         const n = context.node as JoinNode;
-        // Process special separator values
-        let separator = String(n.nodeValue || "");
 
-        // Replace special separator placeholders
-        separator = separator
-          .replace(/\(new line\)/g, "\n") // Replace (new line) with actual newline
-          .replace(/\\n/g, "\n"); // Also support \n for newlines
+        // Read Mode
+        const modeParam = (n.configParameters ?? []).find(
+          (p) => p.parameterName === "Mode"
+        );
+        const mode = String(
+          modeParam?.paramValue ?? modeParam?.defaultValue ?? "concatenate"
+        );
 
-          // Count input sockets to determine how many inputs to process
-        // const inputSockets = n.sockets.filter((s) => s.type === "input");
+        // Read Separator / Template
+        const separatorParam = (n.configParameters ?? []).find(
+          (p) => p.parameterName === "Separator"
+        );
+        const rawValue = String(
+          separatorParam?.paramValue ?? separatorParam?.defaultValue ?? " "
+        );
 
-        // Collect all input values
-        // const inputValues = await Promise.all(
-        //   inputSockets.map(async (socket) => {
-        //     const value = await context.getInputValue(socket.id);
-        //     return value !== undefined ? String(value) : "";
-        //   })
-        // );
-        const result = Object.values(context.inputs)
-          .filter((val) => typeof val === "string" && val !== "")
-          .join(separator);
-          
-        // Join all non-empty values with the separator
-        return result;
+        // Read Input Count
+        const countParam = (n.configParameters ?? []).find(
+          (p) => p.parameterName === "Input Count"
+        );
+        const parsed = Number(
+          countParam?.paramValue ?? countParam?.defaultValue ?? DEFAULT_INPUT_COUNT
+        );
+        const inputCountVal = Math.min(
+          7,
+          Math.max(
+            1,
+            Number.isFinite(parsed) ? Math.trunc(parsed) : DEFAULT_INPUT_COUNT
+          )
+        );
+
+        // Collect input values in socket order
+        const inputValues: string[] = [];
+        for (let i = 1; i <= inputCountVal; i++) {
+          const socketId = n.id * 100 + i;
+          const val = context.inputs[socketId];
+          inputValues.push(
+            val !== undefined && val !== null ? String(val) : ""
+          );
+        }
+
+        if (mode === "substitute") {
+          // Replace {{input1}}, {{input2}}, … in the template
+          let result = rawValue;
+          for (let i = 0; i < inputValues.length; i++) {
+            const placeholder = new RegExp(`\\{\\{input${i + 1}\\}\\}`, "g");
+            const replacement = inputValues[i] ?? "";
+            result = result.replace(placeholder, () => replacement);
+          }
+          return result;
+        } else {
+          // Concatenate mode
+          const separator = rawValue
+            .replace(/\(new line\)/g, "\n")
+            .replace(/\\n/g, "\n");
+          return inputValues.filter((v) => v !== "").join(separator);
+        }
       },
+
       configParameters: metadata.configParameters,
 
       getConfigParameters: function (): ConfigParameterType[] {
         return this.configParameters || [];
       },
       getConfigParameter(parameterName) {
-        const parameter = (this.configParameters ?? []).find(
+        return (this.configParameters ?? []).find(
           (param) => param.parameterName === parameterName
         );
-        return parameter;
       },
-      setConfigParameter(parameterName, value) {
+      setConfigParameter(parameterName, value, onSocketsChanged?) {
         const parameter = (this.configParameters ?? []).find(
           (param) => param.parameterName === parameterName
         );
-        if (parameter) {
+        if (!parameter) return;
+
+        if (parameterName === "Input Count") {
+          const parsed = Number(value);
+          const newCount = Math.min(
+            7,
+            Math.max(1, Number.isFinite(parsed) ? Math.trunc(parsed) : DEFAULT_INPUT_COUNT)
+          );
+          
+          const oldInputCount = this.sockets
+            .filter(s => s.type === "input")
+            .length;
+          
+          parameter.paramValue = newCount;
+          this.sockets = buildSockets(this.id, newCount);
+          this.height = computeHeight(newCount);
+          
+          if (newCount < oldInputCount && onSocketsChanged) {
+            const removedSocketIds: number[] = [];
+            for (let i = newCount + 1; i <= oldInputCount; i++) {
+              removedSocketIds.push(this.id * 100 + i);
+            }
+            onSocketsChanged(removedSocketIds);
+          }
+        } else {
           parameter.paramValue = value;
         }
       },

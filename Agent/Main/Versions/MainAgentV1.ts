@@ -24,7 +24,7 @@ export class MainAgentV1 implements MainAgent {
   version = "1.0.0";
   private aborted = false;
 
-  constructor(private workspaceData: WorkspaceData, private ws: WebSocket) {}
+  constructor(private workspaceData: WorkspaceData, private ws: WebSocket, private triggerData?: unknown ) {}
 
   async run(): Promise<Record<string, string>> {
     if (!this.workspaceData) return {};
@@ -213,7 +213,8 @@ export class MainAgentV1 implements MainAgent {
     const finalResult = await workflowExecutor(
       this.ws,
       workflowId,
-      taskContext
+      taskContext,
+      this.triggerData
     );
 
     if (this.aborted) return;
