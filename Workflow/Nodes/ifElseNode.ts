@@ -73,7 +73,7 @@ function evaluate(
   a: unknown,
   b: unknown,
   c: unknown,
-  flags: string
+  _flags: string
 ): boolean {
   switch (op) {
     case "is_not_empty":  return !isEmpty(a);
@@ -100,7 +100,7 @@ function evaluate(
     case "starts_with":   return typeof a === "string" && a.startsWith(String(b));
     case "ends_with":     return typeof a === "string" && a.endsWith(String(b));
     case "regex": {
-      try { return new RegExp(String(b), flags).test(String(a)); } catch { return false; }
+      return false; // handled async in process()
     }
     default:              return !isEmpty(a);
   }
@@ -165,7 +165,7 @@ const metadata: NodeMetadata = {
       parameterName: "Compare B (literal)",
       parameterType: "string",
       defaultValue: "",
-      valueSource: "UserInput",
+      valueSource: "Default",
       UIConfigurable: false,
       description: "Literal value for B when the B socket is not connected.",
       i18n: {
@@ -177,7 +177,7 @@ const metadata: NodeMetadata = {
       parameterName: "Compare C (literal)",
       parameterType: "string",
       defaultValue: "",
-      valueSource: "UserInput",
+      valueSource: "Default",
       UIConfigurable: false,
       description: "Literal value for C when the C socket is not connected. Used by Between.",
       i18n: {
@@ -189,7 +189,7 @@ const metadata: NodeMetadata = {
       parameterName: "Regex Flags",
       parameterType: "string",
       defaultValue: "i",
-      valueSource: "UserInput",
+      valueSource: "Default",
       UIConfigurable: false,
       description: "Flags for the regex operator, e.g. 'i' = case-insensitive.",
       i18n: {
@@ -262,11 +262,25 @@ function createIfElseNode(id: number, position: Position): IfElseNode {
       const regexFlags = String(n.getConfigParameter?.("Regex Flags")?.paramValue         ?? "i");
       const negate     = Boolean(n.getConfigParameter?.("Negate Result")?.paramValue      ?? false);
 
-      const b: unknown = (bSocket !== undefined && bSocket !== null) ? bSocket : literalB;
-      const c: unknown = (cSocket !== undefined && cSocket !== null) ? cSocket : literalC;
+    const b: unknown = (bSocket !== undefined && bSocket !== null) ? bSocket : literalB;
+    const c: unknown = (cSocket !== undefined && cSocket !== null) ? cSocket : literalC;
 
-      let condition = evaluate(op, a, b, c, regexFlags);
-      if (negate) condition = !condition;
+    let condition: boolean;
+    if (op === "regex") {
+      const regex = new RegExp(String(b), regexFlags);
+      const testValue = String(a);
+      let timedOut = false;
+      const timeoutPromise = new Promise<boolean>((resolve) => {
+        setTimeout(() => { timedOut = true; resolve(false); }, 1000);
+      });
+      const testPromise = Promise.resolve(regex.test(testValue));
+      condition = await Promise.race([testPromise, timeoutPromise]);
+      if (timedOut) condition = false;
+    } else {
+      condition = evaluate(op, a, b, c, regexFlags);
+    }
+
+    if (negate) condition = !condition;
 
       const trueOutput:  unknown = condition ? a : undefined;
       const falseOutput: unknown = condition ? undefined : a;

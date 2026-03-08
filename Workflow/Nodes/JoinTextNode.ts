@@ -195,13 +195,14 @@ export function register(nodeRegistry: NodeRegistry): void {
         const countParam = (n.configParameters ?? []).find(
           (p) => p.parameterName === "Input Count"
         );
+        const parsed = Number(
+          countParam?.paramValue ?? countParam?.defaultValue ?? DEFAULT_INPUT_COUNT
+        );
         const inputCountVal = Math.min(
           7,
           Math.max(
             1,
-            Number(
-              countParam?.paramValue ?? countParam?.defaultValue ?? DEFAULT_INPUT_COUNT
-            )
+            Number.isFinite(parsed) ? Math.trunc(parsed) : DEFAULT_INPUT_COUNT
           )
         );
 
@@ -220,7 +221,8 @@ export function register(nodeRegistry: NodeRegistry): void {
           let result = rawValue;
           for (let i = 0; i < inputValues.length; i++) {
             const placeholder = new RegExp(`\\{\\{input${i + 1}\\}\\}`, "g");
-            result = result.replace(placeholder, inputValues[i] ?? "");
+            const replacement = inputValues[i] ?? "";
+            result = result.replace(placeholder, () => replacement);
           }
           return result;
         } else {
@@ -242,17 +244,34 @@ export function register(nodeRegistry: NodeRegistry): void {
           (param) => param.parameterName === parameterName
         );
       },
-      setConfigParameter(parameterName, value) {
+      setConfigParameter(parameterName, value, onSocketsChanged?) {
         const parameter = (this.configParameters ?? []).find(
           (param) => param.parameterName === parameterName
         );
         if (!parameter) return;
 
         if (parameterName === "Input Count") {
-          const newCount = Math.min(7, Math.max(1, Number(value)));
+          const parsed = Number(value);
+          const newCount = Math.min(
+            7,
+            Math.max(1, Number.isFinite(parsed) ? Math.trunc(parsed) : DEFAULT_INPUT_COUNT)
+          );
+          
+          const oldInputCount = this.sockets
+            .filter(s => s.type === "input")
+            .length;
+          
           parameter.paramValue = newCount;
           this.sockets = buildSockets(this.id, newCount);
           this.height = computeHeight(newCount);
+          
+          if (newCount < oldInputCount && onSocketsChanged) {
+            const removedSocketIds: number[] = [];
+            for (let i = newCount + 1; i <= oldInputCount; i++) {
+              removedSocketIds.push(this.id * 100 + i);
+            }
+            onSocketsChanged(removedSocketIds);
+          }
         } else {
           parameter.paramValue = value;
         }

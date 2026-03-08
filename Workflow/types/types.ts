@@ -59,7 +59,8 @@ export interface BaseNode {
 
   setConfigParameter?: (
     parameterName: string,
-    value: string | number | boolean
+    value: string | number | boolean,
+    onSocketsChanged?: (removedSocketIds: number[]) => void
   ) => void;
 }
 
