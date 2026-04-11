@@ -31,71 +31,98 @@ const processTextTemplate = async (
   template: string,
   input: string
 ): Promise<string> => {
-  // Handle {{input}} variable
-  const inputRegex = /\{\{input\}\}/g;
   let result = template;
 
-  if (inputRegex.test(template)) {
-    // Replace {{input}} with the actual input value, or empty string if undefined
-    result = template.replace(inputRegex, () => input);
+  // Try to parse input as JSON for dot-notation field access (e.g. {{input.title}})
+  let parsedInput: any = null;
+  try {
+    parsedInput = JSON.parse(input);
+  } catch {
+    parsedInput = null;
   }
+
+  // Replace {{input.field}} or {{input.nested.field}} patterns using parsed JSON
+  if (parsedInput && typeof parsedInput === "object") {
+    result = result.replace(/\{\{input\.([^}]+)\}\}/g, (_, fieldPath: string) => {
+      // Support nested dot paths like {{input.author.name}}
+      const keys = fieldPath.split(".");
+      let value: any = parsedInput;
+      for (const key of keys) {
+        if (value !== null && value !== undefined && typeof value === "object") {
+          value = value[key];
+        } else {
+          value = undefined;
+          break;
+        }
+      }
+      return value !== undefined && value !== null ? String(value) : "";
+    });
+  }
+
+  // Replace plain {{input}} with the raw input string
+  result = result.replace(/\{\{input\}\}/g, input);
 
   return result;
 };
 
 export function register(nodeRegistry: NodeRegistry): void {
- const metadata: NodeMetadata = {
-  category: "Text",
-  title: "Text",
-  nodeType: "Text",
-  description: "A versatile text node that processes a template string. It replaces the `{{input}}` placeholder with the value from its input socket, making it ideal for formatting and combining text dynamically.",
-  nodeValue: "{{input}}",
-  sockets: [
-    { title: "Input", type: "input", dataType: "string" },
-    { title: "Output", type: "output", dataType: "string" },
-  ],
-  width: 380,
-  height: 220,
-  configParameters: [
-    {
-      parameterName: "Text Input",
-      parameterType: "text",
-      defaultValue: "{{input}}",
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description: "Text template to interpolate with input",
-      isNodeBodyContent: true,
-      i18n: {
-        en: {
-          "Text Input": {
-            Name: "Text Input",
-            Description: "Text template to interpolate with input",
+  const metadata: NodeMetadata = {
+    category: "Text",
+    title: "Text",
+    nodeType: "Text",
+    description:
+      "A versatile text node that processes a template string. It replaces the `{{input}}` placeholder with the value from its input socket. If the input is a JSON object, you can access individual fields using dot-notation, e.g. `{{input.title}}`, `{{input.authors}}`, making it ideal for formatting and combining text dynamically.",
+    nodeValue: "{{input}}",
+    sockets: [
+      { title: "Input", type: "input", dataType: "string" },
+      { title: "Output", type: "output", dataType: "string" },
+    ],
+    width: 380,
+    height: 220,
+    configParameters: [
+      {
+        parameterName: "Text Input",
+        parameterType: "text",
+        defaultValue: "{{input}}",
+        valueSource: "UserInput",
+        UIConfigurable: true,
+        description: "Text template to interpolate with input. Supports {{input}} for raw input and {{input.field}} for JSON field access.",
+        isNodeBodyContent: true,
+        i18n: {
+          en: {
+            "Text Input": {
+              Name: "Text Input",
+              Description:
+                "Text template to interpolate with input. Supports {{input}} for raw input and {{input.field}} for JSON field access.",
+            },
           },
-        },
-        ar: {
-          "Text Input": {
-            Name: "القالب النصي",
-            Description: "قالب نصي يُدمج مع البيانات المُدخلة",
+          ar: {
+            "Text Input": {
+              Name: "القالب النصي",
+              Description:
+                "قالب نصي يُدمج مع البيانات المُدخلة. يدعم {{input}} للنص الخام و {{input.field}} للوصول إلى حقول JSON.",
+            },
           },
         },
       },
+    ],
+    i18n: {
+      en: {
+        category: "Text",
+        title: "Text",
+        nodeType: "Text",
+        description:
+          "A versatile text node that processes a template string. It replaces the `{{input}}` placeholder with the value from its input socket. If the input is a JSON object, you can access individual fields using dot-notation, e.g. `{{input.title}}`, `{{input.authors}}`, making it ideal for formatting and combining text dynamically.",
+      },
+      ar: {
+        category: "نص",
+        title: "نص",
+        nodeType: "نص",
+        description:
+          "عقدة نصية متعددة الاستخدامات تقوم بمعالجة سلسلة قالب نصي. يتم استبدال العنصر النائب `{{input}}` بقيمة من مقبس الإدخال. إذا كان الإدخال كائن JSON، يمكن الوصول إلى الحقول باستخدام النقطة مثل `{{input.title}}`.",
+      },
     },
-  ],
-  i18n: {
-    en: {
-      category: "Text",
-      title: "Text",
-      nodeType: "Text", 
-      description: "A versatile text node that processes a template string. It replaces the `{{input}}` placeholder with the value from its input socket, making it ideal for formatting and combining text dynamically.",
-    },
-    ar: {
-      category: "نص",
-      title: "نص",
-      nodeType: "نص", 
-      description: "عقدة نصية متعددة الاستخدامات تقوم بمعالجة سلسلة قالب نصي. يتم استبدال العنصر النائب `{{input}}` بقيمة من مقبس الإدخال، مما يجعلها مثالية لتنسيق ودمج النصوص ديناميكياً.",
-    },
-  },
-};
+  };
 
   function createTextNode(id: number, position: Position): TextNode {
     return {
@@ -127,10 +154,9 @@ export function register(nodeRegistry: NodeRegistry): void {
       selected: false,
       processing: false,
       process: async (context: NodeExecutionContext) => {
-        // If the node value is a string and contains template variables, process them
         const n = context.node as TextNode;
 
-          if (typeof n.nodeValue === "string") {
+        if (typeof n.nodeValue === "string") {
           const inputValue = context.inputs[n.id * 100 + 1];
           let input = "";
           if (typeof inputValue !== "string") {

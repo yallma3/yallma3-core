@@ -1,9 +1,13 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { type ToolCall } from "../Models/Mcp";
+const REQUEST_TIMEOUT_MS = 300_000; 
 
 export const getTools = async (client: Client) => {
   try {
-    const toolsResult = await client.listTools();
+    const toolsResult = await client.listTools(
+      undefined,
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
 
     const mcpTools = toolsResult.tools.map((tool) => ({
       name: tool.name,
@@ -19,10 +23,14 @@ export const getTools = async (client: Client) => {
 
 export const callTool = async (client: Client, toolCall: ToolCall) => {
   try {
-    const toolResponse = await client.callTool({
-      name: toolCall.tool,
-      arguments: toolCall.input,
-    });
+    const toolResponse = await client.callTool(
+      {
+        name: toolCall.tool,
+        arguments: toolCall.input,
+      },
+      undefined,
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
 
     const response = {
       content: toolResponse.content,
@@ -38,7 +46,10 @@ export const callTool = async (client: Client, toolCall: ToolCall) => {
 
 export const getPrompts = async (client: Client) => {
   try {
-    const promptsResult = await client.listPrompts();
+    const promptsResult = await client.listPrompts(
+      undefined,
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
 
     const mcpPrompts = promptsResult.prompts.map((prompt) => ({
       name: prompt.name,
@@ -54,9 +65,10 @@ export const getPrompts = async (client: Client) => {
 
 export const getPrompt = async (client: Client, getPrompt: string) => {
   try {
-    const promptResult = await client.getPrompt({
-      name: getPrompt,
-    });
+    const promptResult = await client.getPrompt(
+      { name: getPrompt },
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
     const mcpPrompt = {
       description: promptResult.description,
       messages: promptResult.messages,
@@ -71,7 +83,10 @@ export const getPrompt = async (client: Client, getPrompt: string) => {
 
 export const getResources = async (client: Client) => {
   try {
-    const resourcesResult = await client.listResources();
+    const resourcesResult = await client.listResources(
+      undefined,
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
     const mcpResources = resourcesResult.resources.map((resource) => ({
       name: resource.name,
       description: resource.description,
@@ -86,9 +101,10 @@ export const getResources = async (client: Client) => {
 
 export const getResource = async (client: Client, getResource: string) => {
   try {
-    const resourceResult = await client.readResource({
-      uri: getResource,
-    });
+    const resourceResult = await client.readResource(
+      { uri: getResource },
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
     const mcpResource = {
       contents: resourceResult.contents,
     };

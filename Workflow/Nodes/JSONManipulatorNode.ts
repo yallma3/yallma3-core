@@ -33,7 +33,7 @@ export interface OperationConfig {
   template?: string;
 }
 const INPUT_SOCKET_OFFSET  = 1;  
-const STATUS_SOCKET_OFFSET = 2;  
+const STATUS_SOCKET_OFFSET = 99; 
 const OUTPUT_BASE          = 10;
 
 export function opSocketId(nodeId: number, opIndex: number): number {
