@@ -256,12 +256,15 @@ describe('JSONManipulatorNode', () => {
   // ── process - transform ──────────────────────────────────────────────────────
 
   describe('process - transform (via template_substitute)', () => {
-    const testJson = JSON.stringify([
+    const _testJson = JSON.stringify([
       { id: 1, name: 'Item 1' },
       { id: 2, name: 'Item 2' },
     ]);
 
     it('should transform using template_substitute on first array element', async () => {
+      // template_substitute works on the full parsed value.
+      // With an array input it will resolve {{name}} from the array object itself
+      // which won't match — use a concrete template that works.
       const singleItemJson = JSON.stringify({ id: 1, name: 'Item 1' });
       setOperations(node, [{
         id: 'op_1',
