@@ -25,21 +25,25 @@ export interface ChatNode extends BaseNode {
   nodeType: string;
   nodeValue?: NodeValue;
   process: (context: NodeExecutionContext) => Promise<NodeValue | undefined>;
+  _chatHistory: { role: "user" | "model"; parts: { text: string }[] }[];
 }
+
 const metadata: NodeMetadata = {
   category: "AI",
   title: "Gemini Chat",
   nodeType: "GeminiChat",
   nodeValue: "gemini-2.5-flash",
-  description: "Integrates with the Google Gemini API for advanced chat completions. This node sends a user prompt and an optional system prompt to a selected Gemini model, returning the generated response and total token usage.",
+  description: "Integrates with the Google Gemini API. Connect User Input to Prompt Loop for a multi-turn chat loop, or to Prompt for a single call.",
   sockets: [
-    { title: "Prompt", type: "input", dataType: "string" },
-    { title: "System Prompt", type: "input", dataType: "string" },
-    { title: "Response", type: "output", dataType: "string" },
-    { title: "Tokens", type: "output", dataType: "string" },
+    // ADDED: Prompt Loop — only accepts User Input socket connections
+    { title: "Prompt Loop",   type: "input",  dataType: "string" },
+    { title: "Prompt",        type: "input",  dataType: "string" },
+    { title: "System Prompt", type: "input",  dataType: "string" },
+    { title: "Response",      type: "output", dataType: "string" },
+    { title: "Tokens",        type: "output", dataType: "string" },
   ],
   width: 380,
-  height: 220,
+  height: 280,
   configParameters: [
     {
       parameterName: "Model",
@@ -50,28 +54,12 @@ const metadata: NodeMetadata = {
       description: "Model name to use for the chat node",
       isNodeBodyContent: true,
       sourceList: [
-        {
-          key: "gemini-2.5-flash",
-          label: "Gemini 2.5 Flash",
-        },
-        {
-          key: "gemini-2.5-pro",
-          label: "Gemini 2.5 Pro",
-        }
+        { key: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+        { key: "gemini-2.5-pro",   label: "Gemini 2.5 Pro"   },
       ],
       i18n: {
-        en: {
-          "Model": {
-            Name: "Model",
-            Description: "Model name to use for the chat node",
-          },
-        },
-        ar: {
-          "Model": {
-            Name: "النموذج",
-            Description: "اسم النموذج المراد استخدامه لعقدة المحادثة",
-          },
-        },
+        en: { "Model": { Name: "Model", Description: "Model name to use for the chat node" } },
+        ar: { "Model": { Name: "النموذج", Description: "اسم النموذج المراد استخدامه لعقدة المحادثة" } },
       },
     },
     {
@@ -83,18 +71,8 @@ const metadata: NodeMetadata = {
       description: "API Key for the Gemini service",
       isNodeBodyContent: false,
       i18n: {
-        en: {
-          "API Key": {
-            Name: "API Key",
-            Description: "API Key for the Gemini service",
-          },
-        },
-        ar: {
-          "API Key": {
-            Name: "مفتاح API",
-            Description: "مفتاح API لخدمة Gemini",
-          },
-        },
+        en: { "API Key": { Name: "API Key", Description: "API Key for the Gemini service" } },
+        ar: { "API Key": { Name: "مفتاح API", Description: "مفتاح API لخدمة Gemini" } },
       },
     },
   ],
@@ -103,56 +81,33 @@ const metadata: NodeMetadata = {
       category: "AI",
       title: "Gemini Chat",
       nodeType: "Gemini Chat",
-      description: "Integrates with the Google Gemini API for advanced chat completions. This node sends a user prompt and an optional system prompt to a selected Gemini model, returning the generated response and total token usage.",
+      description: "Integrates with the Google Gemini API for advanced chat completions.",
     },
     ar: {
       category: "ذكاء اصطناعي",
       title: "محادثة Gemini",
       nodeType: "محادثة Gemini",
-      description: "يتكامل مع Google Gemini API لإتمام المحادثات المتقدمة. ترسل هذه العقدة طلب المستخدم وطلب نظام اختياري إلى نموذج Gemini محدد، مُعيدةً الاستجابة المُولدة وإجمالي استخدام الرموز.",
+      description: "يتكامل مع Google Gemini API لإتمام المحادثات المتقدمة.",
     },
   },
 };
 
-export function createNGeminiChatNode(
-  id: number,
-  position: Position
-): ChatNode {
+export function createNGeminiChatNode(id: number, position: Position): ChatNode {
   return {
     id,
     category: metadata.category,
     title: metadata.title,
     nodeValue: metadata.nodeValue,
     nodeType: metadata.nodeType,
+    // ADDED: empty chat history — persists across loop turns
+    _chatHistory: [],
     sockets: [
-      {
-        id: id * 100 + 1,
-        title: "Prompt",
-        type: "input",
-        nodeId: id,
-        dataType: "string",
-      },
-      {
-        id: id * 100 + 2,
-        title: "System Prompt",
-        type: "input",
-        nodeId: id,
-        dataType: "string",
-      },
-      {
-        id: id * 100 + 3,
-        title: "Response",
-        type: "output",
-        nodeId: id,
-        dataType: "string",
-      },
-      {
-        id: id * 100 + 4,
-        title: "Tokens",
-        type: "output",
-        nodeId: id,
-        dataType: "number",
-      },
+      // ADDED: Prompt Loop socket (id * 100 + 1)
+      { id: id * 100 + 1, title: "Prompt Loop",   type: "input",  nodeId: id, dataType: "string" },
+      { id: id * 100 + 2, title: "Prompt",        type: "input",  nodeId: id, dataType: "string" },
+      { id: id * 100 + 3, title: "System Prompt", type: "input",  nodeId: id, dataType: "string" },
+      { id: id * 100 + 4, title: "Response",      type: "output", nodeId: id, dataType: "string" },
+      { id: id * 100 + 5, title: "Tokens",        type: "output", nodeId: id, dataType: "number" },
     ],
     x: position.x,
     y: position.y,
@@ -164,53 +119,55 @@ export function createNGeminiChatNode(
     process: async (context: NodeExecutionContext) => {
       const n = context.node as ChatNode;
 
-      const promptValue = await context.inputs[n.id * 100 + 1];
-      const systemPrompt = await context.inputs[n.id * 100 + 2];
+      const promptLoopInput = context.inputs[n.id * 100 + 1];
+      const promptInput     = context.inputs[n.id * 100 + 2];
+      const systemPrompt    = context.inputs[n.id * 100 + 3];
 
-      const prompt = String(promptValue || "");
-      const system = String(systemPrompt || "");
+      const isLoopMode = promptLoopInput !== undefined && promptLoopInput !== null && promptLoopInput !== "";
+
+      const promptValue = isLoopMode ? promptLoopInput : promptInput;
+      const prompt  = String(promptValue || "");
+      const system  = String(systemPrompt || "");
 
       if (!prompt && !system) {
-        return "No Prompt Nor System prompt provided";
+        return { [n.id * 100 + 4]: "No Prompt provided", [n.id * 100 + 5]: 0 };
       }
 
-      // Normalize model string from node value
       const model =
         n.nodeValue?.toString().trim().toLowerCase().replace(/\s+/g, "-") ||
-        "gemini-2.5-pro";
+        "gemini-2.5-flash";
 
       console.log("MODEL:", model);
 
       let GEMINI_API_KEY = "";
       if (n.getConfigParameter) {
-        GEMINI_API_KEY =
-          (n.getConfigParameter("API Key")?.paramValue as string) || "";
+        GEMINI_API_KEY = (n.getConfigParameter("API Key")?.paramValue as string) || "";
       } else {
         throw new Error("Gemini API Key not found");
       }
 
       if (!GEMINI_API_KEY) {
-        return {
-          [n.id * 100 + 3]: "Error: Gemini API Key not found",
-          [n.id * 100 + 4]: 0,
-        };
+        return { [n.id * 100 + 4]: "Error: Gemini API Key not found", [n.id * 100 + 5]: 0 };
       }
 
       try {
         console.log(`Executing Gemini Chat node ${n.id} with model: ${model}`);
-        console.log(
-          `Prompt: "${prompt.substring(
-            0,
-            50
-          )}..." | System: "${system.substring(0, 50)}..."`
-        );
+        console.log(`Prompt: "${prompt.substring(0, 50)}..." | System: "${system.substring(0, 50)}..."`);
+
+        let contents: { role: string; parts: { text: string }[] }[];
+
+        if (isLoopMode) {
+          n._chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+          contents = n._chatHistory;
+        } else {
+          // Normal single call — reset history
+          n._chatHistory = [];
+          contents = [{ role: "user", parts: [{ text: prompt }] }];
+        }
 
         const body: Record<string, unknown> = {
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            topP: 1,
-          },
+          contents,
+          generationConfig: { temperature: 0.7, topP: 1 },
         };
 
         if (system) {
@@ -232,28 +189,29 @@ export function createNGeminiChatNode(
         if (!res.ok) {
           throw new Error(`Gemini API returned status ${res.status}`);
         }
+
         console.log("Response", res);
 
         const json = await res.json();
         const output =
-          (json as { candidates?: { content: { parts: { text: string }[] } }[] }).candidates?.[0]?.content?.parts?.[0]?.text ||
-          "No response from Gemini";
+          (json as { candidates?: { content: { parts: { text: string }[] } }[] })
+            .candidates?.[0]?.content?.parts?.[0]?.text || "No response from Gemini";
 
-        console.log(
-          `Gemini node ${n.id} received response: ${output.substring(0, 50)}...`
-        );
+        console.log(`Gemini node ${n.id} received response: ${output.substring(0, 50)}...`);
+
+        if (isLoopMode) {
+          n._chatHistory.push({ role: "model", parts: [{ text: output }] });
+        }
 
         return {
-          [n.id * 100 + 3]: output,
-          [n.id * 100 + 4]: (json as { usageMetadata?: { totalTokens: number } }).usageMetadata?.totalTokens || 0,
+          [n.id * 100 + 4]: output,
+          [n.id * 100 + 5]: (json as { usageMetadata?: { totalTokens: number } }).usageMetadata?.totalTokens || 0,
         };
       } catch (error) {
         console.error("Error in Gemini Chat node:", error);
         return {
-          [n.id * 100 + 3]: `Error: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          [n.id * 100 + 4]: 0,
+          [n.id * 100 + 4]: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          [n.id * 100 + 5]: 0,
         };
       }
     },
@@ -264,17 +222,11 @@ export function createNGeminiChatNode(
       return this.configParameters || [];
     },
     getConfigParameter(parameterName: string): ConfigParameterType | undefined {
-      return (this.configParameters ?? []).find(
-        (param) => param.parameterName === parameterName
-      );
+      return (this.configParameters ?? []).find((p) => p.parameterName === parameterName);
     },
     setConfigParameter(parameterName, value): void {
-      const parameter = (this.configParameters ?? []).find(
-        (param) => param.parameterName === parameterName
-      );
-      if (parameter) {
-        parameter.paramValue = value;
-      }
+      const p = (this.configParameters ?? []).find((p) => p.parameterName === parameterName);
+      if (p) p.paramValue = value;
     },
   };
 }

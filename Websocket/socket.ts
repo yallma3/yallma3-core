@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 import { createMainAgent } from "../Utils/Runtime";
-import { executeFlowRuntime } from "../Workflow/runtime";
+import { executeFlowRuntime, requestStop } from "../Workflow/runtime";
 
 import { ConsoleInputUtils } from "../Workflow/Nodes/ConsoleInput";
 import { resolveUserPrompt } from "../Workflow/Nodes/UserPromptNode";
@@ -51,6 +51,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
 
   const workspaceDataCache = new Map<string, string>();
   const workspacePathsCache = new Map<string, string>();
+ // const workflowRequestsMap = new Map<string, string>();
 
   function broadcast(message: unknown) {
     const messageStr = JSON.stringify(message);
@@ -1033,6 +1034,18 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   timestamp: new Date().toISOString(),
                 })
               );
+            }
+            break;
+          }
+          case "stop_workflow": {
+            try {
+              const payload = typeof data.data === "string" ? JSON.parse(data.data) : data.data;
+              const workflowId = String(payload?.workflowId ?? "default");
+              requestStop(workflowId);
+              console.log(`[SERVER STDOUT] [Stop] Received stop request for workflow: ${workflowId}`);
+              ws.send(JSON.stringify({ type: "workflow_stopped", workflowId, timestamp: new Date().toISOString() }));
+            } catch (e) {
+              console.error("Failed to parse stop_workflow payload:", e);
             }
             break;
           }

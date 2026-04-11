@@ -20,7 +20,9 @@ let cachedWorkspaceData: WorkspaceData | null = null;
 export function setWorkspaceDataForTools(workspaceData: WorkspaceData) {
   cachedWorkspaceData = workspaceData;
 }
-
+export function getWorkspaceDataForTools() {
+  return cachedWorkspaceData;
+}
 
 // Detect if WebSocket is real or mock
 function isRealWebSocket(ws: WebSocket): boolean {

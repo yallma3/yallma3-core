@@ -57,12 +57,15 @@ import { register as registerDataGenerationNode } from "./Nodes/DataGenerationNo
 import { register as registerPublishToHuggingFaceNode } from "./Nodes/publishToHuggingFaceNode";
 import { register as registerImageInputNode } from "./Nodes/ImageInputNode";
 import { register as registerSoundInputNode } from "./Nodes/soundInputNode";
+import{register as registerLoopNode} from "./Nodes/LoopNode";
+import {register as registerMcpClientNode} from "./Nodes/Mcp/McpClientNode";
 export async function initFlowSystem() {
   registerMathNode(nodeRegistry);
   registerTextNode(nodeRegistry);
   registerJoinNode(nodeRegistry);
   registerImageInputNode(nodeRegistry);
   registerSoundInputNode(nodeRegistry);
+  registerLoopNode(nodeRegistry); 
 
   registerConsoleInputNode(nodeRegistry);
   registerUserPromptNode(nodeRegistry);
@@ -81,6 +84,7 @@ export async function initFlowSystem() {
   registerMcpDiscoveryNode(nodeRegistry);
   registerMcpToolCallNode(nodeRegistry);
   registerMcpGetResourceNode(nodeRegistry);
+  registerMcpClientNode(nodeRegistry);
   registerMcpGeToolNode(nodeRegistry);
 
   registerPdfDownloaderNode(nodeRegistry);

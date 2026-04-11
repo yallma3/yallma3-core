@@ -1,3 +1,15 @@
+/*
+ * yaLLMa3 - Framework for building AI agents that are capable of learning from their environment and interacting with it.
+ *
+ * Copyright (C) 2025 yaLLMa3
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+ * If a copy of the MPL was not distributed with this file, You can obtain one at https://www.mozilla.org/MPL/2.0/.
+ *
+ * This software is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied.
+ */
+
 import type {
   BaseNode,
   NodeMetadata,
@@ -93,7 +105,7 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
     configParameters: JSON.parse(JSON.stringify(metadata.configParameters)),
 
     sockets: SOCKETS.map((socket, index) => ({
-      id: id * 100 + (socket.type === "input" ? index + 1 : index - 3 + 101),
+      id: id * 100 + (socket.type === "input" ? index + 1 : index - 2 + 101),
       title: socket.title,
       type: socket.type,
       nodeId: id,
@@ -112,7 +124,6 @@ function createHttpCallNode(id: number, position: Position): HttpCallNode {
       const timeout = (n.getConfigParameter?.("Timeout (ms)")?.paramValue ?? 10000) as number;
 
       if (!url?.trim()) {
-        n.nodeValue = null;
         return {
           [base + 101]: null,
           [base + 102]: 0,
