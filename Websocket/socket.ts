@@ -51,7 +51,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
 
   const workspaceDataCache = new Map<string, string>();
   const workspacePathsCache = new Map<string, string>();
-  const workflowRequestsMap = new Map<string, string>();
+ // const workflowRequestsMap = new Map<string, string>();
 
   function broadcast(message: unknown) {
     const messageStr = JSON.stringify(message);

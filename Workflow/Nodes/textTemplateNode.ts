@@ -34,9 +34,12 @@ const processTextTemplate = async (
   let result = template;
 
   // Try to parse input as JSON for dot-notation field access (e.g. {{input.title}})
-  let parsedInput: any = null;
+  let parsedInput: Record<string, unknown> | null = null;
   try {
-    parsedInput = JSON.parse(input);
+    const parsed: unknown = JSON.parse(input);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      parsedInput = parsed as Record<string, unknown>;
+    }
   } catch {
     parsedInput = null;
   }
@@ -46,10 +49,10 @@ const processTextTemplate = async (
     result = result.replace(/\{\{input\.([^}]+)\}\}/g, (_, fieldPath: string) => {
       // Support nested dot paths like {{input.author.name}}
       const keys = fieldPath.split(".");
-      let value: any = parsedInput;
+      let value: unknown = parsedInput;
       for (const key of keys) {
         if (value !== null && value !== undefined && typeof value === "object") {
-          value = value[key];
+          value = (value as Record<string, unknown>)[key];
         } else {
           value = undefined;
           break;

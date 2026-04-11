@@ -46,7 +46,7 @@ const resolvePath = (obj: unknown, path: string): unknown => {
 const toArray = (raw: unknown, fieldPath: string): unknown[] => {
   let parsed: unknown = raw;
   if (typeof raw === "string") {
-    try { parsed = JSON.parse(raw); } catch { }
+    try { parsed = JSON.parse(raw); } catch { /* ignore parse errors */ }
   }
   const extracted = fieldPath.trim() ? resolvePath(parsed, fieldPath) : parsed;
   if (Array.isArray(extracted)) return extracted;

@@ -324,7 +324,7 @@ Reply ONLY with this JSON (no markdown, no extra text):
 
   const raw = await llm.generateText(prompt);
 
-  const cleaned = raw.replace(/\`\`\`json|\`\`\`/g, "").trim();
+  const cleaned = raw.replace(/```json|```/g, "").trim();
   const jsonStart = cleaned.indexOf("{");
   const jsonEnd   = cleaned.lastIndexOf("}") + 1;
   if (jsonStart === -1) throw new Error("AI selector returned no JSON. Response: " + raw.substring(0, 300));
@@ -386,7 +386,8 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
             resources: resourcesResult.status === "fulfilled" ? (resourcesResult.value as { name: string; uri: string; description?: string }[])          : [],
             prompts:   promptsResult.status   === "fulfilled" ? (promptsResult.value   as { name: string; description?: string; arguments?: unknown[] }[]) : [],
           };
-          const wsData = getWorkspaceDataForTools() as any;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const wsData = getWorkspaceDataForTools() as Record<string, any>;
           const llmOption = wsData?.mainLLM;
           const apiKey: string = wsData?.apiKey ?? "";
 
@@ -452,9 +453,14 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
 
           let inputRecord: Record<string, unknown> = {};
           if (inputJSON.trim() && inputJSON.trim() !== "{}") {
-            const sanitized = inputJSON.replace(/[\u0000-\u001F\u007F]/g, (c) =>
-              ({ "\n": "\\n", "\r": "\\r", "\t": "\\t" }[c] ?? "")
-            );
+            const sanitized = inputJSON.split("").map((c: string) => {
+              const code = c.charCodeAt(0);
+              if (code === 0x0A) return "\\n";
+              if (code === 0x0D) return "\\r";
+              if (code === 0x09) return "\\t";
+              if (code <= 0x1F || code === 0x7F) return "";
+              return c;
+            }).join("");
             try {
               inputRecord = JSON.parse(sanitized);
             } catch {
