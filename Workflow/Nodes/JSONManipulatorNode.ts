@@ -12,15 +12,135 @@
 
 import type {
   BaseNode,
+  Position,
   ConfigParameterType,
   NodeValue,
   NodeExecutionContext,
   NodeMetadata,
-  Position,
   DataType,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
 
+export type OperationType = "extract_field" | "template_substitute";
+export type OutputFormat  = "string" | "array" | "object" | "count";
+
+export interface OperationConfig {
+  id: string;
+  type: OperationType;
+  label: string;
+  fieldPath?: string;
+  outputFormat?: OutputFormat;
+  template?: string;
+}
+const INPUT_SOCKET_OFFSET  = 1;  
+const STATUS_SOCKET_OFFSET = 99; 
+const OUTPUT_BASE          = 10;
+
+export function opSocketId(nodeId: number, opIndex: number): number {
+  return nodeId * 100 + OUTPUT_BASE + opIndex;
+}
+
+function buildSockets(id: number, ops: OperationConfig[]): BaseNode["sockets"] {
+  const sockets: BaseNode["sockets"] = [
+    {
+      id: id * 100 + INPUT_SOCKET_OFFSET,
+      title: "JSON Input",
+      type: "input",
+      nodeId: id,
+      dataType: "string" as DataType,
+    },
+  ];
+  ops.forEach((op, idx) => {
+    sockets.push({
+      id: opSocketId(id, idx),
+      title: op.label || `Output ${idx + 1}`,
+      type: "output",
+      nodeId: id,
+      dataType: "string" as DataType,
+    });
+  });
+  sockets.push({
+    id: id * 100 + STATUS_SOCKET_OFFSET,
+    title: "Status",
+    type: "output",
+    nodeId: id,
+    dataType: "string" as DataType,
+  });
+  return sockets;
+}
+
+function computeHeight(opCount: number): number {
+  const totalSockets = opCount + 2;
+  return Math.max(220, 100 + totalSockets * 50);
+}
+
+const DEFAULT_OPERATIONS: OperationConfig[] = [
+  {
+    id: "op_1",
+    type: "extract_field",
+    label: "Field Output",
+    fieldPath: "title",
+    outputFormat: "string",
+  },
+];
+
+const DEFAULT_OPS_JSON = JSON.stringify(DEFAULT_OPERATIONS);
+
+function getNestedValue(obj: unknown, path: string): unknown {
+  const tokens = path.match(/[^.[\]]+|\[\d+\]/g) ?? [];
+
+  return tokens.reduce((current: unknown, token) => {
+    if (current === null || current === undefined) return undefined;
+    const indexMatch = token.match(/^\[(\d+)\]$/);
+    if (indexMatch && indexMatch[1]) {
+      const index = parseInt(indexMatch[1], 10);
+      return Array.isArray(current) ? current[index] : undefined;
+    }
+    if (typeof current === "object" && !Array.isArray(current)) {
+      return (current as Record<string, unknown>)[token];
+    }
+
+    return undefined;
+  }, obj);
+}
+
+function extractField(data: unknown, fieldPath: string): unknown {
+  if (Array.isArray(data)) {
+    return data
+      .map((item) => getNestedValue(item, fieldPath))
+      .filter((v) => v !== undefined);
+  }
+  return getNestedValue(data, fieldPath);
+}
+
+function formatOutput(value: unknown, fmt: OutputFormat): string {
+  switch (fmt) {
+    case "string":  return Array.isArray(value) ? value.join(", ") : String(value ?? "");
+    case "array":   return JSON.stringify(Array.isArray(value) ? value : [value], null, 2);
+    case "object":  return JSON.stringify(value, null, 2);
+    case "count":   return String(Array.isArray(value) ? value.length : value !== undefined ? 1 : 0);
+    default:        return String(value ?? "");
+  }
+}
+
+function templateSubstitute(data: unknown, template: string): string {
+  return template.replace(/\{\{([^}]+)\}\}/g, (_match, path: string) => {
+    const val = getNestedValue(data, path.trim());
+    return val !== undefined && val !== null ? String(val) : "";
+  });
+}
+
+function readOperations(node: BaseNode): OperationConfig[] {
+  const param = (node.configParameters ?? []).find(
+    (p) => p.parameterName === "Operations"
+  );
+  const raw = String(param?.paramValue ?? param?.defaultValue ?? "");
+  try {
+    const parsed = JSON.parse(raw) as OperationConfig[];
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch { /* fall through */ }
+  return DEFAULT_OPERATIONS;
+}
 export interface JSONManipulatorNode extends BaseNode {
   nodeType: string;
   nodeValue?: NodeValue;
@@ -31,110 +151,26 @@ const metadata: NodeMetadata = {
   category: "Text",
   title: "JSON Manipulator",
   nodeType: "JSONManipulator",
-  description: "A versatile node for processing JSON data. It can extract fields, filter arrays, transform structures, and count items based on configurable operations and field paths.",
-  nodeValue: "JSON Processor",
+  description:
+    "Multi-output JSON processor. Each output runs an independent operation " +
+    "(extract_field or template_substitute) on the same JSON input.",
+  nodeValue: "",
   sockets: [
-    { title: "JSON Input", type: "input", dataType: "string" },
-    { title: "Result", type: "output", dataType: "string" },
-    { title: "Status", type: "output", dataType: "string" },
+    { title: "JSON Input",   type: "input",  dataType: "string" },
+    { title: "Field Output", type: "output", dataType: "string" },
+    { title: "Status",       type: "output", dataType: "string" },
   ],
-  width: 320,
-  height: 280,
+  width: 280,
+  height: computeHeight(DEFAULT_OPERATIONS.length),
   configParameters: [
     {
-      parameterName: "Operation",
-      parameterType: "string",
-      defaultValue: "extract_field",
+      parameterName: "Operations",
+      parameterType: "text",
+      defaultValue: DEFAULT_OPS_JSON,
       valueSource: "UserInput",
-      UIConfigurable: true,
-      description:
-        "Operation: extract_field, extract_array, filter, transform, count",
+      UIConfigurable: false,
+      description: "JSON array of OperationConfig objects — managed by the Node Edit Panel UI",
       isNodeBodyContent: false,
-      i18n: {
-        en: {
-          "Operation": {
-            Name: "Operation",
-            Description: "Operation: extract_field, extract_array, filter, transform, count",
-          },
-        },
-        ar: {
-          "Operation": {
-            Name: "العملية",
-            Description: "العملية: استخراج الحقل، استخراج المصفوفة، تصفية، تحويل، عد",
-          },
-        },
-      },
-    },
-    {
-      parameterName: "Field Path",
-      parameterType: "string",
-      defaultValue: "title",
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description:
-        "Field path to extract (e.g., 'title', 'data.name', 'items[0].id')",
-      isNodeBodyContent: false,
-      i18n: {
-        en: {
-          "Field Path": {
-            Name: "Field Path",
-            Description: "Field path to extract (e.g., 'title', 'data.name', 'items[0].id')",
-          },
-        },
-        ar: {
-          "Field Path": {
-            Name: "مسار الحقل",
-            Description: "مسار الحقل للاستخراج (مثال: 'title', 'data.name', 'items[0].id')",
-          },
-        },
-      },
-    },
-    {
-      parameterName: "Filter Condition",
-      parameterType: "string",
-      defaultValue: "",
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description:
-        "Filter condition (e.g., 'version > 1', 'title contains \"test\"')",
-      isNodeBodyContent: false,
-      i18n: {
-        en: {
-          "Filter Condition": {
-            Name: "Filter Condition",
-            Description: "Filter condition (e.g., 'version > 1', 'title contains \"test\"')",
-          },
-        },
-        ar: {
-          "Filter Condition": {
-            Name: "شرط التصفية",
-            Description: "شرط التصفية (مثال: 'version > 1', 'title contains \"test\"')",
-          },
-        },
-      },
-    },
-    {
-      parameterName: "Output Format",
-      parameterType: "string",
-      defaultValue: "array",
-      valueSource: "UserInput",
-      UIConfigurable: true,
-      description: "Output format: array, object, string, count",
-      isNodeBodyContent: false,
-      i18n: {
-        en: {
-          "Output Format": {
-            Name: "Output Format",
-            Description: "Output format: array, object, string, count",
-          },
-        },
-        ar: {
-          "Output Format": {
-            Name: "صيغة الإخراج",
-            Description: "صيغة الإخراج: مصفوفة، كائن، نص، عد",
-          },
-        },
-      },
     },
   ],
   i18n: {
@@ -142,13 +178,14 @@ const metadata: NodeMetadata = {
       category: "Text",
       title: "JSON Manipulator",
       nodeType: "JSON Manipulator",
-      description: "A versatile node for processing JSON data. It can extract fields, filter arrays, transform structures, and count items based on configurable operations and field paths.",
+      description:
+        "Multi-output JSON processor with extract_field and template_substitute operations.",
     },
     ar: {
       category: "نص",
       title: "معالج JSON",
       nodeType: "معالج JSON",
-      description: "عقدة متعددة الاستخدامات لمعالجة بيانات JSON. يمكنها استخراج الحقول، وتصفية المصفوفات، وتحويل الهياكل، وعد العناصر بناءً على عمليات قابلة للتكوين ومسارات الحقول.",
+      description: "معالج JSON متعدد المخرجات.",
     },
   },
 };
@@ -157,293 +194,106 @@ export function createJSONManipulatorNode(
   id: number,
   position: Position
 ): JSONManipulatorNode {
+  const ops = DEFAULT_OPERATIONS.map((o) => ({ ...o }));
+
   return {
     id,
     category: metadata.category,
     title: metadata.title,
-    nodeValue: metadata.nodeValue,
+    nodeValue: "",
     nodeType: metadata.nodeType,
-    sockets: metadata.sockets.map((socket, index) => ({
-      id: id * 100 + index + 1,
-      title: socket.title,
-      type: socket.type,
-      nodeId: id,
-      dataType: socket.dataType as DataType,
-    })),
+    sockets: buildSockets(id, ops),
     x: position.x,
     y: position.y,
     width: metadata.width,
-    height: metadata.height,
+    height: computeHeight(ops.length),
     selected: false,
     processing: false,
-    configParameters: [...metadata.configParameters],
 
+    configParameters: [
+      {
+        parameterName: "Operations",
+        parameterType: "text",
+        defaultValue: DEFAULT_OPS_JSON,
+        paramValue: DEFAULT_OPS_JSON,
+        valueSource: "UserInput",
+        UIConfigurable: false,
+        description: "JSON array of OperationConfig objects — managed by the Node Edit Panel UI",
+        isNodeBodyContent: false,
+      },
+    ],
     process: async (context: NodeExecutionContext) => {
+      const n   = context.node as JSONManipulatorNode;
+      const ops = readOperations(n);
+
+      // Parse the incoming JSON input once
+      const jsonInput = context.inputs[n.id * 100 + INPUT_SOCKET_OFFSET];
+      let parsed: unknown;
       try {
-        // Get input values
-        const jsonInput = await context.inputs[id * 100 + 1];
-
-        console.log(`Executing JSONManipulator node ${id}`);
-
-        // Validate required inputs
-        if (!jsonInput || typeof jsonInput !== 'string') {
+        if (!jsonInput || typeof jsonInput !== "string")
           throw new Error("JSON input is required and must be a string");
-        }
-
-        // Get configuration parameters
-        const getConfigValue = (paramName: string) => {
-          const param = context.node.configParameters?.find(
-            (p: ConfigParameterType) => p.parameterName === paramName
-          );
-          return param?.paramValue ?? param?.defaultValue;
-        };
-
-        const operation = getConfigValue("Operation") as string;
-        const fieldPath = getConfigValue("Field Path") as string;
-        const filterCondition = getConfigValue("Filter Condition") as string;
-        const outputFormat = getConfigValue("Output Format") as string;
-
-        console.log(
-          `Operation: ${operation}, Field Path: ${fieldPath}, Output Format: ${outputFormat}`
-        );
-
-        // Parse JSON input
-        let jsonData: unknown;
-        try {
-          jsonData = JSON.parse(jsonInput);
-        } catch (parseError) {
-          throw new Error(
-            `Invalid JSON input: ${
-              parseError instanceof Error
-                ? parseError.message
-                : String(parseError)
-            }`
-          );
-        }
-
-       // Process based on operation
-        let result: unknown;
-
-        switch (operation.toLowerCase()) {
-          case "extract_field":
-            result = extractField(jsonData, fieldPath);
-            break;
-          case "extract_array":
-            result = extractArrayField(jsonData, fieldPath);
-            break;
-          case "filter":
-            result = filterData(jsonData, filterCondition);
-            break;
-          case "transform":
-            result = transformData(jsonData, fieldPath);
-            break;
-          case "count":
-            result = countItems(jsonData, fieldPath);
-            break;
-          default:
-            throw new Error(`Unsupported operation: ${operation}`);
-        }
-
-       // Format output
-        let formattedResult: string;
-        switch (outputFormat.toLowerCase()) {
-          case "array":
-            formattedResult = JSON.stringify(
-              Array.isArray(result) ? result : [result],
-              null,
-              2
-            );
-            break;
-          case "object":
-            formattedResult = JSON.stringify(result, null, 2);
-            break;
-          case "string":
-            formattedResult = Array.isArray(result)
-              ? result.join(", ")
-              : String(result);
-            break;
-          case "count":
-            formattedResult = String(Array.isArray(result) ? result.length : 1);
-            break;
-          default:
-            formattedResult = JSON.stringify(result, null, 2);
-        }
-
-        console.log(`JSON manipulation completed successfully`);
-
-        return {
-         // Socket id 2 is for Result output
-          [id * 100 + 2]: formattedResult,
-          // Socket id 3 is for Status
-          [id * 100 + 3]: `Success: ${operation} operation completed`,
-        };
-      } catch (error) {
-        console.error("Error in JSONManipulator node:", error);
-
-        return {
-          [id * 100 + 2]: "",
-          [id * 100 + 3]: `Error: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        };
+        parsed = JSON.parse(jsonInput);
+      } catch (e) {
+        const err = `Error: ${e instanceof Error ? e.message : String(e)}`;
+        const result: Record<number, string> = {};
+        ops.forEach((_op, idx) => { result[opSocketId(n.id, idx)] = ""; });
+        result[n.id * 100 + STATUS_SOCKET_OFFSET] = err;
+        return result;
       }
+
+      // Run each operation and write to its dedicated socket
+      const result: Record<number, string> = {};
+      ops.forEach((op, idx) => {
+        try {
+          let output = "";
+          if (op.type === "extract_field") {
+            const value = extractField(parsed, op.fieldPath ?? "");
+            output = formatOutput(value, op.outputFormat ?? "string");
+          } else if (op.type === "template_substitute") {
+            output = templateSubstitute(parsed, op.template ?? "");
+          }
+          result[opSocketId(n.id, idx)] = output;
+        } catch (err) {
+          result[opSocketId(n.id, idx)] =
+            `Error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      });
+
+      // Write Status — summarise how many ops ran successfully
+      const errorCount = Object.values(result).filter((v) => String(v).startsWith("Error:")).length;
+      result[n.id * 100 + STATUS_SOCKET_OFFSET] =
+        errorCount === 0
+          ? `Success: ${ops.length} operation${ops.length === 1 ? "" : "s"} completed`
+          : `Warning: ${errorCount} of ${ops.length} operation${ops.length === 1 ? "" : "s"} failed`;
+
+      return result;
     },
 
     getConfigParameters(): ConfigParameterType[] {
       return this.configParameters || [];
     },
-
     getConfigParameter(parameterName: string): ConfigParameterType | undefined {
-      return (this.configParameters ?? []).find(
-        (param: ConfigParameterType) => param.parameterName === parameterName
-      );
+      return (this.configParameters ?? []).find((p) => p.parameterName === parameterName);
     },
+    setConfigParameter(parameterName: string, value: string | number | boolean): void {
+      const param = (this.configParameters ?? []).find((p) => p.parameterName === parameterName);
+      if (!param) return;
+      param.paramValue = value;
 
-    setConfigParameter(
-      parameterName: string,
-      value: string | number | boolean
-    ): void {
-      const parameter = (this.configParameters ?? []).find(
-        (param: ConfigParameterType) => param.parameterName === parameterName
-      );
-      if (parameter) {
-        parameter.paramValue = value;
+      // When the panel writes a new "Operations" JSON → rebuild sockets + height immediately
+      if (parameterName === "Operations") {
+        try {
+          const ops = JSON.parse(String(value)) as OperationConfig[];
+          if (Array.isArray(ops)) {
+            this.sockets = buildSockets(this.id, ops);
+            this.height  = computeHeight(ops.length);
+          }
+        } catch { /* invalid JSON during typing — keep current sockets */ }
       }
     },
   };
 }
 
-// Helper functions for JSON manipulation
-
-function extractField(data: unknown, fieldPath: string): unknown {
-  if (Array.isArray(data)) {
-    return data
-      .map((item) => getNestedValue(item, fieldPath))
-      .filter((val) => val !== undefined);
-  } else {
-    return getNestedValue(data, fieldPath);
-  }
-}
-
-function extractArrayField(data: unknown, fieldPath: string): unknown[] {
-  const result = extractField(data, fieldPath);
-  return Array.isArray(result)
-    ? result
-    : [result].filter((val) => val !== undefined);
-}
-
-function getNestedValue(obj: unknown, path: string): unknown {
-  return path.split(".").reduce((current: unknown, key) => {
-    if (current === null || current === undefined) return undefined;
-
-    // Handle array notation like items[0]
-    const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
-    if (arrayMatch && arrayMatch[1] && arrayMatch[2]) {
-      const arrayKey = arrayMatch[1];
-      const index = arrayMatch[2];
-      if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
-        const array = (current as Record<string, unknown>)[arrayKey];
-        return Array.isArray(array) ? array[parseInt(index, 10)] : undefined;
-      }
-      return undefined;
-    }
-
-    if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
-      return (current as Record<string, unknown>)[key];
-    }
-    return undefined;
-  }, obj);
-}
-
-function filterData(data: unknown, condition: string): unknown {
-  if (!condition.trim()) return data;
-
-  if (Array.isArray(data)) {
-    return data.filter((item) => evaluateCondition(item, condition));
-  } else {
-    return evaluateCondition(data, condition) ? data : null;
-  }
-}
-
-function evaluateCondition(item: unknown, condition: string): boolean {
-  try {
-    // Simple condition evaluation (extend as needed)
-    // Supports: field > value, field < value, field == value, field contains "text"
-
-    if (condition.includes(" contains ")) {
-      const parts = condition.split(" contains ");
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        const field = parts[0];
-        const value = parts[1];
-        const fieldValue = getNestedValue(item, field.trim());
-        const searchValue = value.trim().replace(/['"]/g, "");
-        return String(fieldValue)
-          .toLowerCase()
-          .includes(searchValue.toLowerCase());
-      }
-    }
-
-    if (condition.includes(" > ")) {
-      const parts = condition.split(" > ");
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        const field = parts[0];
-        const value = parts[1];
-        const fieldValue = getNestedValue(item, field.trim());
-        return Number(fieldValue) > Number(value.trim());
-      }
-    }
-
-    if (condition.includes(" < ")) {
-      const parts = condition.split(" < ");
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        const field = parts[0];
-        const value = parts[1];
-        const fieldValue = getNestedValue(item, field.trim());
-        return Number(fieldValue) < Number(value.trim());
-      }
-    }
-
-    if (condition.includes(" == ")) {
-      const parts = condition.split(" == ");
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        const field = parts[0];
-        const value = parts[1];
-        const fieldValue = getNestedValue(item, field.trim());
-        return String(fieldValue) === value.trim().replace(/['"]/g, "");
-      }
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function transformData(data: unknown, fieldPath: string): unknown {
-  // Simple transformation - can be extended
-  if (Array.isArray(data)) {
-    return data.map((item) => {
-      const value = getNestedValue(item, fieldPath);
-      return { [fieldPath]: value };
-    });
-  } else {
-    const value = getNestedValue(data, fieldPath);
-    return { [fieldPath]: value };
-  }
-}
-
-function countItems(data: unknown, fieldPath?: string): number {
-  if (fieldPath) {
-    const extracted = extractField(data, fieldPath);
-    return Array.isArray(extracted)
-      ? extracted.length
-      : extracted !== undefined
-      ? 1
-      : 0;
-  }
-
-  return Array.isArray(data) ? data.length : 1;
-}
 
 export function register(nodeRegistry: NodeRegistry): void {
   nodeRegistry.registerNodeType(

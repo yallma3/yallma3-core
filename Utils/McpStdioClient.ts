@@ -27,8 +27,18 @@ export class McpSTDIOClient {
       const transport = new StdioClientTransport({
         command: this.serverConfig.command,
         args: this.serverConfig.args || [],
+        env: {
+          ...process.env,
+          ...(this.serverConfig.env || {}),
+        } as Record<string, string>,
       });
-      await this.client.connect(transport);
+      await Promise.race([
+        this.client.connect(transport),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Connection timed out after 5 minutes")), 300000)
+        ),
+      ]);
+
       console.log("connected");
     } catch (err) {
       console.error("[MCP STDIO] Failed to initialize connection:", err);
@@ -41,12 +51,23 @@ export class McpSTDIOClient {
       const transport = new StdioClientTransport({
         command: this.serverConfig.command,
         args: this.serverConfig.args || [],
+        env: {
+          ...process.env,
+          ...(this.serverConfig.env || {}),
+        } as Record<string, string>,
       });
 
-      await this.client.connect(transport);
-      console.log("Connected to MCP STDIO server successfully");
+      const testClient = new Client({ name: "http-client", version: "1.0.0" });
 
-      this.client.close();
+      await Promise.race([
+        testClient.connect(transport),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Test connection timed out")), 300000)
+        ),
+      ]);
+
+      console.log("Connected to MCP STDIO server successfully");
+      testClient.close();
       return true;
     } catch (err) {
       console.error("STDIO MCP connection failed:", err);

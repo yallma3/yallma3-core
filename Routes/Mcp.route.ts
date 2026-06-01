@@ -58,13 +58,19 @@ router.post("/health", async (req, res) => {
     });
   }
 });
+
 // Auto connect to MCP STDIO or HTTP
 router.post("/connect", async (req, res) => {
+  req.socket.setTimeout(300000);
+  res.setTimeout(300000);
+
   try {
     const mcpConfig = req.body;
 
     if (!mcpConfig || !mcpConfig.type) {
-      return res.status(400).json({ error: "Missing MCP configuration" });
+      return res.status(400).json({
+        error: "Missing MCP configuration. 'type' field is required (HTTP or STDIO). Make sure Transport Type is set in the node before connecting.",
+      });
     }
 
     let tools: unknown = [];
@@ -77,46 +83,75 @@ router.post("/connect", async (req, res) => {
       if (!mcpConfig.command) {
         return res.status(400).json({ error: "Missing command for STDIO" });
       }
+      let envVars: Record<string, string> = {};
+      if (mcpConfig.env && typeof mcpConfig.env === "object") {
+        envVars = mcpConfig.env as Record<string, string>;
+      }
 
       const serverConfig: ServerConfig = {
         command: mcpConfig.command,
-        args: mcpConfig.args,
+        args: mcpConfig.args || [],
+        env: envVars,
       };
+
       const client = new McpSTDIOClient(serverConfig);
       try {
         await client.init();
-        tools = await client.listTools();
-        prompts = await client.listPrompts();
-        resources = await client.listResources();
+        const [toolsResult, promptsResult, resourcesResult] = await Promise.allSettled([
+          client.listTools(),
+          client.listPrompts(),
+          client.listResources(),
+        ]);
+
+        tools     = toolsResult.status     === "fulfilled" ? toolsResult.value     : [];
+        prompts   = promptsResult.status   === "fulfilled" ? promptsResult.value   : [];
+        resources = resourcesResult.status === "fulfilled" ? resourcesResult.value : [];
+        if (toolsResult.status === "rejected")
+          console.warn("[STDIO] listTools failed (non-fatal):", toolsResult.reason);
+        if (promptsResult.status === "rejected")
+          console.warn("[STDIO] listPrompts failed (non-fatal):", promptsResult.reason);
+        if (resourcesResult.status === "rejected")
+          console.warn("[STDIO] listResources failed (non-fatal):", resourcesResult.reason);
+
       } finally {
         await client.close();
       }
+
     } else if (mcpConfig.type === "HTTP") {
       console.log("HTTP");
 
-      if (!mcpConfig.url) {
-        return res.status(400).json({ error: "Missing server URL" });
+      if (!mcpConfig.url || !String(mcpConfig.url).trim()) {
+        return res.status(400).json({
+          error: "Missing MCP Server URL. Please enter the server URL in the node's Transport settings.",
+        });
       }
 
       const serverUrl = mcpConfig.url;
-
       const client = new McpHttpClient(serverUrl);
 
       try {
-
         await client.init();
 
-        tools = await client.listTools();
+        const [toolsResult, promptsResult, resourcesResult] = await Promise.allSettled([
+          client.listTools(),
+          client.listPrompts(),
+          client.listResources(),
+        ]);
 
-        prompts = await client.listPrompts();
+        tools     = toolsResult.status     === "fulfilled" ? toolsResult.value     : [];
+        prompts   = promptsResult.status   === "fulfilled" ? promptsResult.value   : [];
+        resources = resourcesResult.status === "fulfilled" ? resourcesResult.value : [];
 
-        resources = await client.listResources();
+        if (toolsResult.status === "rejected")
+          console.warn("[HTTP] listTools failed (non-fatal):", toolsResult.reason);
+        if (promptsResult.status === "rejected")
+          console.warn("[HTTP] listPrompts failed (non-fatal):", promptsResult.reason);
+        if (resourcesResult.status === "rejected")
+          console.warn("[HTTP] listResources failed (non-fatal):", resourcesResult.reason);
 
-    } finally {
-
-      await client.close();
-
-    }
+      } finally {
+        await client.close();
+      }
 
     } else {
       return res.status(400).json({ error: "Unsupported MCP type" });
@@ -125,9 +160,15 @@ router.post("/connect", async (req, res) => {
     res.json({ tools, prompts, resources });
 
   } catch (error) {
-    console.error("Error listing tools from HTTP server:", error);
+    const isTimeout =
+      error instanceof Error &&
+      (error.message.includes("timed out") || error.message.includes("-32001"));
+
+    console.error("Error connecting to MCP server:", error);
     res.status(500).json({
-      error: "Failed to list tools",
+      error: isTimeout
+        ? "MCP server connection timed out. The server took too long to respond — check that the command/URL is correct and the server is reachable."
+        : "Failed to connect to MCP server",
       details: error instanceof Error ? error.message : String(error),
     });
   }

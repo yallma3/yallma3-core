@@ -82,6 +82,14 @@ export function hydrateWorkflowNodes(workflow: Workflow): BaseNode[] {
     // create base node
     const freshNode = factory(nodeData.id, { x: nodeData.x ?? 0, y: nodeData.y ?? 0 });
 
+    // Apply saved config parameters so nodes with dynamic sockets
+    // (e.g. JSONManipulatorNode) rebuild their sockets correctly.
+    for (const param of nodeData.configParameters ?? []) {
+      if (param.paramValue !== undefined && freshNode.setConfigParameter) {
+        freshNode.setConfigParameter(param.parameterName, param.paramValue);
+      }
+    }
+
     return {
       ...freshNode,
       ...nodeData,
