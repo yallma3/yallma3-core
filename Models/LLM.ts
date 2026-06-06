@@ -43,6 +43,7 @@ export interface ProviderModels {
 export interface LLMOption {
   provider: "Groq" | "OpenAI" | "OpenRouter" | "Gemini" | "Anthropic" | "Ollama";
   model: LLMModel;
+  options?: Record<string, string>;
 }
 
 export interface LLMMessage {
