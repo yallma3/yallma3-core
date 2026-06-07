@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import type { LLMModel, ProviderModels } from "../Models/LLM";
+import { Helper } from "../Utils/Helper";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,10 +21,12 @@ function loadModels(): ProviderModels {
   }
   try {
     const data = fs.readFileSync(MODELS_FILE_PATH, "utf-8");
-    return JSON.parse(data, (key, value) => {
+    const parsed = Helper.JsonParser.safeParse<ProviderModels>(data, (key, value) => {
       if (value === "Infinity") return Infinity;
       return value;
     });
+    if (parsed.success) return parsed.data;
+    throw new Error("Failed to parse models.json: " + parsed.error);
   } catch (error) {
     console.error("Failed to load models.json", error);
     return {

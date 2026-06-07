@@ -23,6 +23,7 @@ import { NodeRegistry } from "../../NodeRegistry";
 import { McpHttpClient } from "../../../Utils/McpHttpClient";
 import { McpSTDIOClient } from "../../../Utils/McpStdioClient";
 import type { ToolCall } from "../../../Models/Mcp";
+import { Helper } from "../../../Utils/Helper";
 
 export interface McpToolCallNode extends BaseNode {
   nodeType: string;
@@ -327,10 +328,10 @@ export function createNMcpToolCallNode(
           //   const inputRecord: Record<string, unknown> = JSON.parse(input);
           let inputRecord: Record<string, unknown> = {};
           if (input && typeof input === "string") {
-            try {
-              console.log(input);
-              inputRecord = JSON.parse(input);
-            } catch {
+            const parsedToolInput = Helper.JsonParser.safeParse(input);
+            if (parsedToolInput.success) {
+              inputRecord = parsedToolInput.data as Record<string, unknown>;
+            } else {
               throw new Error(
                 'Input must be a valid JSON string representing an object, e.g. \'{"param1": "value1"}\''
               );

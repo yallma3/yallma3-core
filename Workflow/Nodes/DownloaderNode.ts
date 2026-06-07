@@ -22,6 +22,7 @@ import { NodeRegistry } from "../NodeRegistry";
 import { promises as fs } from "fs";
 import { join } from "path";
 import { existsSync } from "fs";
+import { Helper } from "../../Utils/Helper";
 
 export interface PDFDownloaderNode extends BaseNode {
   nodeType: string;
@@ -178,15 +179,11 @@ export function createPDFDownloaderNode(
 
       let papers = [];
 
-      try {
-        const parsedData = JSON.parse(urlOrJson);
-        if (Array.isArray(parsedData)) {
-          papers = parsedData;
-          console.log(`📚 Received ${papers.length} papers from ArXiv Scraper`);
-        } else {
-          throw new Error("Not an array");
-        }
-      } catch {
+      const parsedData = Helper.JsonParser.safeParse(urlOrJson);
+      if (parsedData.success && Array.isArray(parsedData.data)) {
+        papers = parsedData.data;
+        console.log(`📚 Received ${papers.length} papers from ArXiv Scraper`);
+      } else {
         papers = [
           { pdfUrl: urlOrJson, title: "Direct URL", arxivId: "direct" },
         ];

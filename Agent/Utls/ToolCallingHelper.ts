@@ -7,6 +7,7 @@ import {
   executeMcpTool,
   normalizeTool,
 } from "./McpUtils";
+import { Helper } from "../../Utils/Helper";
 
 // Proper type for workspace data — no `any`
 type WorkspaceData = {
@@ -44,18 +45,16 @@ async function sendWorkflow(ws: WebSocket, workflowId: string, context?: string)
     };
 
     const listener = (message: WebSocket.RawData) => {
-      try {
-        const data = JSON.parse(message.toString());
-        if (data.type === "workflow_json" && data.id === requestId) {
-          cleanup();
-          resolve(JSON.stringify(data.data));
-        }
-        if (data.type === "error" && data.requestId === requestId) {
-          cleanup();
-          reject(data.message || "Workflow execution failed");
-        }
-      } catch {
-        // Ignore parse errors
+      const parsed = Helper.JsonParser.safeParse(message.toString());
+      if (!parsed.success) return;
+      const data = parsed.data as Record<string, unknown>;
+      if (data.type === "workflow_json" && data.id === requestId) {
+        cleanup();
+        resolve(JSON.stringify(data.data));
+      }
+      if (data.type === "error" && data.requestId === requestId) {
+        cleanup();
+        reject((data.message as string) || "Workflow execution failed");
       }
     };
 
@@ -93,10 +92,12 @@ export async function workflowExecutor(
     console.log(`[ToolCalling] Using sendWorkflow for ${workflowId} (Real WebSocket)`);
 
     const workflowResponse = await sendWorkflow(ws, workflowId, input);
-    const wrapper = typeof workflowResponse === "string" ? JSON.parse(workflowResponse) : workflowResponse;
+    const wrapper = typeof workflowResponse === "string"
+      ? Helper.JsonParser.parseWithFallback(workflowResponse, null)
+      : workflowResponse;
 
     const json: Workflow = typeof wrapper?.data === "string"
-      ? JSON.parse(wrapper.data)
+      ? Helper.JsonParser.parseWithFallback(wrapper.data, wrapper)
       : wrapper?.data ?? wrapper;
 
     const result = await executeFlowRuntime(json, ws, input, triggerData);

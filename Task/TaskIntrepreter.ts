@@ -8,6 +8,7 @@ import type {
   AgentStep,
   CoreTaskAnalysis,
 } from "../Models/Task";
+import { Helper } from "../Utils/Helper";
 
 export async function interpretExecutionGraph(
   llm: LLMProvider,
@@ -65,13 +66,14 @@ export async function interpretExecutionGraph(
   `;
 
   const response = (await runLLM(llm, prompt)).trim();
-  try {
-    return JSON.parse(response) as InterpretationResult;
-  } catch {
-    const match = response.match(/(\{[\s\S]*\})/);
-    if (match) return JSON.parse(match[1] ?? "") as InterpretationResult;
-    throw new Error("Failed to parse InterpretationResult: " + response);
+  const firstPass = Helper.JsonParser.safeParse<InterpretationResult>(response);
+  if (firstPass.success) return firstPass.data;
+  const match = response.match(/(\{[\s\S]*\})/);
+  if (match) {
+    const retry = Helper.JsonParser.safeParse<InterpretationResult>(match[1] ?? "");
+    if (retry.success) return retry.data;
   }
+  throw new Error("Failed to parse InterpretationResult: " + response);
 }
 
 export async function analyzeTaskCore(
@@ -101,15 +103,14 @@ export async function analyzeTaskCore(
   const raw = await runLLM(llm, prompt);
   const trimmed = raw.trim();
 
-  try {
-    return JSON.parse(trimmed) as CoreTaskAnalysis;
-  } catch {
-    const match = trimmed.match(/(\{[\s\S]*\})/);
-    if (match) {
-      return JSON.parse(match[1] ?? "") as CoreTaskAnalysis;
-    }
-    throw new Error("Failed to parse core task analysis: " + trimmed);
+  const firstPass = Helper.JsonParser.safeParse<CoreTaskAnalysis>(trimmed);
+  if (firstPass.success) return firstPass.data;
+  const match = trimmed.match(/(\{[\s\S]*\})/);
+  if (match) {
+    const retry = Helper.JsonParser.safeParse<CoreTaskAnalysis>(match[1] ?? "");
+    if (retry.success) return retry.data;
   }
+  throw new Error("Failed to parse core task analysis: " + trimmed);
 }
 
 export async function decomposeTask(
@@ -141,15 +142,14 @@ export async function decomposeTask(
   const raw = await runLLM(llm, prompt);
   const trimmed = raw.trim();
 
-  try {
-    return JSON.parse(trimmed) as SubTask[];
-  } catch {
-    const match = trimmed.match(/(\[[\s\S]*\])/);
-    if (match) {
-      return JSON.parse(match[1] ?? "") as SubTask[];
-    }
-    throw new Error("Failed to parse decomposition: " + trimmed);
+  const firstPass = Helper.JsonParser.safeParse<SubTask[]>(trimmed);
+  if (firstPass.success) return firstPass.data;
+  const match = trimmed.match(/(\[[\s\S]*\])/);
+  if (match) {
+    const retry = Helper.JsonParser.safeParse<SubTask[]>(match[1] ?? "");
+    if (retry.success) return retry.data;
   }
+  throw new Error("Failed to parse decomposition: " + trimmed);
 }
 
 export async function planAgenticTask(
@@ -185,15 +185,14 @@ export async function planAgenticTask(
   const raw = await runLLM(llm, prompt);
   const trimmed = raw.trim();
 
-  try {
-    return JSON.parse(trimmed) as AgentStep[];
-  } catch {
-    const match = trimmed.match(/(\[[\s\S]*\])/);
-    if (match) {
-      return JSON.parse(match[1] ?? "") as AgentStep[];
-    }
-    throw new Error("Failed to parse agentic plan: " + trimmed);
+  const firstPass = Helper.JsonParser.safeParse<AgentStep[]>(trimmed);
+  if (firstPass.success) return firstPass.data;
+  const match = trimmed.match(/(\[[\s\S]*\])/);
+  if (match) {
+    const retry = Helper.JsonParser.safeParse<AgentStep[]>(match[1] ?? "");
+    if (retry.success) return retry.data;
   }
+  throw new Error("Failed to parse agentic plan: " + trimmed);
 }
 
 // Quick notes & recommended improvements

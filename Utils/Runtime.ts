@@ -1,10 +1,11 @@
 import { WebSocket } from "ws";
 import { getMainAgent } from "../Agent/Main/MainAgentRegistry";
 import { setWorkspaceDataForTools } from "../Agent/Utls/ToolCallingHelper";
+import { Helper } from "./Helper";
 
 export function createMainAgent(data: string, ws: WebSocket, triggerData?: unknown) {
   try {
-    const workspaceData = JSON.parse(data);
+    const workspaceData = Helper.JsonParser.parse(data);
     setWorkspaceDataForTools(workspaceData);  
     const agent = getMainAgent("1.0.0", workspaceData, ws, triggerData); 
     return agent;

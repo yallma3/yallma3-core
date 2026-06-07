@@ -20,6 +20,7 @@ import type {
   DataType,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
+import { Helper } from "../../Utils/Helper";
 
 interface GeminiCandidate {
   content?: {
@@ -544,12 +545,11 @@ async function parseUserQuery(
 
   const data = (await response.json()) as GeminiResponse;
   const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const parsedResult = Helper.JsonParser.safeParse<ParsedQueryResult>(generatedText);
+  if (!parsedResult.success) {
     throw new Error("Failed to extract JSON from Gemini response");
   }
-
-  return JSON.parse(jsonMatch[0]) as ParsedQueryResult;
+  return parsedResult.data;
 }
 
 async function refineQueries(

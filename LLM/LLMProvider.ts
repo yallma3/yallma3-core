@@ -1,4 +1,5 @@
 import type { LLMSpecTool, ToolCall } from "../Models/Tool";
+import { Helper } from "../Utils/Helper";
 import type {
   LLMMessage,
   LLMResponse,
@@ -169,10 +170,10 @@ export class OpenAIProvider implements LLMProvider {
       message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
         name: t.function?.name ?? "",
-        input: JSON.parse(t.function?.arguments ?? "{}") as Record<
-          string,
-          unknown
-        >,
+        input: Helper.JsonParser.parseWithFallback(
+          t.function?.arguments ?? "{}",
+          {} as Record<string, unknown>,
+        ),
       })) || null;
 
     const content =
@@ -317,10 +318,10 @@ export class GroqProvider implements LLMProvider {
       message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
         name: t.function?.name ?? "",
-        input: JSON.parse(t.function?.arguments ?? "{}") as Record<
-          string,
-          unknown
-        >,
+        input: Helper.JsonParser.parseWithFallback(
+          t.function?.arguments ?? "{}",
+          {} as Record<string, unknown>,
+        ),
       })) || null;
 
     const content =
@@ -461,7 +462,10 @@ export class OpenRouterProvider implements LLMProvider {
       message.tool_calls?.map((t: OpenAIToolCall) => ({
         id: t.id,
         name: t.function?.name ?? "",
-        input: JSON.parse(t.function?.arguments ?? "{}") as Record<string, unknown>,
+        input: Helper.JsonParser.parseWithFallback(
+          t.function?.arguments ?? "{}",
+          {} as Record<string, unknown>,
+        ),
       })) || null;
 
     const content =
