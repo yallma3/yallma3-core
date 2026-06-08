@@ -92,13 +92,31 @@ export async function workflowExecutor(
     console.log(`[ToolCalling] Using sendWorkflow for ${workflowId} (Real WebSocket)`);
 
     const workflowResponse = await sendWorkflow(ws, workflowId, input);
-    const wrapper = typeof workflowResponse === "string"
-      ? Helper.JsonParser.parseWithFallback(workflowResponse, null)
-      : workflowResponse;
+    let wrapper: unknown;
+    if (typeof workflowResponse === "string") {
+      const parsed = Helper.JsonParser.safeParse(workflowResponse);
+      if (!parsed.success) {
+        throw new Error(`Failed to parse workflow response: ${parsed.error}`);
+      }
+      wrapper = parsed.data;
+    } else {
+      wrapper = workflowResponse;
+    }
 
-    const json: Workflow = typeof wrapper?.data === "string"
-      ? Helper.JsonParser.parseWithFallback(wrapper.data, wrapper)
-      : wrapper?.data ?? wrapper;
+    let json: Workflow;
+    if (wrapper && typeof (wrapper as Record<string, unknown>).data === "string") {
+      const parsed = Helper.JsonParser.safeParse((wrapper as Record<string, unknown>).data as string);
+      if (!parsed.success) {
+        throw new Error(`Failed to parse workflow data: ${parsed.error}`);
+      }
+      json = parsed.data as Workflow;
+    } else {
+      json = ((wrapper as Record<string, unknown>)?.data ?? wrapper) as Workflow;
+    }
+
+    if (!json) {
+      throw new Error("Workflow is null/undefined after parsing");
+    }
 
     const result = await executeFlowRuntime(json, ws, input, triggerData);
 

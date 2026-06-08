@@ -167,14 +167,19 @@ export class OpenAIProvider implements LLMProvider {
 
     const rawContent: string | null = message.content ?? null;
     const toolCalls: ToolCall[] | null =
-      message.tool_calls?.map((t: OpenAIToolCall) => ({
-        id: t.id,
-        name: t.function?.name ?? "",
-        input: Helper.JsonParser.parseWithFallback(
-          t.function?.arguments ?? "{}",
-          {} as Record<string, unknown>,
-        ),
-      })) || null;
+      message.tool_calls?.map((t: OpenAIToolCall) => {
+        const parsed = Helper.JsonParser.safeParse<Record<string, unknown>>(
+          t.function?.arguments ?? "{}"
+        );
+        if (!parsed.success) {
+          console.warn(`Failed to parse tool arguments for ${t.function?.name}: ${parsed.error}`);
+        }
+        return {
+          id: t.id,
+          name: t.function?.name ?? "",
+          input: parsed.success ? parsed.data : {} as Record<string, unknown>,
+        };
+      }) || null;
 
     const content =
       rawContent ||
@@ -315,14 +320,19 @@ export class GroqProvider implements LLMProvider {
     // Extract both content and tool calls safely
     const rawContent: string | null = message.content ?? null;
     const toolCalls: ToolCall[] | null =
-      message.tool_calls?.map((t: OpenAIToolCall) => ({
-        id: t.id,
-        name: t.function?.name ?? "",
-        input: Helper.JsonParser.parseWithFallback(
-          t.function?.arguments ?? "{}",
-          {} as Record<string, unknown>,
-        ),
-      })) || null;
+      message.tool_calls?.map((t: OpenAIToolCall) => {
+        const parsed = Helper.JsonParser.safeParse<Record<string, unknown>>(
+          t.function?.arguments ?? "{}"
+        );
+        if (!parsed.success) {
+          console.warn(`Failed to parse tool arguments for ${t.function?.name}: ${parsed.error}`);
+        }
+        return {
+          id: t.id,
+          name: t.function?.name ?? "",
+          input: parsed.success ? parsed.data : {} as Record<string, unknown>,
+        };
+      }) || null;
 
     const content =
       rawContent ||
@@ -459,14 +469,19 @@ export class OpenRouterProvider implements LLMProvider {
     // Extract both content and tool calls safely
     const rawContent: string | null = message.content ?? null;
     const toolCalls =
-      message.tool_calls?.map((t: OpenAIToolCall) => ({
-        id: t.id,
-        name: t.function?.name ?? "",
-        input: Helper.JsonParser.parseWithFallback(
-          t.function?.arguments ?? "{}",
-          {} as Record<string, unknown>,
-        ),
-      })) || null;
+      message.tool_calls?.map((t: OpenAIToolCall) => {
+        const parsed = Helper.JsonParser.safeParse<Record<string, unknown>>(
+          t.function?.arguments ?? "{}"
+        );
+        if (!parsed.success) {
+          console.warn(`Failed to parse tool arguments for ${t.function?.name}: ${parsed.error}`);
+        }
+        return {
+          id: t.id,
+          name: t.function?.name ?? "",
+          input: parsed.success ? parsed.data : {} as Record<string, unknown>,
+        };
+      }) || null;
 
     const content =
       rawContent ||

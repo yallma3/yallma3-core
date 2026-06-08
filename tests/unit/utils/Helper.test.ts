@@ -237,4 +237,52 @@ describe('Helper.JsonParser', () => {
       expect(() => JsonParser.parse('not json')).toThrow();
     });
   });
+
+  describe('parseWithFallback', () => {
+    it('returns parsed object on valid JSON', () => {
+      const result = JsonParser.parseWithFallback('{"a": 1}', null);
+      expect(result).toEqual({ a: 1 });
+    });
+
+    it('returns fallback for invalid JSON', () => {
+      const fallback = { default: true };
+      const result = JsonParser.parseWithFallback('invalid json', fallback);
+      expect(result).toEqual(fallback);
+    });
+
+    it('returns fallback for primitive JSON like null', () => {
+      const result = JsonParser.parseWithFallback('null', 'fallback');
+      expect(result).toBe('fallback');
+    });
+  });
+
+  describe('reviver parameter', () => {
+    it('applies reviver in safeParse', () => {
+      const reviver = (key: string, value: unknown) => {
+        if (key === 'date' && typeof value === 'string') {
+          return new Date(value);
+        }
+        return value;
+      };
+      const result = JsonParser.safeParse('{"date": "2024-01-01"}', reviver);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect((result.data as Record<string, unknown>).date).toBeInstanceOf(Date);
+      }
+    });
+
+    it('applies reviver in parse', () => {
+      const reviver = (_key: string, value: unknown) =>
+        typeof value === 'string' ? value.toUpperCase() : value;
+      const data = JsonParser.parse('{"name": "hello"}', reviver);
+      expect(data).toEqual({ name: 'HELLO' });
+    });
+
+    it('applies reviver in parseWithFallback', () => {
+      const reviver = (_key: string, value: unknown) =>
+        typeof value === 'number' ? value * 2 : value;
+      const result = JsonParser.parseWithFallback('{"count": 5}', null, reviver);
+      expect(result).toEqual({ count: 10 });
+    });
+  });
 });

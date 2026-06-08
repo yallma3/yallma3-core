@@ -68,7 +68,7 @@ export async function interpretExecutionGraph(
   const response = (await runLLM(llm, prompt)).trim();
   const firstPass = Helper.JsonParser.safeParse<InterpretationResult>(response);
   if (firstPass.success) return firstPass.data;
-  const match = response.match(/(\{[\s\S]*\})/);
+  const match = response.match(/(\{.*?\})/s);
   if (match) {
     const retry = Helper.JsonParser.safeParse<InterpretationResult>(match[1] ?? "");
     if (retry.success) return retry.data;

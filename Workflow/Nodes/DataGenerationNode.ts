@@ -559,14 +559,7 @@ ${descriptionPrompt}
       console.warn("No JSON array found in Gemini response");
       return [];
     }
-    const parsedData = parsedResult.data;
-
-    if (Array.isArray(parsedData)) {
-      return parsedData;
-    } else {
-      console.warn("Generated data is not an array");
-      return [];
-    }
+    return parsedResult.data;
   } catch (error) {
     console.error(
       `Error generating data for topic "${topic}":`,

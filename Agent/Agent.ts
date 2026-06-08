@@ -241,7 +241,7 @@ export class Yallma3GenOneAgentRuntime {
 
       const parsedReview = Helper.JsonParser.safeParse<Review>(reviewRaw);
       if (!parsedReview.success) {
-        throw new Error("❌ Failed to parse review JSON: " + reviewRaw);
+        throw new Error(`❌ Failed to parse review JSON: ${parsedReview.error}\nRaw output: ${reviewRaw.slice(0, 500)}`);
       }
       const review = parsedReview.data;
 
@@ -263,7 +263,7 @@ export class Yallma3GenOneAgentRuntime {
 
         const parsedCheck = Helper.JsonParser.safeParse<FinalCheck>(checkRaw);
         if (!parsedCheck.success) {
-          throw new Error("❌ Failed to parse final check JSON: " + checkRaw);
+          throw new Error(`❌ Failed to parse final check JSON: ${parsedCheck.error}\nRaw output: ${checkRaw.slice(0, 500)}`);
         }
         const finalCheck = parsedCheck.data;
 

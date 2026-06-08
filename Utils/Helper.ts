@@ -10,6 +10,7 @@ const TRAILING_COMMA = /,\s*([}\]])/g;
 const UNQUOTED_KEY = /([{, ])\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g;
 const CODE_BLOCK = /```(?:json)?\s*([\s\S]*?)\s*```/;
 const JSON_LIKE_BLOCK = /^\s*[[{].*[}\]]\s*$/s;
+// Best-effort heuristic: does not support escaped quotes like 'don\'t'
 const SINGLE_QUOTED_VALUE = /:\s*'(.*?)'(?=\s*[,}\]])/g;
 const SINGLE_QUOTED_KEY = /'([a-zA-Z_$][a-zA-Z0-9_$]*)'\s*:/g;
 
@@ -39,8 +40,8 @@ function safeJsonParse<T = unknown>(raw: string, reviver?: Reviver): JsonParseRe
       return { success: false, error: `JSON value is a primitive, expected object or array` };
     }
     return { success: true, data };
-  } catch {
-    return { success: false, error: `Invalid JSON` };
+  } catch (err) {
+    return { success: false, error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
@@ -54,7 +55,7 @@ export class Helper {
       if (fast.success) return fast;
 
       if (!JSON_LIKE_BLOCK.test(normalized)) {
-        return { success: false, error: `Input does not contain valid JSON: ${normalized.slice(0, 200)}` };
+        return { success: false, error: `Input does not contain valid JSON` };
       }
 
       const repaired = aggressiveRepair(normalized);

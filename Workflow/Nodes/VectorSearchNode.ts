@@ -220,7 +220,7 @@ export function register(nodeRegistry: NodeRegistry): void {
               parsedVector.data.every((v) => typeof v === "number")
             ) {
               vector = parsedVector.data;
-            } else if (!parsedVector.success) {
+            } else {
               throw new Error(
                 "Invalid vector input. Must be number[] or JSON stringified number[]."
               );
