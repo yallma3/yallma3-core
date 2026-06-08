@@ -20,6 +20,7 @@ import type {
   NodeMetadata,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
+import { Helper } from "../../Utils/Helper";
 
 export interface PineconeSearchNode extends BaseNode {
   nodeType: string;
@@ -212,15 +213,14 @@ export function register(nodeRegistry: NodeRegistry): void {
           ) {
             vector = rawVector;
           } else if (typeof rawVector === "string") {
-            try {
-              const parsed = JSON.parse(rawVector);
-              if (
-                Array.isArray(parsed) &&
-                parsed.every((v) => typeof v === "number")
-              ) {
-                vector = parsed;
-              }
-            } catch {
+            const parsedVector = Helper.JsonParser.safeParse(rawVector);
+            if (
+              parsedVector.success &&
+              Array.isArray(parsedVector.data) &&
+              parsedVector.data.every((v) => typeof v === "number")
+            ) {
+              vector = parsedVector.data;
+            } else {
               throw new Error(
                 "Invalid vector input. Must be number[] or JSON stringified number[]."
               );

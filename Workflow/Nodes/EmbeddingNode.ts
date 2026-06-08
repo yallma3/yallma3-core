@@ -20,6 +20,7 @@ import type {
   DataType,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
+import { Helper } from "../../Utils/Helper";
 
 export interface EmbeddingNode extends BaseNode {
   nodeType: string;
@@ -155,37 +156,24 @@ export function createEmbeddingNode(
             : JSON.stringify(inputValue);
 
         // Try to parse as JSON first
-        try {
-          // Check if it's a direct string input (not JSON)
-          if (
-            typeof inputValue === "string" &&
-            (!inputValue.trim().startsWith("{") ||
-              !inputValue.trim().endsWith("}"))
-          ) {
-            // Handle as a single string input
-            chunks = [inputValue.trim()];
-            isSingleString = true;
-            console.log("Processing single string input");
-          } else {
-            // Parse as JSON
-            const inputData = JSON.parse(inputString);
-
-            // Check if it has chunks array
-            if (inputData.chunks && Array.isArray(inputData.chunks)) {
-              chunks = inputData.chunks;
-              console.log(`Processing JSON input with ${chunks.length} chunks`);
-            } else {
-              // If JSON doesn't have chunks array, treat the whole JSON as a single string
-              chunks = [inputString];
-              isSingleString = true;
-              console.log("Processing JSON input as a single string");
-            }
-          }
-         } catch {
-          // If JSON parsing fails, treat as a single string
+        const parsedInput = Helper.JsonParser.safeParse(inputString);
+        if (
+          parsedInput.success &&
+          typeof parsedInput.data === "object" &&
+          !Array.isArray(parsedInput.data) &&
+          (parsedInput.data as Record<string, unknown>)?.chunks &&
+          Array.isArray((parsedInput.data as Record<string, unknown>).chunks)
+        ) {
+          chunks = (parsedInput.data as Record<string, unknown>).chunks as string[];
+          console.log(`Processing JSON input with ${chunks.length} chunks`);
+        } else {
           chunks = [inputString];
           isSingleString = true;
-          console.log("Processing as single string due to JSON parse error");
+          console.log(
+            parsedInput.success
+              ? "Processing JSON input as a single string"
+              : "Processing single string input",
+          );
         }
 
         if (chunks.length === 0) {

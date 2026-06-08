@@ -20,6 +20,7 @@ import type {
   DataType,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
+import { Helper } from "../../Utils/Helper";
 
 interface TopicsInput {
   extracted_topics: string[];
@@ -258,12 +259,12 @@ export function createDataGenerationNode(
 
         const topicsData: TopicsInput =
           typeof topicsInput === "string"
-            ? JSON.parse(topicsInput)
+            ? Helper.JsonParser.parse(topicsInput)
             : topicsInput;
 
         const queryMetadata: QueryMetadata =
           typeof queryMetadataInput === "string"
-            ? JSON.parse(queryMetadataInput)
+            ? Helper.JsonParser.parse(queryMetadataInput)
             : queryMetadataInput;
 
         const topics = topicsData.extracted_topics || [];
@@ -553,27 +554,12 @@ ${descriptionPrompt}
     const data = (await response.json()) as GeminiResponse;
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    const jsonStart = generatedText.indexOf("[");
-    if (jsonStart === -1) {
+    const parsedResult = Helper.JsonParser.safeParse<SyntheticDataPoint[]>(generatedText);
+    if (!parsedResult.success || !Array.isArray(parsedResult.data)) {
       console.warn("No JSON array found in Gemini response");
       return [];
     }
-
-    const jsonEnd = generatedText.lastIndexOf("]");
-    if (jsonEnd === -1) {
-      console.warn("Incomplete JSON array in Gemini response");
-      return [];
-    }
-
-    const jsonStr = generatedText.substring(jsonStart, jsonEnd + 1);
-    const parsedData = JSON.parse(jsonStr) as SyntheticDataPoint[];
-
-    if (Array.isArray(parsedData)) {
-      return parsedData;
-    } else {
-      console.warn("Generated data is not an array");
-      return [];
-    }
+    return parsedResult.data;
   } catch (error) {
     console.error(
       `Error generating data for topic "${topic}":`,

@@ -5,6 +5,7 @@ import type { LLMProvider, LLMOption } from "../Models/LLM";
 import type WebSocket from "ws";
 import { toolExecutorAttacher } from "../Agent/Utls/ToolCallingHelper";
 import { closeMcpConnections } from "./Utls/McpUtils";
+import { Helper } from "../Utils/Helper";
 
 interface Review {
   task_completion_status: string;
@@ -53,7 +54,7 @@ export class AgentRuntime {
 
       const reviewPrompt = this.buildReviewPrompt(output);
       const reviewResult = await this.llm.generateText(reviewPrompt);
-      const reviewResultParsed = JSON.parse(reviewResult);
+      const reviewResultParsed = Helper.JsonParser.parse<Review>(reviewResult);
       if (reviewResultParsed.task_completion_status === "complete") {
         break;
       }
@@ -238,17 +239,11 @@ export class Yallma3GenOneAgentRuntime {
       this.checkAbort();
       const reviewRaw = await this.llm.generateText(reviewPrompt);
 
-      let review: Review;
-      try {
-        review = JSON.parse(reviewRaw);
-      } catch {
-        const match = reviewRaw.match(/(\{[\s\S]*\})/);
-        if (match) {
-          review = JSON.parse(match[1] ?? "");
-        } else {
-          throw new Error("❌ Failed to parse review JSON: " + reviewRaw);
-        }
+      const parsedReview = Helper.JsonParser.safeParse<Review>(reviewRaw);
+      if (!parsedReview.success) {
+        throw new Error(`❌ Failed to parse review JSON: ${parsedReview.error}\nRaw output: ${reviewRaw.slice(0, 500)}`);
       }
+      const review = parsedReview.data;
 
       console.log("🔍 Review Result:", JSON.stringify(review, null, 2));
 
@@ -266,17 +261,11 @@ export class Yallma3GenOneAgentRuntime {
         const finalCheckPrompt = this.buildFinalCheckPrompt(output);
         const checkRaw = await this.llm.generateText(finalCheckPrompt);
 
-        let finalCheck: FinalCheck;
-        try {
-          finalCheck = JSON.parse(checkRaw);
-        } catch {
-          const match = checkRaw.match(/(\{[\s\S]*\})/);
-          if (match) {
-            finalCheck = JSON.parse(match[1] ?? "");
-          } else {
-            throw new Error("❌ Failed to parse final check JSON: " + checkRaw);
-          }
+        const parsedCheck = Helper.JsonParser.safeParse<FinalCheck>(checkRaw);
+        if (!parsedCheck.success) {
+          throw new Error(`❌ Failed to parse final check JSON: ${parsedCheck.error}\nRaw output: ${checkRaw.slice(0, 500)}`);
         }
+        const finalCheck = parsedCheck.data;
 
         console.log("✅ Final Check:", JSON.stringify(finalCheck, null, 2));
 

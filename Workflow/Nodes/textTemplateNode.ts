@@ -20,6 +20,7 @@ import type {
   NodeMetadata,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
+import { Helper } from "../../Utils/Helper";
 
 export interface TextNode extends BaseNode {
   nodeType: string;
@@ -35,13 +36,9 @@ const processTextTemplate = async (
 
   // Try to parse input as JSON for dot-notation field access (e.g. {{input.title}})
   let parsedInput: Record<string, unknown> | null = null;
-  try {
-    const parsed: unknown = JSON.parse(input);
-    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-      parsedInput = parsed as Record<string, unknown>;
-    }
-  } catch {
-    parsedInput = null;
+  const parsedResult = Helper.JsonParser.safeParse(input);
+  if (parsedResult.success && typeof parsedResult.data === "object" && !Array.isArray(parsedResult.data)) {
+    parsedInput = parsedResult.data as Record<string, unknown>;
   }
 
   // Replace {{input.field}} or {{input.nested.field}} patterns using parsed JSON

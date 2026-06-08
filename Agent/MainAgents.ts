@@ -13,6 +13,7 @@ import {
 import { assignBestFit } from "./Utls/MainAgentHelper";
 import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
+import { Helper } from "../Utils/Helper";
 
 interface FlowResult {
   layers: unknown;
@@ -159,20 +160,8 @@ export const BasicAgentRuntime = async (
 
   const plan = await runLLM(MainLLM, propmt);
 
-  // Remove markdown code block formatting if present
-  const cleanedPlan = plan.replace(/^```json\s*/, "").replace(/\s*```$/, "");
-
-  const parsedPlan = JSON.parse(cleanedPlan);
-
-  if (parsedPlan) {
-    ws.send(
-      JSON.stringify({
-        type: "message",
-        data: "Plan Created Successfully",
-        timestamp: new Date().toISOString(),
-      })
-    );
-  } else {
+  const parsedPlanResult = Helper.JsonParser.safeParse(plan);
+  if (!parsedPlanResult.success) {
     ws.send(
       JSON.stringify({
         type: "message",
@@ -182,6 +171,15 @@ export const BasicAgentRuntime = async (
     );
     return;
   }
+  const parsedPlan = parsedPlanResult.data;
+
+  ws.send(
+    JSON.stringify({
+      type: "message",
+      data: "Plan Created Successfully",
+      timestamp: new Date().toISOString(),
+    })
+  );
 
   ws.send(
     JSON.stringify({
@@ -204,7 +202,7 @@ export const BasicAgentRuntime = async (
 
     const type = step.type;
     if (type == "workflow") {
-      const json: Workflow = JSON.parse(step.workflow);
+      const json: Workflow = Helper.JsonParser.parse(step.workflow);
 
       console.log("Parsed workflow:", json);
         const workflow = workspaceData.workflows.find((w) => {

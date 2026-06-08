@@ -2,6 +2,7 @@ import type { Agent } from "../../Models/Agent";
 import type { Task } from "../../Models/Task";
 import type { Workflow } from "../../Models/Workflow";
 import type { LLMProvider } from "../../Models/LLM";
+import { Helper } from "../../Utils/Helper";
 
 export async function assignBestFit(
   llm: LLMProvider,
@@ -83,17 +84,11 @@ Analyze the task and provide your decision:`;
     const response = await llm.generateText(prompt);
     console.log(response);
 
-    // Parse the JSON response
-    const cleanResponse = response.trim();
-    let jsonStart = cleanResponse.indexOf("{");
-    let jsonEnd = cleanResponse.lastIndexOf("}") + 1;
-
-    if (jsonStart === -1 || jsonEnd === 0) {
+    const parsed = Helper.JsonParser.safeParse(response);
+    if (!parsed.success) {
       throw new Error("No valid JSON found in response");
     }
-
-    const jsonStr = cleanResponse.substring(jsonStart, jsonEnd);
-    const result = JSON.parse(jsonStr);
+    const result = parsed.data as Record<string, unknown>;
 
     // Validate the response structure
     if (

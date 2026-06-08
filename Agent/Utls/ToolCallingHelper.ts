@@ -7,6 +7,7 @@ import {
   executeMcpTool,
   normalizeTool,
 } from "./McpUtils";
+import { Helper } from "../../Utils/Helper";
 
 // Proper type for workspace data — no `any`
 type WorkspaceData = {
@@ -44,18 +45,16 @@ async function sendWorkflow(ws: WebSocket, workflowId: string, context?: string)
     };
 
     const listener = (message: WebSocket.RawData) => {
-      try {
-        const data = JSON.parse(message.toString());
-        if (data.type === "workflow_json" && data.id === requestId) {
-          cleanup();
-          resolve(JSON.stringify(data.data));
-        }
-        if (data.type === "error" && data.requestId === requestId) {
-          cleanup();
-          reject(data.message || "Workflow execution failed");
-        }
-      } catch {
-        // Ignore parse errors
+      const parsed = Helper.JsonParser.safeParse(message.toString());
+      if (!parsed.success) return;
+      const data = parsed.data as Record<string, unknown>;
+      if (data.type === "workflow_json" && data.id === requestId) {
+        cleanup();
+        resolve(JSON.stringify(data.data));
+      }
+      if (data.type === "error" && data.requestId === requestId) {
+        cleanup();
+        reject((data.message as string) || "Workflow execution failed");
       }
     };
 
@@ -93,11 +92,31 @@ export async function workflowExecutor(
     console.log(`[ToolCalling] Using sendWorkflow for ${workflowId} (Real WebSocket)`);
 
     const workflowResponse = await sendWorkflow(ws, workflowId, input);
-    const wrapper = typeof workflowResponse === "string" ? JSON.parse(workflowResponse) : workflowResponse;
+    let wrapper: unknown;
+    if (typeof workflowResponse === "string") {
+      const parsed = Helper.JsonParser.safeParse(workflowResponse);
+      if (!parsed.success) {
+        throw new Error(`Failed to parse workflow response: ${parsed.error}`);
+      }
+      wrapper = parsed.data;
+    } else {
+      wrapper = workflowResponse;
+    }
 
-    const json: Workflow = typeof wrapper?.data === "string"
-      ? JSON.parse(wrapper.data)
-      : wrapper?.data ?? wrapper;
+    let json: Workflow;
+    if (wrapper && typeof (wrapper as Record<string, unknown>).data === "string") {
+      const parsed = Helper.JsonParser.safeParse((wrapper as Record<string, unknown>).data as string);
+      if (!parsed.success) {
+        throw new Error(`Failed to parse workflow data: ${parsed.error}`);
+      }
+      json = parsed.data as Workflow;
+    } else {
+      json = ((wrapper as Record<string, unknown>)?.data ?? wrapper) as Workflow;
+    }
+
+    if (!json) {
+      throw new Error("Workflow is null/undefined after parsing");
+    }
 
     const result = await executeFlowRuntime(json, ws, input, triggerData);
 

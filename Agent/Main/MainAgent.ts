@@ -1,4 +1,5 @@
 import { WebSocket } from "ws";
+import { Helper } from "../../Utils/Helper";
 
 export interface MainAgent {
   /** Version number like "1.0.0" */
@@ -28,14 +29,12 @@ export function sendWorkflow(
     };
 
     const listener = (message: WebSocket.RawData) => {
-      try {
-        const data = JSON.parse(message.toString());
-        if (data.type === "workflow_json" && data.id === requestId) {
-          cleanup();
-          resolve(JSON.stringify(data.data));
-        }
-      } catch {
-        // Ignore parse errors for unrelated messages
+      const parsed = Helper.JsonParser.safeParse(message.toString());
+      if (!parsed.success) return;
+      const data = parsed.data as Record<string, unknown>;
+      if (data.type === "workflow_json" && data.id === requestId) {
+        cleanup();
+        resolve(JSON.stringify(data.data));
       }
     };
 

@@ -21,6 +21,7 @@ import type {
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
 import * as CryptoJS from "crypto-js";
+import { Helper } from "../../Utils/Helper";
 
 export interface PineconeStoreNode extends BaseNode {
   nodeType: string;
@@ -202,17 +203,16 @@ export function register(nodeRegistry: NodeRegistry): void {
           ) {
             vector = rawVector as number[];
           } else if (typeof rawVector === "string") {
-            try {
-              const parsed = JSON.parse(rawVector);
-              if (
-                Array.isArray(parsed) &&
-                parsed.every((v) => typeof v === "number")
-              ) {
-                vector = parsed;
-              }
-            } catch {
+            const parsedVector = Helper.JsonParser.safeParse(rawVector);
+            if (
+              parsedVector.success &&
+              Array.isArray(parsedVector.data) &&
+              parsedVector.data.every((v) => typeof v === "number")
+            ) {
+              vector = parsedVector.data;
+            } else {
               throw new Error(
-                "Vector must be a number[] or JSON stringified number[]"
+                "Unsupported vector format. Must be number[] or JSON stringified number[]."
               );
             }
           }
