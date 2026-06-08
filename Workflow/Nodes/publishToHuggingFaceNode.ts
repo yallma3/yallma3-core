@@ -21,6 +21,7 @@ import type {
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
 import { uploadFile } from "@huggingface/hub";
+import { Helper } from "../../Utils/Helper";
 
 interface DatasetInput {
   dataset: Array<Record<string, unknown>>;
@@ -250,12 +251,12 @@ export function createHuggingFacePublisherNode(
         );
         const datasetData: DatasetInput =
           typeof datasetInput === "string"
-            ? JSON.parse(datasetInput)
+            ? Helper.JsonParser.parse(datasetInput)
             : datasetInput;
 
         const statistics: StatisticsInput | null = statisticsInput
           ? typeof statisticsInput === "string"
-            ? JSON.parse(statisticsInput)
+            ? Helper.JsonParser.parse(statisticsInput)
             : statisticsInput
           : null;
 

@@ -13,6 +13,7 @@ import type { MainAgent } from "../Agent/Main/MainAgent";
 import { scheduledTriggerManager } from "../Trigger/ScheduledTriggerManager";
 import { webhookTriggerManager } from "../Trigger/WebhookTriggerManager";
 import { telegramTriggerManager } from "../Trigger/TelegramTriggerManager";
+import { Helper } from "../Utils/Helper";
 
 type EventCallback = (...args: unknown[]) => void;
 
@@ -91,7 +92,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
 
         if (fullPath) {
           const content = fs.readFileSync(fullPath, "utf-8");
-          const graph = JSON.parse(content);
+          const graph = Helper.JsonParser.parse(content);
           let nodes = graph.nodes;
           let connections = graph.connections;
           if (graph.canvasState) {
@@ -173,7 +174,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
       const mockWs = {
         send: async (msg: string) => {
           try {
-            const data = JSON.parse(msg);
+            const data = Helper.JsonParser.parse(msg);
 
             const isWorkflowRequest =
               data.type === "run_workflow" ||
@@ -193,9 +194,8 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               let workflowId = data.id || data.requestId;
 
               if (typeof workflow === "string") {
-                try {
-                  workflow = JSON.parse(workflow);
-                } catch { /* ignore - workflow already parsed */ }
+                const parsed = Helper.JsonParser.safeParse(workflow);
+                if (parsed.success) workflow = parsed.data;
               }
               if (workflow.workflow) workflow = workflow.workflow;
               else if (workflow.data) workflow = workflow.data;
@@ -205,7 +205,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                 !data.data.startsWith("{")
               ) {
                 const targetId = data.data;
-                const wsData: WorkspaceData = JSON.parse(workspaceDataStr);
+                const wsData: WorkspaceData = Helper.JsonParser.parse(workspaceDataStr);
                 const foundWf = wsData.workflows.find(
                   (w: { id: string }) => w.id === targetId
                 );
@@ -245,7 +245,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   if (fullPath) {
                     try {
                       const fileContent = fs.readFileSync(fullPath, "utf-8");
-                      const graphData = JSON.parse(fileContent);
+                      const graphData = Helper.JsonParser.parse(fileContent);
 
                       let nodes = graphData.nodes;
                       let connections = graphData.connections;
@@ -443,7 +443,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
         const mockWs = {
           send: async (msg: string) => {
             try {
-              const data = JSON.parse(msg);
+              const data = Helper.JsonParser.parse(msg);
 
               const isWorkflowRequest =
                 data.type === "run_workflow" ||
@@ -463,9 +463,8 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                 let workflowId = data.id || data.requestId;
 
                 if (typeof workflow === "string") {
-                  try {
-                    workflow = JSON.parse(workflow);
-                  } catch { /* ignore - workflow already parsed */ }
+                  const parsed = Helper.JsonParser.safeParse(workflow);
+                  if (parsed.success) workflow = parsed.data;
                 }
                 if (workflow.workflow) workflow = workflow.workflow;
                 else if (workflow.data) workflow = workflow.data;
@@ -476,7 +475,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                 ) {
                   const targetId = data.data;
                   const wsData: WorkspaceData =
-                    JSON.parse(workspaceDataStr);
+                    Helper.JsonParser.parse(workspaceDataStr);
                   const foundWf = wsData.workflows.find(
                     (w: { id: string }) => w.id === targetId
                   );
@@ -519,7 +518,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                           fullPath,
                           "utf-8"
                         );
-                        const graphData = JSON.parse(fileContent);
+                        const graphData = Helper.JsonParser.parse(fileContent);
 
                         let nodes = graphData.nodes;
                         let connections = graphData.connections;
@@ -718,7 +717,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
         const mockWs = {
           send: async (msg: string) => {
             try {
-              const data = JSON.parse(msg);
+              const data = Helper.JsonParser.parse(msg);
 
               const isWorkflowRequest =
                 data.type === "run_workflow" ||
@@ -738,9 +737,8 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                 let workflowId = data.id || data.requestId;
 
                 if (typeof workflow === "string") {
-                  try {
-                    workflow = JSON.parse(workflow);
-                  } catch { /* ignore - workflow already parsed */ }
+                  const parsed = Helper.JsonParser.safeParse(workflow);
+                  if (parsed.success) workflow = parsed.data;
                 }
                 if (workflow.workflow) workflow = workflow.workflow;
                 else if (workflow.data) workflow = workflow.data;
@@ -750,7 +748,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   !data.data.startsWith("{")
                 ) {
                   const targetId = data.data;
-                  const wsData: WorkspaceData = JSON.parse(workspaceDataStr);
+                  const wsData: WorkspaceData = Helper.JsonParser.parse(workspaceDataStr);
                   const foundWf = wsData.workflows.find(
                     (w: { id: string }) => w.id === targetId
                   );
@@ -790,7 +788,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                     if (fullPath) {
                       try {
                         const fileContent = fs.readFileSync(fullPath, "utf-8");
-                        const graphData = JSON.parse(fileContent);
+                        const graphData = Helper.JsonParser.parse(fileContent);
 
                         let nodes = graphData.nodes;
                         let connections = graphData.connections;
@@ -960,7 +958,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
     // Handle incoming messages from frontend
     ws.on("message", async (message: WebSocket.RawData) => {
       try {
-        const data = JSON.parse(message.toString());
+        const data = Helper.JsonParser.parse(message.toString());
         console.log("Client Count:", clients.size, "Message: ", data.type);
         let consoleMessage: ConsoleEvent | null = null;
 
@@ -975,15 +973,10 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             break;
 
           case "user_prompt_response": {
-            let payload;
-            if (typeof data.data === 'string') {
-              try {
-                payload = JSON.parse(data.data);
-              } catch {
-                payload = data.data;
-              }
-            } else {
-              payload = data.data;
+            let payload = data.data;
+            if (typeof payload === 'string') {
+              const parsed = Helper.JsonParser.safeParse(payload);
+              if (parsed.success) payload = parsed.data;
             }
             
             const { promptId, response } = payload;
@@ -1039,7 +1032,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
           }
           case "stop_workflow": {
             try {
-              const payload = typeof data.data === "string" ? JSON.parse(data.data) : data.data;
+              const payload = typeof data.data === "string" ? Helper.JsonParser.parse(data.data) : data.data;
               const workflowId = String(payload?.workflowId ?? "default");
               requestStop(workflowId);
               console.log(`[SERVER STDOUT] [Stop] Received stop request for workflow: ${workflowId}`);
@@ -1064,7 +1057,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               break;
             }
 
-            const payload = JSON.parse(data.data);
+            const payload = Helper.JsonParser.parse(data.data);
             const { workspaceId, trigger, workspaceData, baseWorkflowsPath } =
               payload;
 
@@ -1418,7 +1411,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               })
             );
 
-            const workflow = JSON.parse(data.data);
+            const workflow = Helper.JsonParser.parse(data.data);
             const result = await executeFlowRuntime(workflow, ws);
 
             ws.send(

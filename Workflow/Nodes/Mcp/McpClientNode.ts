@@ -21,6 +21,7 @@ import { McpHttpClient } from "../../../Utils/McpHttpClient";
 import { McpSTDIOClient } from "../../../Utils/McpStdioClient";
 import { getLLMProvider } from "../../../LLM/LLMRunner";
 import { getWorkspaceDataForTools } from "../../../Agent/Utls/ToolCallingHelper";
+import { Helper } from "../../../Utils/Helper";
 
 export interface McpClientNode extends BaseNode {
   nodeType: string;
@@ -267,8 +268,7 @@ async function buildClient(n: McpClientNode): Promise<McpHttpClient | McpSTDIOCl
     if (!command) throw new Error("Command is required for Stdio transport.");
     const args   = get("Args");
     const envStr = get("Env Variables") || "{}";
-    let envVars: Record<string, string> = {};
-    try { envVars = JSON.parse(envStr); } catch { /* ignore */ }
+    const envVars = Helper.JsonParser.parseWithFallback(envStr, {} as Record<string, string>);
     return new McpSTDIOClient({
       command,
       args: args ? args.split(" ").filter(Boolean) : [],
@@ -324,11 +324,9 @@ Reply ONLY with this JSON (no markdown, no extra text):
 
   const raw = await llm.generateText(prompt);
 
-  const cleaned = raw.replace(/```json|```/g, "").trim();
-  const jsonStart = cleaned.indexOf("{");
-  const jsonEnd   = cleaned.lastIndexOf("}") + 1;
-  if (jsonStart === -1) throw new Error("AI selector returned no JSON. Response: " + raw.substring(0, 300));
-  return JSON.parse(cleaned.substring(jsonStart, jsonEnd)) as DynamicDecision;
+  const parsedDecision = Helper.JsonParser.safeParse<DynamicDecision>(raw);
+  if (!parsedDecision.success) throw new Error("AI selector returned no JSON. Response: " + raw.substring(0, 300));
+  return parsedDecision.data;
 }
 
 // ── Node factory ──────────────────────────────────────────────────────────────
@@ -431,15 +429,14 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
 
           if (socketInput) {
             if (socketInput.startsWith("{")) {
-              try {
-                const parsed = JSON.parse(socketInput) as Record<string, unknown>;
-                if (typeof parsed.tool === "string") {
-                  toolName  = parsed.tool;
-                  inputJSON = JSON.stringify(parsed.input ?? {});
-                } else {
-                  inputJSON = socketInput;
-                }
-              } catch { inputJSON = socketInput; }
+              const parsed = Helper.JsonParser.safeParse(socketInput);
+              if (parsed.success && typeof (parsed.data as Record<string, unknown>).tool === "string") {
+                const parsedData = parsed.data as Record<string, unknown>;
+                toolName  = parsedData.tool as string;
+                inputJSON = JSON.stringify(parsedData.input ?? {});
+              } else {
+                inputJSON = socketInput;
+              }
             } else if (!socketInput.startsWith("[")) {
               toolName = socketInput;
             }
@@ -461,9 +458,10 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
               if (code <= 0x1F || code === 0x7F) return "";
               return c;
             }).join("");
-            try {
-              inputRecord = JSON.parse(sanitized);
-            } catch {
+            const parsedInputRecord = Helper.JsonParser.safeParse(sanitized);
+            if (parsedInputRecord.success) {
+              inputRecord = parsedInputRecord.data as Record<string, unknown>;
+            } else {
               return { [n.id * 100 + 2]: `Error: Input JSON is invalid. Got: ${inputJSON}` };
             }
           }
@@ -482,10 +480,10 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
           if (socketInput && !socketInput.startsWith("{")) {
             resourceUri = socketInput;
           } else if (socketInput.startsWith("{")) {
-            try {
-              const parsed = JSON.parse(socketInput) as Record<string, unknown>;
-              if (typeof parsed.uri === "string") resourceUri = parsed.uri;
-            } catch { /* ignore */ }
+            const parsed = Helper.JsonParser.safeParse(socketInput);
+            if (parsed.success && typeof (parsed.data as Record<string, unknown>).uri === "string") {
+              resourceUri = (parsed.data as Record<string, unknown>).uri as string;
+            }
           }
 
           if (!resourceUri) {
@@ -507,10 +505,10 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
 
           if (socketInput) {
             if (socketInput.startsWith("{")) {
-              try {
-                const parsed = JSON.parse(socketInput) as Record<string, unknown>;
-                if (typeof parsed.prompt === "string") promptName = parsed.prompt;
-              } catch { /* ignore */ }
+              const parsed = Helper.JsonParser.safeParse(socketInput);
+              if (parsed.success && typeof (parsed.data as Record<string, unknown>).prompt === "string") {
+                promptName = (parsed.data as Record<string, unknown>).prompt as string;
+              }
             } else {
               promptName = socketInput;
             }

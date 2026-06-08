@@ -21,6 +21,7 @@ import type {
   DataType,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
+import { Helper } from "../../Utils/Helper";
 
 export interface LoopNode extends BaseNode {
   nodeType: "Loop";
@@ -46,7 +47,8 @@ const resolvePath = (obj: unknown, path: string): unknown => {
 const toArray = (raw: unknown, fieldPath: string): unknown[] => {
   let parsed: unknown = raw;
   if (typeof raw === "string") {
-    try { parsed = JSON.parse(raw); } catch { /* ignore parse errors */ }
+    const result = Helper.JsonParser.safeParse(raw);
+    if (result.success) parsed = result.data;
   }
   const extracted = fieldPath.trim() ? resolvePath(parsed, fieldPath) : parsed;
   if (Array.isArray(extracted)) return extracted;

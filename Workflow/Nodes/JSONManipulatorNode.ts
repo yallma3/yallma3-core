@@ -20,6 +20,7 @@ import type {
   DataType,
 } from "../types/types";
 import { NodeRegistry } from "../NodeRegistry";
+import { Helper } from "../../Utils/Helper";
 
 export type OperationType = "extract_field" | "template_substitute";
 export type OutputFormat  = "string" | "array" | "object" | "count";
@@ -135,10 +136,8 @@ function readOperations(node: BaseNode): OperationConfig[] {
     (p) => p.parameterName === "Operations"
   );
   const raw = String(param?.paramValue ?? param?.defaultValue ?? "");
-  try {
-    const parsed = JSON.parse(raw) as OperationConfig[];
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch { /* fall through */ }
+  const ops = Helper.JsonParser.parseWithFallback(raw, [] as OperationConfig[]);
+  if (Array.isArray(ops) && ops.length > 0) return ops;
   return DEFAULT_OPERATIONS;
 }
 export interface JSONManipulatorNode extends BaseNode {
@@ -232,7 +231,9 @@ export function createJSONManipulatorNode(
       try {
         if (!jsonInput || typeof jsonInput !== "string")
           throw new Error("JSON input is required and must be a string");
-        parsed = JSON.parse(jsonInput);
+        const parsedResult = Helper.JsonParser.safeParse(jsonInput);
+        if (!parsedResult.success) throw new Error(parsedResult.error);
+        parsed = parsedResult.data;
       } catch (e) {
         const err = `Error: ${e instanceof Error ? e.message : String(e)}`;
         const result: Record<number, string> = {};
@@ -282,13 +283,12 @@ export function createJSONManipulatorNode(
 
       // When the panel writes a new "Operations" JSON → rebuild sockets + height immediately
       if (parameterName === "Operations") {
-        try {
-          const ops = JSON.parse(String(value)) as OperationConfig[];
-          if (Array.isArray(ops)) {
-            this.sockets = buildSockets(this.id, ops);
-            this.height  = computeHeight(ops.length);
-          }
-        } catch { /* invalid JSON during typing — keep current sockets */ }
+        const opsResult = Helper.JsonParser.safeParse(String(value));
+        if (opsResult.success && Array.isArray(opsResult.data)) {
+          const ops = opsResult.data as OperationConfig[];
+          this.sockets = buildSockets(this.id, ops);
+          this.height  = computeHeight(ops.length);
+        }
       }
     },
   };

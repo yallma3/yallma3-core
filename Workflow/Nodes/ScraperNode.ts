@@ -23,6 +23,7 @@ import type {
 import { NodeRegistry } from "../NodeRegistry";
 import * as cheerio from "cheerio";
 import type { CheerioAPI, Element } from "cheerio";
+import { Helper } from "../../Utils/Helper";
 
 
 export interface CheerioScraperNode extends BaseNode {
@@ -382,11 +383,9 @@ function extractJsonLd($: CheerioAPI): unknown[] {
   const jsonLdData: unknown[] = [];
 
   $('script[type="application/ld+json"]').each((_index: number, el: Element) => {
-    try {
-      const data = JSON.parse($(el).html() || '{}');
-      jsonLdData.push(data);
-    } catch {
-      // Invalid JSON, skip
+    const parsed = Helper.JsonParser.safeParse($(el).html() || '{}');
+    if (parsed.success) {
+      jsonLdData.push(parsed.data);
     }
   });
 
