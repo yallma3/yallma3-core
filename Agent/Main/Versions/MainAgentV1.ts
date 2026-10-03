@@ -22,6 +22,7 @@ import { Yallma3GenOneAgentRuntime } from "../../Agent";
 import { getLLMProvider } from "../../../LLM/LLMRunner";
 import type { LLMProvider } from "../../../Models/LLM";
 import type { ExecutionContext } from "../../../Execution/ExecutionContext";
+import { validateWorkspace } from "../../Validation/WorkspaceValidator";
 
 export class MainAgentV1 implements MainAgent {
   version = "1.0.0";
@@ -46,6 +47,12 @@ export class MainAgentV1 implements MainAgent {
 
   async run(): Promise<Record<string, string>> {
     if (!this.workspaceData) return {};
+
+    const validation = validateWorkspace(this.workspaceData);
+    if (!validation.valid) {
+      this.emitErrorRaw(validation.error.message, null, false);
+      return {};
+    }
 
     await this.initialize();
 
