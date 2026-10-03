@@ -14,6 +14,7 @@ import {
 import type { ConsoleEvent } from "../../../Models/Workspace";
 import type { NodeExecutionContext, BaseNode, Position, NodeMetadata } from "../../../Workflow/types/types";
 import type { NodeRegistry } from "../../../Workflow/NodeRegistry";
+import type { ExecutionContext } from "../../../Execution/ExecutionContext";
 
 interface MockNodeRegistry {
   registerNodeType: (type: string, createFn: (id: number, position: Position) => BaseNode, metadata: NodeMetadata) => void;
@@ -490,12 +491,11 @@ describe("ConsoleInput Utilities", () => {
 
     it("should resolve with user response", async () => {
       const node = createNode(1, { x: 0, y: 0 });
-      const mockWs = { send: vi.fn() };
+      const mockCtx = { send: vi.fn(), onMessage: vi.fn(), onClose: vi.fn(() => () => {}), broadcast: vi.fn() } as unknown as ExecutionContext;
       const context: NodeExecutionContext = {
         node,
         inputs: {},
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ws: mockWs as any,
+        ctx: mockCtx,
       };
 
       const processPromise = node.process(context);
@@ -510,25 +510,24 @@ describe("ConsoleInput Utilities", () => {
       const result = await processPromise;
       expect(result).toBe("test response");
 
-      // Check WebSocket messages
-      expect(mockWs.send).toHaveBeenCalledTimes(2); // prompt and success
-      expect(mockWs.send).toHaveBeenCalledWith(
-        expect.stringContaining('"type":"console_prompt"')
+      // Check ExecutionContext messages
+      expect(mockCtx.send).toHaveBeenCalledTimes(2); // prompt and success
+      expect(mockCtx.send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "console_prompt" })
       );
-      expect(mockWs.send).toHaveBeenCalledWith(
-        expect.stringContaining('"type":"console_event"')
+      expect(mockCtx.send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "console_event" })
       );
     });
 
     it("should reject on timeout", async () => {
       const node = createNode(2, { x: 0, y: 0 });
       node.setConfigParameter("Timeout (seconds)", 1); // 1 second timeout
-      const mockWs = { send: vi.fn() };
+      const mockCtx = { send: vi.fn(), onMessage: vi.fn(), onClose: vi.fn(() => () => {}), broadcast: vi.fn() } as unknown as ExecutionContext;
       const context: NodeExecutionContext = {
         node,
         inputs: {},
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ws: mockWs as any,
+        ctx: mockCtx,
       };
 
       const processPromise = node.process(context);
@@ -541,12 +540,81 @@ describe("ConsoleInput Utilities", () => {
 
     it("should resolve with empty string response", async () => {
       const node = createNode(3, { x: 0, y: 0 });
-      const mockWs = { send: vi.fn() };
+      const mockCtx = { send: vi.fn(), onMessage: vi.fn(), onClose: vi.fn(() => () => {}), broadcast: vi.fn() } as unknown as ExecutionContext;
       const context: NodeExecutionContext = {
         node,
         inputs: {},
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ws: mockWs as any,
+        ctx: mockCtx,
+      };
+
+      const processPromise = node.process(context);
+
+      // Wait a bit for the prompt to be registered, then resolve it
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const pending = getPendingPrompts();
+      expect(pending).toHaveLength(1);
+      const prompt = pending[0]!;
+      resolvePrompt(prompt.promptId, "");
+
+      const result = await processPromise;
+      expect(result).toBe("");
+    });
+
+    it("should use prompt from input socket", async () => {
+      const node = createNode(4, { x: 0, y: 0 });
+      const mockCtx = { send: vi.fn(), onMessage: vi.fn(), onClose: vi.fn(() => () => {}), broadcast: vi.fn() } as unknown as ExecutionContext;
+      const context: NodeExecutionContext = {
+        node,
+        inputs: { [4 * 100 + 1]: "Custom prompt from socket" },
+        ctx: mockCtx,
+      };
+
+      const processPromise = node.process(context);
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const pending = getPendingPrompts();
+      const prompt = pending[0]!;
+      resolvePrompt(prompt.promptId, "response");
+
+      await processPromise;
+
+      // Check that the prompt event has the custom message
+      expect(mockCtx.send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "console_prompt" })
+      );
+    });
+
+    it("should use prompt from config parameter", async () => {
+      const node = createNode(5, { x: 0, y: 0 });
+      node.setConfigParameter("Prompt Message", "Config prompt");
+      const mockCtx = { send: vi.fn(), onMessage: vi.fn(), onClose: vi.fn(() => () => {}), broadcast: vi.fn() } as unknown as ExecutionContext;
+      const context: NodeExecutionContext = {
+        node,
+        inputs: {},
+        ctx: mockCtx,
+      };
+
+      const processPromise = node.process(context);
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const pending = getPendingPrompts();
+      const prompt = pending[0]!;
+      resolvePrompt(prompt.promptId, "response");
+
+      await processPromise;
+
+      expect(mockCtx.send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "console_prompt" })
+      );
+    });
+
+    it("should resolve with empty string response", async () => {
+      const node = createNode(3, { x: 0, y: 0 });
+      const mockCtx = { send: vi.fn(), onMessage: vi.fn(), onClose: vi.fn(() => () => {}), broadcast: vi.fn() } as unknown as ExecutionContext;
+      const context: NodeExecutionContext = {
+        node,
+        inputs: {},
+        ctx: mockCtx,
       };
 
       const processPromise = node.process(context);
@@ -564,12 +632,11 @@ describe("ConsoleInput Utilities", () => {
 
     it("should use prompt from input socket", async () => {
       const node = createNode(4, { x: 0, y: 0 });
-      const mockWs = { send: vi.fn() };
+      const mockCtx = { send: vi.fn(), onMessage: vi.fn(), onClose: vi.fn(() => () => {}), broadcast: vi.fn() } as unknown as ExecutionContext;
       const context: NodeExecutionContext = {
         node,
         inputs: { [4 * 100 + 1]: "Custom prompt from socket" },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ws: mockWs as any,
+        ctx: mockCtx,
       };
 
       const processPromise = node.process(context);
@@ -582,20 +649,19 @@ describe("ConsoleInput Utilities", () => {
       await processPromise;
 
       // Check that the prompt event has the custom message
-      expect(mockWs.send).toHaveBeenCalledWith(
-        expect.stringContaining("Custom prompt from socket")
+      expect(mockCtx.send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "console_prompt" })
       );
     });
 
     it("should use prompt from config parameter", async () => {
       const node = createNode(5, { x: 0, y: 0 });
       node.setConfigParameter("Prompt Message", "Config prompt");
-      const mockWs = { send: vi.fn() };
+      const mockCtx = { send: vi.fn(), onMessage: vi.fn(), onClose: vi.fn(() => () => {}), broadcast: vi.fn() } as unknown as ExecutionContext;
       const context: NodeExecutionContext = {
         node,
         inputs: {},
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ws: mockWs as any,
+        ctx: mockCtx,
       };
 
       const processPromise = node.process(context);
@@ -607,8 +673,8 @@ describe("ConsoleInput Utilities", () => {
 
       await processPromise;
 
-      expect(mockWs.send).toHaveBeenCalledWith(
-        expect.stringContaining("Config prompt")
+      expect(mockCtx.send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "console_prompt" })
       );
     });
   });

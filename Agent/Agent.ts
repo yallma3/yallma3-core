@@ -2,10 +2,14 @@ import type { Agent } from "../Models/Agent";
 import type { AgentStep, Task } from "../Models/Task";
 import { getLLMProvider } from "../LLM/LLMRunner";
 import type { LLMProvider, LLMOption } from "../Models/LLM";
-import type WebSocket from "ws";
+import type { ExecutionContext } from "../Execution/ExecutionContext";
 import { toolExecutorAttacher } from "../Agent/Utls/ToolCallingHelper";
 import { closeMcpConnections } from "./Utls/McpUtils";
 import { Helper } from "../Utils/Helper";
+import { FileAgentMemoryStore } from "../Memory/AgentMemoryStore";
+import type { AgentMemoryStore } from "../Models/AgentMemory";
+
+const memoryStore: AgentMemoryStore = new FileAgentMemoryStore();
 
 interface Review {
   task_completion_status: string;
@@ -45,25 +49,30 @@ export class AgentRuntime {
     let output = "";
     let feedback = "";
 
-    while (iteration < this.maxIterations) {
-      console.log("Iteration:", iteration);
+    try {
+      while (iteration < this.maxIterations) {
+        console.log("Iteration:", iteration);
 
-      const prompt = this.buildPrompt(iteration, output, feedback);
-      output = await this.llm.generateText(prompt);
-      console.log("🧠 Agent Response: ", output);
+        const prompt = this.buildPrompt(iteration, output, feedback);
+        output = await this.llm.generateText(prompt);
+        console.log("🧠 Agent Response: ", output);
 
-      const reviewPrompt = this.buildReviewPrompt(output);
-      const reviewResult = await this.llm.generateText(reviewPrompt);
-      const reviewResultParsed = Helper.JsonParser.parse<Review>(reviewResult);
-      if (reviewResultParsed.task_completion_status === "complete") {
-        break;
+        const reviewPrompt = this.buildReviewPrompt(output);
+        const reviewResult = await this.llm.generateText(reviewPrompt);
+        const reviewResultParsed = Helper.JsonParser.parse<Review>(reviewResult);
+        if (reviewResultParsed.task_completion_status === "complete") {
+          break;
+        }
+        feedback = reviewResultParsed.feedback;
+
+        iteration++;
       }
-      feedback = reviewResultParsed.feedback;
-      //   console.log("📝 Feedback:", feedback);
-
-      iteration++;
+      memoryStore.recordOutcome(this.agent, true);
+      return output;
+    } catch (e) {
+      memoryStore.recordOutcome(this.agent, false);
+      throw e;
     }
-    return output;
   }
 
   private buildPrompt(
@@ -176,7 +185,7 @@ export class Yallma3GenOneAgentRuntime {
   private context: string = "";
   private llm: LLMProvider;
   private apiKey: string;
-  private ws: WebSocket;
+  private ctx: ExecutionContext;
   private maxIterations = 1;
 
   constructor(
@@ -184,7 +193,7 @@ export class Yallma3GenOneAgentRuntime {
     task: Task,
     context: string,
     plan: AgentStep[],
-    ws: WebSocket,
+    ctx: ExecutionContext,
     workspaceKey?: string,
     workspaceLLM?: LLMOption,
     intent?: string
@@ -198,7 +207,7 @@ export class Yallma3GenOneAgentRuntime {
     const llmOption = agent.llm || workspaceLLM;
     this.llm = getLLMProvider(llmOption, this.apiKey);
     this.intent = intent || "";
-    this.ws = ws;
+    this.ctx = ctx;
   }
 
   private abortChecker: (() => boolean) | null = null;
@@ -218,77 +227,83 @@ export class Yallma3GenOneAgentRuntime {
 
     if (this.agent.tools.length > 0) {
       const attachedTools = await toolExecutorAttacher(
-        this.ws,
+        this.ctx,
         this.agent.tools
       );
 
       this.llm.registerTools(attachedTools);
     }
 
-    while (iteration < this.maxIterations) {
-      console.log(`\n🔄 Iteration ${iteration + 1}/${this.maxIterations}`);
+    try {
+      while (iteration < this.maxIterations) {
+        console.log(`\n🔄 Iteration ${iteration + 1}/${this.maxIterations}`);
 
-      // Step 1: Agent generates output
-      const prompt = this.buildPrompt(iteration, output, feedback);
-      this.checkAbort();
-      output = await this.llm.generateText(prompt);
-      console.log("🧠 Agent Response:\n", output);
+        // Step 1: Agent generates output
+        const prompt = this.buildPrompt(iteration, output, feedback);
+        this.checkAbort();
+        output = await this.llm.generateText(prompt);
+        console.log("🧠 Agent Response:\n", output);
 
-      // Step 2: Review the output
-      const reviewPrompt = this.buildReviewPrompt(output);
-      this.checkAbort();
-      const reviewRaw = await this.llm.generateText(reviewPrompt);
+        // Step 2: Review the output
+        const reviewPrompt = this.buildReviewPrompt(output);
+        this.checkAbort();
+        const reviewRaw = await this.llm.generateText(reviewPrompt);
 
-      const parsedReview = Helper.JsonParser.safeParse<Review>(reviewRaw);
-      if (!parsedReview.success) {
-        throw new Error(`❌ Failed to parse review JSON: ${parsedReview.error}\nRaw output: ${reviewRaw.slice(0, 500)}`);
-      }
-      const review = parsedReview.data;
-
-      console.log("🔍 Review Result:", JSON.stringify(review, null, 2));
-
-      // If the review says the task is complete → accept immediately
-      if (review.task_completion_status === "complete") {
-        console.log("🎉 Task marked complete by reviewer.");
-        break;
-      }
-
-      // Step 3: Final acceptance check — only if revision is suggested
-      if (
-        review.task_completion_status === "needs_revision" ||
-        review.task_completion_status === "inadequate"
-      ) {
-        const finalCheckPrompt = this.buildFinalCheckPrompt(output);
-        const checkRaw = await this.llm.generateText(finalCheckPrompt);
-
-        const parsedCheck = Helper.JsonParser.safeParse<FinalCheck>(checkRaw);
-        if (!parsedCheck.success) {
-          throw new Error(`❌ Failed to parse final check JSON: ${parsedCheck.error}\nRaw output: ${checkRaw.slice(0, 500)}`);
+        const parsedReview = Helper.JsonParser.safeParse<Review>(reviewRaw);
+        if (!parsedReview.success) {
+          throw new Error(`❌ Failed to parse review JSON: ${parsedReview.error}\nRaw output: ${reviewRaw.slice(0, 500)}`);
         }
-        const finalCheck = parsedCheck.data;
+        const review = parsedReview.data;
 
-        console.log("✅ Final Check:", JSON.stringify(finalCheck, null, 2));
+        console.log("🔍 Review Result:", JSON.stringify(review, null, 2));
 
-        if (finalCheck.accept) {
-          console.log("🎉 Task accepted by final check.");
+        // If the review says the task is complete → accept immediately
+        if (review.task_completion_status === "complete") {
+          console.log("🎉 Task marked complete by reviewer.");
           break;
-        } else {
-          console.log("⚠️ Needs revision, applying feedback...");
-          feedback = review.feedback;
         }
+
+        // Step 3: Final acceptance check — only if revision is suggested
+        if (
+          review.task_completion_status === "needs_revision" ||
+          review.task_completion_status === "inadequate"
+        ) {
+          const finalCheckPrompt = this.buildFinalCheckPrompt(output);
+          const checkRaw = await this.llm.generateText(finalCheckPrompt);
+
+          const parsedCheck = Helper.JsonParser.safeParse<FinalCheck>(checkRaw);
+          if (!parsedCheck.success) {
+            throw new Error(`❌ Failed to parse final check JSON: ${parsedCheck.error}\nRaw output: ${checkRaw.slice(0, 500)}`);
+          }
+          const finalCheck = parsedCheck.data;
+
+          console.log("✅ Final Check:", JSON.stringify(finalCheck, null, 2));
+
+          if (finalCheck.accept) {
+            console.log("🎉 Task accepted by final check.");
+            break;
+          } else {
+            console.log("⚠️ Needs revision, applying feedback...");
+            feedback = review.feedback;
+          }
+        }
+
+        iteration++;
       }
 
-      iteration++;
+      if (iteration >= this.maxIterations) {
+        console.warn("⚠️ Max iterations reached, returning last output.");
+      }
+
+      memoryStore.recordOutcome(this.agent, true);
+      return output;
+    } catch (e) {
+      memoryStore.recordOutcome(this.agent, false);
+      throw e;
+    } finally {
+      // Clean up MCP connections
+      await this.cleanup();
     }
-
-    if (iteration >= this.maxIterations) {
-      console.warn("⚠️ Max iterations reached, returning last output.");
-    }
-
-    // Clean up MCP connections
-    await this.cleanup();
-
-    return output;
   }
 
   private buildPrompt(

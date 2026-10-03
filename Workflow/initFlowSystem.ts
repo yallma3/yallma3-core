@@ -44,6 +44,7 @@ import { register as registerDelayNode } from "./Nodes/DelayNode";
 import { register as registerEmbeddingNode } from "./Nodes/EmbeddingNode";
 
 import { register as registerWorkflowInputNode } from "./Nodes/WorkflowInputNode";
+import { register as registerWorkflowOutputNode } from "./Nodes/WorkflowOutputNode";
 import { register as registerUserPromptNode } from "./Nodes/UserPromptNode";
 import { register as registerMailNode } from "./Nodes/SendMailNode";
 import { register as registerJSONManipulatorNode } from "./Nodes/JSONManipulatorNode";
@@ -107,6 +108,7 @@ export async function initFlowSystem() {
   registerEmbeddingNode(nodeRegistry);
 
   registerWorkflowInputNode(nodeRegistry);
+  registerWorkflowOutputNode(nodeRegistry);
   registerMailNode(nodeRegistry);
   registerJSONManipulatorNode(nodeRegistry);
 }

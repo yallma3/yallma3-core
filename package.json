@@ -8,6 +8,7 @@
     "start": "bun run --watch index.ts",
     "build": "bun build index.ts --compile --outfile bin/yallma3",
     "serve": "./bin/yallma3",
+    "seed:capabilities": "bun run LLM/seed-capabilities.ts",
     "lint": "eslint . --ext .ts,.tsx",
     "test": "vitest",
     "test:coverage": "vitest run --coverage"

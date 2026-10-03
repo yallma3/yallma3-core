@@ -20,7 +20,7 @@ import type {
 import { McpHttpClient } from "../../../Utils/McpHttpClient";
 import { McpSTDIOClient } from "../../../Utils/McpStdioClient";
 import { getLLMProvider } from "../../../LLM/LLMRunner";
-import { getWorkspaceDataForTools } from "../../../Agent/Utls/ToolCallingHelper";
+import { WorkspaceRepository } from "../../../Execution/WorkspaceRepository";
 import { Helper } from "../../../Utils/Helper";
 
 export interface McpClientNode extends BaseNode {
@@ -384,8 +384,9 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
             resources: resourcesResult.status === "fulfilled" ? (resourcesResult.value as { name: string; uri: string; description?: string }[])          : [],
             prompts:   promptsResult.status   === "fulfilled" ? (promptsResult.value   as { name: string; description?: string; arguments?: unknown[] }[]) : [],
           };
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const wsData = getWorkspaceDataForTools() as Record<string, any>;
+          const repo = WorkspaceRepository.getInstance();
+          const currentId = repo.getCurrent();
+          const wsData = currentId ? repo.get(currentId) : undefined;
           const llmOption = wsData?.mainLLM;
           const apiKey: string = wsData?.apiKey ?? "";
 

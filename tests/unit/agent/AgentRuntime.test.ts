@@ -3,6 +3,7 @@ import { AgentRuntime, Yallma3GenOneAgentRuntime } from '../../../Agent/Agent';
 import type { Agent } from '../../../Models/Agent';
 import type { Task, AgentStep } from '../../../Models/Task';
 import type { LLMProvider, LLMOption } from '../../../Models/LLM';
+import type { ExecutionContext } from '../../../Execution/ExecutionContext';
 
 // Mock dependencies
 vi.mock('../../../LLM/LLMRunner', () => ({
@@ -206,8 +207,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
   let mockLLM: LLMProvider;
   let mockAgent: Agent;
   let mockTask: Task;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockWebSocket: any;
+  let mockCtx: ExecutionContext;
   let mockGetLLMProvider: MockedFunction<typeof getLLMProvider>;
   let mockToolExecutorAttacher: MockedFunction<typeof toolExecutorAttacher>;
   let mockCloseMcpConnections: MockedFunction<typeof closeMcpConnections>;
@@ -246,9 +246,11 @@ describe('Yallma3GenOneAgentRuntime', () => {
       sockets: [],
     };
 
-    mockWebSocket = {
+    mockCtx = {
       send: vi.fn(),
-      close: vi.fn(),
+      onMessage: vi.fn(),
+      onClose: vi.fn(() => () => {}),
+      broadcast: vi.fn(),
     };
 
     mockGetLLMProvider = vi.mocked(getLLMProvider);
@@ -274,7 +276,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket,
+        mockCtx,
         'workspace-key',
         { provider: 'Groq', model: { name: 'Llama2', id: 'llama2' } },
         'test intent'
@@ -303,12 +305,12 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket
+        mockCtx
       );
 
       await runtime.run();
 
-      expect(mockToolExecutorAttacher).toHaveBeenCalledWith(mockWebSocket, mockAgent.tools);
+      expect(mockToolExecutorAttacher).toHaveBeenCalledWith(mockCtx, mockAgent.tools);
       expect(mockLLM.registerTools).toHaveBeenCalled();
     });
 
@@ -327,7 +329,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket
+        mockCtx
       );
 
       const result = await runtime.run();
@@ -356,7 +358,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket
+        mockCtx
       );
 
       const result = await runtime.run();
@@ -385,7 +387,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket
+        mockCtx
       );
 
       const result = await runtime.run();
@@ -410,7 +412,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket
+        mockCtx
       );
 
       await expect(runtime.run()).rejects.toThrow('Failed to parse review JSON');
@@ -428,7 +430,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket,
+        mockCtx,
         undefined,
         undefined,
         'test intent'
@@ -449,7 +451,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket
+        mockCtx
       );
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -469,7 +471,7 @@ describe('Yallma3GenOneAgentRuntime', () => {
         mockTask,
         'test context',
         plan,
-        mockWebSocket
+        mockCtx
       );
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

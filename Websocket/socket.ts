@@ -1,58 +1,46 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
-import * as fs from "fs";
-import * as path from "path";
 import * as crypto from "crypto";
 import { createMainAgent } from "../Utils/Runtime";
-import { executeFlowRuntime, requestStop } from "../Workflow/runtime";
-
 import { ConsoleInputUtils } from "../Workflow/Nodes/ConsoleInput";
 import { resolveUserPrompt } from "../Workflow/Nodes/UserPromptNode";
-import type { ConsoleEvent, WorkspaceData } from "../Models/Workspace";
+import type { ConsoleEvent } from "../Models/Workspace";
 import type { MainAgent } from "../Agent/Main/MainAgent";
 import { scheduledTriggerManager } from "../Trigger/ScheduledTriggerManager";
 import { webhookTriggerManager } from "../Trigger/WebhookTriggerManager";
 import { telegramTriggerManager } from "../Trigger/TelegramTriggerManager";
 import { Helper } from "../Utils/Helper";
+import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
+import { WebSocketContext } from "../Execution/ExecutionContext";
+import { ExecutionOrchestrator } from "../Execution/Orchestrator";
 
-type EventCallback = (...args: unknown[]) => void;
+export type CommandErrorCode =
+  | 'VALIDATION_ERROR'
+  | 'EXECUTION_ERROR'
+  | 'TIMEOUT'
+  | 'NOT_FOUND'
+  | 'INTERNAL_ERROR'
 
-export let globalBroadcast: ((message: unknown) => void) | null = null;
-
-/**
- * Sanitize filename to prevent path traversal attacks
- */
-function safeName(name: string): string {
-  if (!name) return '_';
-  return name
-    .replace(/[/\\]/g, '_')
-    .replace(/\.\./g, '_')
-    .replace(/\0/g, '')
-    .replace(/^\.+/, '_')
-    .trim() || '_';
-}
-
-/**
- * Verify resolved path is within expected base directory
- */
-function isPathSafe(resolvedPath: string, basePath: string): boolean {
-  try {
-    const normalizedResolved = path.resolve(resolvedPath);
-    const normalizedBase = path.resolve(basePath);
-    return normalizedResolved.startsWith(normalizedBase + path.sep) || 
-           normalizedResolved === normalizedBase;
-  } catch {
-    return false;
-  }
+export function sendCommandError(
+  ws: WebSocket,
+  commandType: string,
+  code: CommandErrorCode,
+  message: string,
+  requestId?: string,
+) {
+  ws.send(JSON.stringify({
+    type: 'error',
+    requestId,
+    commandType,
+    code,
+    message,
+    timestamp: new Date().toISOString(),
+  }))
 }
 
 export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string) {
   const clients = new Set<WebSocket>();
   let currentWorkspaceAgent: MainAgent | null = null;
-
-  const workspaceDataCache = new Map<string, string>();
-  const workspacePathsCache = new Map<string, string>();
- // const workflowRequestsMap = new Map<string, string>();
 
   function broadcast(message: unknown) {
     const messageStr = JSON.stringify(message);
@@ -63,885 +51,20 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
     });
   }
 
-  globalBroadcast = broadcast;
+  const repo = WorkspaceRepository.getInstance();
+  const orchestrator = new ExecutionOrchestrator(repo, broadcast);
 
-  function hydrateWorkspaceData(
-    workspaceId: string,
-    data: WorkspaceData,
-    providedBasePath?: string
-  ): WorkspaceData {
-    const basePath = providedBasePath || workspacePathsCache.get(workspaceId);
-
-    if (!basePath || !data.workflows) return data;
-
-    console.log(`[SERVER STDOUT] 💧 Hydrating workspace ${workspaceId}...`);
-
-    data.workflows.forEach((wf: { id: string; name: string; nodes?: unknown[]; connections?: unknown[] }) => {
-      try {
-        const flowsPath = path.join(basePath, "flows", `${safeName(wf.id)}.json`);
-        const rootPath = path.join(basePath, `${safeName(wf.name)}.json`);
-
-        if (!isPathSafe(flowsPath, basePath) || !isPathSafe(rootPath, basePath)) {
-          console.error(` Path traversal attempt detected: ${wf.id} / ${wf.name}`);
-          return;
-        }
-
-        let fullPath: string | null = null;
-        if (fs.existsSync(flowsPath)) fullPath = flowsPath;
-        else if (fs.existsSync(rootPath)) fullPath = rootPath;
-
-        if (fullPath) {
-          const content = fs.readFileSync(fullPath, "utf-8");
-          const graph = Helper.JsonParser.parse(content);
-          let nodes = graph.nodes;
-          let connections = graph.connections;
-          if (graph.canvasState) {
-            nodes = graph.canvasState.nodes;
-            connections = graph.canvasState.connections;
-          }
-          if (nodes) {
-            wf.nodes = nodes;
-            wf.connections = connections || [];
-          }
-        }
-      } catch (e) {
-        console.error(` Failed to hydrate '${wf.name}':`, e);
-      }
-    });
-
-    if (data.tasks) {
-      (data.tasks as unknown as { workflow?: { id: string } }[]).forEach((task) => {
-        if (task.workflow && task.workflow.id) {
-          const hydratedWf = data.workflows.find(
-            (w) => w.id === task.workflow!.id
-          );
-          if (hydratedWf && hydratedWf.nodes && hydratedWf.nodes.length > 0) {
-            task.workflow = hydratedWf;
-          }
-        }
-      });
-    }
-
-    return data;
-  }
-
-  // SCHEDULED TRIGGER LOGIC
-  scheduledTriggerManager.setExecutionCallback(async (workspaceId: string) => {
-    console.log(` Executing workspace ${workspaceId} via scheduled trigger`);
-
-    const workspaceDataStr = workspaceDataCache.get(workspaceId);
-
-    if (!workspaceDataStr) {
-      console.error(` No workspace data found for ${workspaceId}`);
-
-      const nextExecutionTime =
-        scheduledTriggerManager.getNextExecutionTime(workspaceId);
-
-      console.log(
-        ` Next execution time: ${
-          nextExecutionTime
-            ? new Date(nextExecutionTime).toISOString()
-            : "null"
-        }`
-      );
-
-      broadcast({
-        type: "trigger_execution",
-        workspaceId,
-        data: {
-          success: false,
-          message: "Workspace data not found",
-          nextExecutionTime,
-        },
-      });
-      return;
-    }
-
-    try {
-      broadcast({
-        type: "message",
-        data: {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          type: "system",
-          message: ` Workspace triggered by schedule: ${workspaceId}`,
-        },
-        timestamp: new Date().toISOString(),
-      });
-
-      const listeners: Record<string, EventCallback[]> = {};
-
-      const mockWs = {
-        send: async (msg: string) => {
-          try {
-            const data = Helper.JsonParser.parse(msg);
-
-            const isWorkflowRequest =
-              data.type === "run_workflow" ||
-              (data.data &&
-                typeof data.data === "string" &&
-                data.data.includes('"nodes"')) ||
-              (data.data &&
-                typeof data.data === "string" &&
-                data.data.includes("wf-"));
-
-            if (isWorkflowRequest) {
-              console.log(
-                " [MockWS] Intercepting background workflow execution..."
-              );
-
-              let workflow = data.data;
-              let workflowId = data.id || data.requestId;
-
-              if (typeof workflow === "string") {
-                const parsed = Helper.JsonParser.safeParse(workflow);
-                if (parsed.success) workflow = parsed.data;
-              }
-              if (workflow.workflow) workflow = workflow.workflow;
-              else if (workflow.data) workflow = workflow.data;
-
-              if (
-                typeof data.data === "string" &&
-                !data.data.startsWith("{")
-              ) {
-                const targetId = data.data;
-                const wsData: WorkspaceData = Helper.JsonParser.parse(workspaceDataStr);
-                const foundWf = wsData.workflows.find(
-                  (w: { id: string }) => w.id === targetId
-                );
-                if (foundWf) {
-                  workflow = foundWf;
-                }
-              }
-
-              if (
-                (!workflow.nodes || !Array.isArray(workflow.nodes)) &&
-                workflow.id
-              ) {
-                const basePath = workspacePathsCache.get(workspaceId);
-                if (basePath) {
-                  const flowsPath = path.join(
-                    basePath,
-                    "flows",
-                    `${safeName(workflow.id)}.json`
-                  );
-                  const rootNamePath = workflow.name
-                    ? path.join(basePath, `${safeName(workflow.name)}.json`)
-                    : null;
-
-                  if (!isPathSafe(flowsPath, basePath) || 
-                      (rootNamePath && !isPathSafe(rootNamePath, basePath))) {
-                    console.error(" Path traversal attempt detected");
-                    return;
-                  }
-
-                  let fullPath =
-                    fs.existsSync(flowsPath) && flowsPath
-                      ? flowsPath
-                      : rootNamePath && fs.existsSync(rootNamePath)
-                      ? rootNamePath
-                      : null;
-
-                  if (fullPath) {
-                    try {
-                      const fileContent = fs.readFileSync(fullPath, "utf-8");
-                      const graphData = Helper.JsonParser.parse(fileContent);
-
-                      let nodes = graphData.nodes;
-                      let connections = graphData.connections;
-                      if (graphData.canvasState) {
-                        nodes = graphData.canvasState.nodes;
-                        connections = graphData.canvasState.connections;
-                      }
-
-                      if (nodes) {
-                        workflow.nodes = nodes;
-                        workflow.connections = connections || [];
-                        console.log(
-                          ` [MockWS] Hydrated '${
-                            workflow.name || workflow.id
-                          }' from disk! Nodes: ${workflow.nodes.length}`
-                        );
-                      }
-                    } catch (err) {
-                      console.error(` [MockWS] Disk read failed:`, err);
-                    }
-                  }
-                }
-              }
-
-              if (
-                !workflow.nodes ||
-                !Array.isArray(workflow.nodes) ||
-                workflow.nodes.length === 0
-              ) {
-                console.error(
-                  " [MockWS] ABORTING: Workflow has no nodes."
-                );
-                return;
-              }
-
-              try {
-                console.log(`[MockWS] Starting execution...`);
-
-                const context = data.context || "";
-                const result = await executeFlowRuntime(
-                  workflow,
-                  mockWs as unknown as WebSocket,
-                  context
-                );
-
-                console.log(` [MockWS] Execution finished.`);
-
-                const responseEvent = {
-                  type: "workflow_json",
-                  id: workflowId,
-                  data: result,
-                  timestamp: new Date().toISOString(),
-                };
-
-                if (listeners["message"]) {
-                  const rawEvent = {
-                    toString: () => JSON.stringify(responseEvent),
-                  };
-                  listeners["message"].forEach((cb) => cb(rawEvent));
-                }
-              } catch (execError) {
-                console.error(" [MockWS] Execution Error:", execError);
-                if (listeners["message"]) {
-                  const errorEvent = {
-                    type: "error",
-                    requestId: workflowId,
-                    message: String(execError),
-                  };
-                  const rawEvent = {
-                    toString: () => JSON.stringify(errorEvent),
-                  };
-                  listeners["message"].forEach((cb) => cb(rawEvent));
-                }
-              }
-              return;
-            }
-
-            broadcast(data);
-          } catch (e) {
-            console.error(
-              "Failed to broadcast/intercept message:",
-              e
-            );
-          }
-        },
-        on: (event: string, callback: EventCallback) => {
-          if (!listeners[event]) listeners[event] = [];
-          listeners[event].push(callback);
-        },
-        off: (event: string, callback: EventCallback) => {
-          if (!listeners[event]) return;
-          listeners[event] = listeners[event].filter((cb) => cb !== callback);
-        },
-        removeListener: (event: string, callback: EventCallback) => {
-          if (!listeners[event]) return;
-          listeners[event] = listeners[event].filter((cb) => cb !== callback);
-        },
-        once: (event: string, callback: EventCallback) => {
-          const onceWrapper = (...args: unknown[]) => {
-            callback(...args);
-            if (listeners[event])
-              listeners[event] = listeners[event].filter(
-                (cb) => cb !== onceWrapper
-              );
-          };
-          if (!listeners[event]) listeners[event] = [];
-          listeners[event].push(onceWrapper);
-        },
-        emit: (event: string, ...args: unknown[]) => {
-          if (listeners[event])
-            listeners[event].forEach((cb) => cb(...args));
-        },
-        readyState: 1,
-        close: () => {},
-        terminate: () => {},
-      } as unknown as WebSocket;
-
-      const workspaceAgent = createMainAgent(workspaceDataStr, mockWs);
-      await workspaceAgent.run();
-
-      const nextExecutionTime =
-        scheduledTriggerManager.getNextExecutionTime(workspaceId);
-
-      console.log(`Workspace execution completed successfully`);
-      console.log(
-        ` Next execution time: ${
-          nextExecutionTime
-            ? new Date(nextExecutionTime).toISOString()
-            : "null"
-        }`
-      );
-
-      broadcast({
-        type: "trigger_execution",
-        workspaceId,
-        data: {
-          success: true,
-          nextExecutionTime,
-          executedAt: Date.now(),
-        },
-      });
-    } catch (error) {
-      console.error(` Error executing workspace ${workspaceId}:`, error);
-
-      const nextExecutionTime =
-        scheduledTriggerManager.getNextExecutionTime(workspaceId);
-
-      console.log(
-        ` Next execution time after error: ${
-          nextExecutionTime
-            ? new Date(nextExecutionTime).toISOString()
-            : "null"
-        }`
-      );
-
-      broadcast({
-        type: "trigger_execution",
-        workspaceId,
-        data: {
-          success: false,
-          message: String(error),
-          nextExecutionTime,
-        },
-      });
-    }
+  scheduledTriggerManager.setExecutionCallback((workspaceId) => {
+    orchestrator.onScheduledTrigger(workspaceId);
   });
 
-  // WEBHOOK TRIGGER LOGIC (uses queue via directExecute)
-  webhookTriggerManager.setExecutionCallback(
-    async (workspaceId: string, payload: Record<string, unknown>) => {
-      console.log(` Executing workspace ${workspaceId} via webhook`);
-      console.log(`   Payload:`, payload);
+  webhookTriggerManager.setExecutionCallback((workspaceId, payload) => {
+    orchestrator.onWebhookTrigger(workspaceId, payload);
+  });
 
-      const workspaceDataStr = workspaceDataCache.get(workspaceId);
-
-      if (!workspaceDataStr) {
-        console.error(` No workspace data found for ${workspaceId}`);
-        return;
-      }
-
-      try {
-        broadcast({
-          type: "message",
-          data: {
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-            type: "system",
-            message: ` Workspace triggered by webhook: ${workspaceId}`,
-          },
-          timestamp: new Date().toISOString(),
-        });
-
-        const listeners: Record<string, EventCallback[]> = {};
-
-        const mockWs = {
-          send: async (msg: string) => {
-            try {
-              const data = Helper.JsonParser.parse(msg);
-
-              const isWorkflowRequest =
-                data.type === "run_workflow" ||
-                (data.data &&
-                  typeof data.data === "string" &&
-                  data.data.includes('"nodes"')) ||
-                (data.data &&
-                  typeof data.data === "string" &&
-                  data.data.includes("wf-"));
-
-              if (isWorkflowRequest) {
-                console.log(
-                  " [MockWS] Intercepting background workflow execution..."
-                );
-
-                let workflow = data.data;
-                let workflowId = data.id || data.requestId;
-
-                if (typeof workflow === "string") {
-                  const parsed = Helper.JsonParser.safeParse(workflow);
-                  if (parsed.success) workflow = parsed.data;
-                }
-                if (workflow.workflow) workflow = workflow.workflow;
-                else if (workflow.data) workflow = workflow.data;
-
-                if (
-                  typeof data.data === "string" &&
-                  !data.data.startsWith("{")
-                ) {
-                  const targetId = data.data;
-                  const wsData: WorkspaceData =
-                    Helper.JsonParser.parse(workspaceDataStr);
-                  const foundWf = wsData.workflows.find(
-                    (w: { id: string }) => w.id === targetId
-                  );
-                  if (foundWf) {
-                    workflow = foundWf;
-                  }
-                }
-
-                if (
-                  (!workflow.nodes || !Array.isArray(workflow.nodes)) &&
-                  workflow.id
-                ) {
-                  const basePath = workspacePathsCache.get(workspaceId);
-                  if (basePath) {
-                    const flowsPath = path.join(
-                      basePath,
-                      "flows",
-                      `${safeName(workflow.id)}.json`
-                    );
-                    const rootNamePath = workflow.name
-                      ? path.join(basePath, `${safeName(workflow.name)}.json`)
-                      : null;
-
-                    if (!isPathSafe(flowsPath, basePath) || 
-                        (rootNamePath && !isPathSafe(rootNamePath, basePath))) {
-                      console.error(" Path traversal attempt detected");
-                      return;
-                    }
-
-                    let fullPath =
-                      fs.existsSync(flowsPath) && flowsPath
-                        ? flowsPath
-                        : rootNamePath && fs.existsSync(rootNamePath)
-                        ? rootNamePath
-                        : null;
-
-                    if (fullPath) {
-                      try {
-                        const fileContent = fs.readFileSync(
-                          fullPath,
-                          "utf-8"
-                        );
-                        const graphData = Helper.JsonParser.parse(fileContent);
-
-                        let nodes = graphData.nodes;
-                        let connections = graphData.connections;
-                        if (graphData.canvasState) {
-                          nodes = graphData.canvasState.nodes;
-                          connections = graphData.canvasState.connections;
-                        }
-
-                        if (nodes) {
-                          workflow.nodes = nodes;
-                          workflow.connections = connections || [];
-                          console.log(
-                            `[MockWS] Hydrated '${
-                              workflow.name || workflow.id
-                            }' from disk! Nodes: ${workflow.nodes.length}`
-                          );
-                        }
-                      } catch (err) {
-                        console.error(
-                          ` Error [MockWS] Disk read failed:`,
-                          err
-                        );
-                      }
-                    }
-                  }
-                }
-
-                if (
-                  !workflow.nodes ||
-                  !Array.isArray(workflow.nodes) ||
-                  workflow.nodes.length === 0
-                ) {
-                  console.error(
-                    " [MockWS] ABORTING: Workflow has no nodes."
-                  );
-                  return;
-                }
-
-                try {
-                  console.log(` [MockWS] Starting execution...`);
-
-                  const context = JSON.stringify(payload);
-                  const result = await executeFlowRuntime(
-                    workflow,
-                    mockWs as unknown as WebSocket,
-                    context,
-                    payload
-                  );
-
-                  console.log(` [MockWS] Execution finished.`);
-
-                  const responseEvent = {
-                    type: "workflow_json",
-                    id: workflowId,
-                    data: result,
-                    timestamp: new Date().toISOString(),
-                  };
-
-                  if (listeners["message"]) {
-                    const rawEvent = {
-                      toString: () => JSON.stringify(responseEvent),
-                    };
-                    listeners["message"].forEach((cb) => cb(rawEvent));
-                  }
-                } catch (execError) {
-                  console.error(
-                    " [MockWS] Execution Error:",
-                    execError
-                  );
-                  if (listeners["message"]) {
-                    const errorEvent = {
-                      type: "error",
-                      requestId: workflowId,
-                      message: String(execError),
-                    };
-                    const rawEvent = {
-                      toString: () => JSON.stringify(errorEvent),
-                    };
-                    listeners["message"].forEach((cb) => cb(rawEvent));
-                  }
-                }
-                return;
-              }
-
-              broadcast(data);
-            } catch (e) {
-              console.error(
-                "Failed to broadcast/intercept message:",
-                e
-              );
-            }
-          },
-          on: (event: string, callback: EventCallback) => {
-            if (!listeners[event]) listeners[event] = [];
-            listeners[event].push(callback);
-          },
-          off: (event: string, callback: EventCallback) => {
-            if (!listeners[event]) return;
-            listeners[event] = listeners[event].filter(
-              (cb) => cb !== callback
-            );
-          },
-          removeListener: (event: string, callback: EventCallback) => {
-            if (!listeners[event]) return;
-            listeners[event] = listeners[event].filter(
-              (cb) => cb !== callback
-            );
-          },
-          once: (event: string, callback: EventCallback) => {
-            const onceWrapper = (...args: unknown[]) => {
-              callback(...args);
-              if (listeners[event])
-                listeners[event] = listeners[event].filter(
-                  (cb) => cb !== onceWrapper
-                );
-            };
-            if (!listeners[event]) listeners[event] = [];
-            listeners[event].push(onceWrapper);
-          },
-          emit: (event: string, ...args: unknown[]) => {
-            if (listeners[event])
-              listeners[event].forEach((cb) => cb(...args));
-          },
-          readyState: 1,
-          close: () => {},
-          terminate: () => {},
-        } as unknown as WebSocket;
-
-        const workspaceAgent = createMainAgent(workspaceDataStr, mockWs, payload);
-        await workspaceAgent.run();
-
-        console.log(` Webhook execution completed successfully`);
-
-        broadcast({
-          type: "webhook_execution",
-          workspaceId,
-          data: {
-            success: true,
-            executedAt: Date.now(),
-            payload,
-          },
-        });
-      } catch (error) {
-        console.error(
-          ` Error executing workspace ${workspaceId} via webhook:`,
-          error
-        );
-
-        broadcast({
-          type: "webhook_execution",
-          workspaceId,
-          data: {
-            success: false,
-            message: String(error),
-          },
-        });
-      }
-    }
-  );
-
-  // TELEGRAM TRIGGER LOGIC (uses queue via directExecute)
-  telegramTriggerManager.setExecutionCallback(
-    async (workspaceId: string, update: Record<string, unknown>) => {
-      console.log(` Executing workspace ${workspaceId} via Telegram`);
-      console.log(`   Update type:`, Object.keys(update).filter(k => k !== 'update_id'));
-
-      const workspaceDataStr = workspaceDataCache.get(workspaceId);
-
-      if (!workspaceDataStr) {
-        console.error(` No workspace data found for ${workspaceId}`);
-        broadcast({
-          type: 'telegram_execution',
-          workspaceId,
-          data: {
-            success: false,
-            message: 'Workspace data not found'
-          }
-        });
-        return;
-      }
-
-      try {
-        broadcast({
-          type: "message",
-          data: {
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-            type: "system",
-            message: ` Workspace triggered by Telegram: ${workspaceId}`,
-          },
-          timestamp: new Date().toISOString(),
-        });
-
-        const listeners: Record<string, EventCallback[]> = {};
-
-        const mockWs = {
-          send: async (msg: string) => {
-            try {
-              const data = Helper.JsonParser.parse(msg);
-
-              const isWorkflowRequest =
-                data.type === "run_workflow" ||
-                (data.data &&
-                  typeof data.data === "string" &&
-                  data.data.includes('"nodes"')) ||
-                (data.data &&
-                  typeof data.data === "string" &&
-                  data.data.includes("wf-"));
-
-              if (isWorkflowRequest) {
-                console.log(
-                  " [MockWS] Intercepting Telegram-triggered workflow execution..."
-                );
-
-                let workflow = data.data;
-                let workflowId = data.id || data.requestId;
-
-                if (typeof workflow === "string") {
-                  const parsed = Helper.JsonParser.safeParse(workflow);
-                  if (parsed.success) workflow = parsed.data;
-                }
-                if (workflow.workflow) workflow = workflow.workflow;
-                else if (workflow.data) workflow = workflow.data;
-
-                if (
-                  typeof data.data === "string" &&
-                  !data.data.startsWith("{")
-                ) {
-                  const targetId = data.data;
-                  const wsData: WorkspaceData = Helper.JsonParser.parse(workspaceDataStr);
-                  const foundWf = wsData.workflows.find(
-                    (w: { id: string }) => w.id === targetId
-                  );
-                  if (foundWf) {
-                    workflow = foundWf;
-                  }
-                }
-
-                if (
-                  (!workflow.nodes || !Array.isArray(workflow.nodes)) &&
-                  workflow.id
-                ) {
-                  const basePath = workspacePathsCache.get(workspaceId);
-                  if (basePath) {
-                    const flowsPath = path.join(
-                      basePath,
-                      "flows",
-                      `${safeName(workflow.id)}.json`
-                    );
-                    const rootNamePath = workflow.name
-                      ? path.join(basePath, `${safeName(workflow.name)}.json`)
-                      : null;
-
-                    if (!isPathSafe(flowsPath, basePath) || 
-                        (rootNamePath && !isPathSafe(rootNamePath, basePath))) {
-                      console.error(" Path traversal attempt detected");
-                      return;
-                    }
-
-                    let fullPath =
-                      fs.existsSync(flowsPath) && flowsPath
-                        ? flowsPath
-                        : rootNamePath && fs.existsSync(rootNamePath)
-                        ? rootNamePath
-                        : null;
-
-                    if (fullPath) {
-                      try {
-                        const fileContent = fs.readFileSync(fullPath, "utf-8");
-                        const graphData = Helper.JsonParser.parse(fileContent);
-
-                        let nodes = graphData.nodes;
-                        let connections = graphData.connections;
-                        if (graphData.canvasState) {
-                          nodes = graphData.canvasState.nodes;
-                          connections = graphData.canvasState.connections;
-                        }
-
-                        if (nodes) {
-                          workflow.nodes = nodes;
-                          workflow.connections = connections || [];
-                          console.log(
-                            ` [MockWS] Hydrated '${
-                              workflow.name || workflow.id
-                            }' from disk! Nodes: ${workflow.nodes.length}`
-                          );
-                        }
-                      } catch (err) {
-                        console.error(` [MockWS] Disk read failed:`, err);
-                      }
-                    }
-                  }
-                }
-
-                if (
-                  !workflow.nodes ||
-                  !Array.isArray(workflow.nodes) ||
-                  workflow.nodes.length === 0
-                ) {
-                  console.error(
-                    " [MockWS] ABORTING: Workflow has no nodes."
-                  );
-                  return;
-                }
-
-                try {
-                  console.log(` [MockWS] Starting Telegram-triggered execution...`);
-
-                  const context = JSON.stringify(update);
-                  const result = await executeFlowRuntime(
-                    workflow,
-                    mockWs as unknown as WebSocket,
-                    context,
-                    update
-                  );
-
-                  console.log(` [MockWS] Execution finished.`);
-
-                  const responseEvent = {
-                    type: "workflow_json",
-                    id: workflowId,
-                    data: result,
-                    timestamp: new Date().toISOString(),
-                  };
-
-                  if (listeners["message"]) {
-                    const rawEvent = {
-                      toString: () => JSON.stringify(responseEvent),
-                    };
-                    listeners["message"].forEach((cb) => cb(rawEvent));
-                  }
-                } catch (execError) {
-                  console.error(" [MockWS] Execution Error:", execError);
-                  if (listeners["message"]) {
-                    const errorEvent = {
-                      type: "error",
-                      requestId: workflowId,
-                      message: String(execError),
-                    };
-                    const rawEvent = {
-                      toString: () => JSON.stringify(errorEvent),
-                    };
-                    listeners["message"].forEach((cb) => cb(rawEvent));
-                  }
-                }
-                return;
-              }
-
-              broadcast(data);
-            } catch (e) {
-              console.error(
-                "Failed to broadcast/intercept Telegram message:",
-                e
-              );
-            }
-          },
-          on: (event: string, callback: EventCallback) => {
-            if (!listeners[event]) listeners[event] = [];
-            listeners[event].push(callback);
-          },
-          off: (event: string, callback: EventCallback) => {
-            if (!listeners[event]) return;
-            listeners[event] = listeners[event].filter(
-              (cb) => cb !== callback
-            );
-          },
-          removeListener: (event: string, callback: EventCallback) => {
-            if (!listeners[event]) return;
-            listeners[event] = listeners[event].filter(
-              (cb) => cb !== callback
-            );
-          },
-          once: (event: string, callback: EventCallback) => {
-            const onceWrapper = (...args: unknown[]) => {
-              callback(...args);
-              if (listeners[event])
-                listeners[event] = listeners[event].filter(
-                  (cb) => cb !== onceWrapper
-                );
-            };
-            if (!listeners[event]) listeners[event] = [];
-            listeners[event].push(onceWrapper);
-          },
-          emit: (event: string, ...args: unknown[]) => {
-            if (listeners[event])
-              listeners[event].forEach((cb) => cb(...args));
-          },
-          readyState: 1,
-          close: () => {},
-          terminate: () => {},
-        } as unknown as WebSocket;
-
-        const workspaceAgent = createMainAgent(workspaceDataStr, mockWs, update);
-        await workspaceAgent.run();
-
-        console.log(` Telegram execution completed successfully`);
-
-        broadcast({
-          type: "telegram_execution",
-          workspaceId,
-          data: {
-            success: true,
-            executedAt: Date.now(),
-            update,
-          },
-        });
-      } catch (error) {
-        console.error(
-          ` Error executing Telegram workspace ${workspaceId}:`,
-          error
-        );
-
-        broadcast({
-          type: "telegram_execution",
-          workspaceId,
-          data: {
-            success: false,
-            message: String(error),
-          },
-        });
-      }
-    }
-  );
+  telegramTriggerManager.setExecutionCallback(async (workspaceId, update) => {
+    await orchestrator.onTelegramTrigger(workspaceId, update);
+  });
 
   // MAIN CLIENT CONNECTION HANDLER
 
@@ -984,13 +107,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             console.log(`[SERVER STDOUT]  PromptID: ${promptId}, Response: "${response}"`);
             
             if (!promptId) {
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: "Missing promptId in user prompt response",
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'Missing promptId in user prompt response', data.requestId)
               break;
             }
 
@@ -1019,14 +136,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             } else {
               console.warn(` Failed to resolve user prompt ${promptId}`);
               
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: "Failed to resolve prompt - prompt not found or already resolved",
-                  promptId,
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Failed to resolve prompt ${promptId} - prompt not found or already resolved`, data.requestId)
             }
             break;
           }
@@ -1034,11 +144,12 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             try {
               const payload = typeof data.data === "string" ? Helper.JsonParser.parse(data.data) : data.data;
               const workflowId = String(payload?.workflowId ?? "default");
-              requestStop(workflowId);
+              orchestrator.abortWorkspace(workflowId);
               console.log(`[SERVER STDOUT] [Stop] Received stop request for workflow: ${workflowId}`);
               ws.send(JSON.stringify({ type: "workflow_stopped", workflowId, timestamp: new Date().toISOString() }));
             } catch (e) {
               console.error("Failed to parse stop_workflow payload:", e);
+              sendCommandError(ws, data.type, 'VALIDATION_ERROR', `Failed to parse stop_workflow payload: ${e}`, data.requestId)
             }
             break;
           }
@@ -1047,13 +158,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             console.log(`[SERVER STDOUT] Register trigger request`);
 
             if (!data.data) {
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: "Missing trigger data",
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'Missing trigger data', data.requestId)
               break;
             }
 
@@ -1062,21 +167,8 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               payload;
 
             if (!workspaceId || !trigger) {
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: "Missing workspaceId or trigger",
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'Missing workspaceId or trigger', data.requestId)
               break;
-            }
-
-            if (baseWorkflowsPath) {
-              workspacePathsCache.set(workspaceId, baseWorkflowsPath);
-              console.log(
-                `[SERVER STDOUT]  Cached workflows path: ${baseWorkflowsPath}`
-              );
             }
 
             // SCHEDULED TRIGGER
@@ -1085,31 +177,14 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                 `[SERVER STDOUT] ⏰ Registering SCHEDULED trigger for: ${workspaceId}`
               );
 
-              if (
-                !trigger.config ||
-                !trigger.config.cronExpression
-              ) {
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message:
-                      "Missing cronExpression in scheduled trigger",
-                    timestamp: new Date().toISOString(),
-                  })
-                );
-                break;
+              if (!trigger.config || !trigger.config.cronExpression) {
+                sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'Missing cronExpression in scheduled trigger', data.requestId)
+                break
               }
 
               if (workspaceData) {
-                const hydratedData = hydrateWorkspaceData(
-                  workspaceId,
-                  workspaceData,
-                  baseWorkflowsPath
-                );
-                workspaceDataCache.set(
-                  workspaceId,
-                  JSON.stringify(hydratedData)
-                );
+                repo.set(workspaceId, workspaceData);
+                repo.hydrate(workspaceId, baseWorkflowsPath);
                 console.log(
                   `[SERVER STDOUT]  Cached FULL workspace data for: ${workspaceId}`
                 );
@@ -1145,13 +220,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   `[SERVER STDERR]  Failed to register scheduled trigger:`,
                   error
                 );
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message: `Failed to register scheduled trigger: ${error}`,
-                    timestamp: new Date().toISOString(),
-                  })
-                );
+                sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Failed to register scheduled trigger: ${error}`, data.requestId)
               }
             }
             // WEBHOOK TRIGGER
@@ -1161,15 +230,8 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               );
 
               if (workspaceData) {
-                const hydratedData = hydrateWorkspaceData(
-                  workspaceId,
-                  workspaceData,
-                  baseWorkflowsPath
-                );
-                workspaceDataCache.set(
-                  workspaceId,
-                  JSON.stringify(hydratedData)
-                );
+                repo.set(workspaceId, workspaceData);
+                repo.hydrate(workspaceId, baseWorkflowsPath);
                 console.log(
                   `[SERVER STDOUT] 💾 Cached FULL workspace data for: ${workspaceId}`
                 );
@@ -1203,13 +265,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   `[SERVER STDERR]  Failed to register webhook trigger:`,
                   error
                 );
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message: `Failed to register webhook trigger: ${error}`,
-                    timestamp: new Date().toISOString(),
-                  })
-                );
+                sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Failed to register webhook trigger: ${error}`, data.requestId)
               }
             }
             // TELEGRAM TRIGGER
@@ -1219,37 +275,18 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               );
 
               if (!trigger.config || !trigger.config.botToken) {
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message: "Missing bot token in Telegram trigger",
-                    timestamp: new Date().toISOString(),
-                  })
-                );
+                sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'Missing bot token in Telegram trigger', data.requestId)
                 break;
               }
 
               if (!trigger.config.updateTypes || trigger.config.updateTypes.length === 0) {
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message: "At least one update type must be selected",
-                    timestamp: new Date().toISOString(),
-                  })
-                );
-                break;
+                sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'At least one update type must be selected', data.requestId)
+                break
               }
 
               if (workspaceData) {
-                const hydratedData = hydrateWorkspaceData(
-                  workspaceId,
-                  workspaceData,
-                  baseWorkflowsPath
-                );
-                workspaceDataCache.set(
-                  workspaceId,
-                  JSON.stringify(hydratedData)
-                );
+                repo.set(workspaceId, workspaceData);
+                repo.hydrate(workspaceId, baseWorkflowsPath);
                 console.log(
                   `[SERVER STDOUT] 💾 Cached FULL workspace data for: ${workspaceId}`
                 );
@@ -1283,14 +320,8 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                 console.error(
                   `[SERVER STDERR]  Failed to register Telegram trigger:`,
                   error
-                );
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message: `Failed to register Telegram trigger: ${error}`,
-                    timestamp: new Date().toISOString(),
-                  })
-                );
+                )
+                sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Failed to register Telegram trigger: ${error}`, data.requestId)
               }
             }
             // MANUAL TRIGGER
@@ -1312,14 +343,8 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             } else {
               console.error(
                 `[SERVER STDERR]  Unknown trigger type: ${trigger.type}`
-              );
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: `Unknown trigger type: ${trigger.type}`,
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              )
+              sendCommandError(ws, data.type, 'VALIDATION_ERROR', `Unknown trigger type: ${trigger.type}`, data.requestId)
             }
             break;
           }
@@ -1330,13 +355,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             const workspaceId = data.workspaceId;
 
             if (!workspaceId) {
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: "Missing workspaceId",
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'Missing workspaceId', data.requestId)
               break;
             }
 
@@ -1344,8 +363,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             webhookTriggerManager.unregisterWorkspaceWebhooks(workspaceId);
             await telegramTriggerManager.unregisterTelegramBot(workspaceId);
 
-            workspaceDataCache.delete(workspaceId);
-            workspacePathsCache.delete(workspaceId);
+            repo.delete(workspaceId);
 
             ws.send(
               JSON.stringify({
@@ -1358,7 +376,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             break;
           }
 
-          case "run_workspace":
+          case "run_workspace": {
             consoleMessage = {
               id: crypto.randomUUID(),
               timestamp: Date.now(),
@@ -1374,9 +392,18 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               })
             );
 
-            currentWorkspaceAgent = createMainAgent(data.data, ws);
-            await currentWorkspaceAgent.run();
+            const wsCtx = new WebSocketContext(ws, broadcast);
+            wsCtx.requestId = data.requestId;
+            currentWorkspaceAgent = createMainAgent(data.data, wsCtx);
+            try {
+              await currentWorkspaceAgent.run();
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error("Workspace execution error:", errorMessage);
+              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workspace execution failed: ${errorMessage}`, data.requestId)
+            }
             break;
+          }
 
           case "abort_workspace":
             console.log("Abort Message");
@@ -1412,16 +439,21 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             );
 
             const workflow = Helper.JsonParser.parse(data.data);
-            const result = await executeFlowRuntime(workflow, ws);
+            const ctx = new WebSocketContext(ws, broadcast);
+            const result = await orchestrator.runWorkflow(workflow, ctx);
 
-            ws.send(
-              JSON.stringify({
-                id: workflow.id,
-                type: "workflow_result",
-                data: result,
-                timestamp: new Date().toISOString(),
-              })
-            );
+            if (result instanceof Error) {
+              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workflow execution failed: ${result.message}`, data.requestId)
+            } else {
+              ws.send(
+                JSON.stringify({
+                  id: workflow.id,
+                  type: "workflow_result",
+                  data: result,
+                  timestamp: new Date().toISOString(),
+                })
+              );
+            }
             break;
           }
           case "workflow_json":
@@ -1472,26 +504,11 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   );
 
                   // Send error back to client
-                  ws.send(
-                    JSON.stringify({
-                      type: "error",
-                      message:
-                        "Failed to resolve prompt - prompt not found or already resolved",
-                      promptId,
-                      timestamp: new Date().toISOString(),
-                    })
-                  );
+                  sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Failed to resolve prompt ${promptId} - prompt not found or already resolved`, data.requestId)
                 }
               } else {
                 console.warn("Console input missing promptId or message");
-                ws.send(
-                  JSON.stringify({
-                    type: "error",
-                    message:
-                      "Invalid console input format - missing promptId or message",
-                    timestamp: new Date().toISOString(),
-                  })
-                );
+                sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'Invalid console input format - missing promptId or message', data.requestId)
               }
             }
             break;
@@ -1514,13 +531,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
         }
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
-        ws.send(
-          JSON.stringify({
-            type: "error",
-            message: "Invalid message format",
-            timestamp: new Date().toISOString(),
-          })
-        );
+        sendCommandError(ws, 'unknown', 'INTERNAL_ERROR', 'Invalid message format')
       }
     });
 

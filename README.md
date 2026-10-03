@@ -146,6 +146,18 @@ The application starts an HTTP server with WebSocket support. The host and port 
 └── index.ts         # Main application entry point
 ```
 
+## Seed Data Attribution
+
+The LLM capability registry (`LLM/models-capabilities.json`) is seeded with data from the following MIT-licensed sources:
+
+| Source | License | Data Used |
+|--------|---------|-----------|
+| [anomalyco/models.dev](https://github.com/anomalyco/models.dev) | MIT | Model IDs, names, descriptions |
+| [llmring/registry](https://github.com/llmring/registry) | MIT | Capability flags (function-calling, vision, audio, etc.) |
+| [jnd0/llm-registry](https://github.com/jnd0/llm-registry) | MIT | Benchmark scores |
+
+Run `bun run seed:capabilities` to refresh the data.
+
 ## Build & Test
 
 ```bash

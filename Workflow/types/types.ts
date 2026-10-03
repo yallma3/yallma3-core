@@ -1,4 +1,4 @@
-import { WebSocket } from "ws";
+import type { ExecutionContext } from "../../Execution/ExecutionContext";
 
 // Define possible value types for nodes
 export type NodeValue =
@@ -13,7 +13,7 @@ export type NodeValue =
 export type NodeExecutionContext = {
   node: NodeType;
   inputs: Record<string, unknown>;
-  ws?: WebSocket;
+  ctx: ExecutionContext;
   triggerData?: unknown; 
 };
 export type SourceListOption = {
@@ -118,5 +118,6 @@ export interface NodeMetadata {
     title?: string;
     description?: string;
     nodeType?: string; 
-  }>; 
+  }>;
+  allowedCount?: number | null;
 }

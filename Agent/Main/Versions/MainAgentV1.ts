@@ -11,20 +11,38 @@ import {
   planAgenticTask,
 } from "../../../Task/TaskIntrepreter";
 import { assignBestFit } from "../../Utls/MainAgentHelper";
+import type { BestFitAssignment } from "../../Utls/MainAgentHelper";
 import { mkdir, writeFile } from "fs/promises";
 import { join } from "path";
 import { workflowExecutor } from "../../Utls/ToolCallingHelper";
+import { requestStop } from "../../../Workflow/runtime";
 import type { WorkspaceData } from "../../../Models/Workspace";
+import { WorkspaceRepository } from "../../../Execution/WorkspaceRepository";
 import { Yallma3GenOneAgentRuntime } from "../../Agent";
 import { getLLMProvider } from "../../../LLM/LLMRunner";
-import { WebSocket } from "ws";
 import type { LLMProvider } from "../../../Models/LLM";
+import type { ExecutionContext } from "../../../Execution/ExecutionContext";
 
 export class MainAgentV1 implements MainAgent {
   version = "1.0.0";
   private aborted = false;
+  private currentWorkflowId: string | null = null;
+  private workspaceId: string;
 
-  constructor(private workspaceData: WorkspaceData, private ws: WebSocket, private triggerData?: unknown ) {}
+  constructor(
+    workspaceData: WorkspaceData,
+    private ctx: ExecutionContext,
+    private triggerData?: unknown
+  ) {
+    const repo = WorkspaceRepository.getInstance();
+    repo.set(workspaceData.id, workspaceData);
+    repo.setCurrent(workspaceData.id);
+    this.workspaceId = workspaceData.id;
+  }
+
+  private get workspaceData(): WorkspaceData {
+    return WorkspaceRepository.getInstance().get(this.workspaceId)!;
+  }
 
   async run(): Promise<Record<string, string>> {
     if (!this.workspaceData) return {};
@@ -46,6 +64,15 @@ export class MainAgentV1 implements MainAgent {
       const taskContext = this.buildTaskContext(layer, results);
 
       const bestFit = await this.assignIfNeeded(task, MainLLM);
+
+      if (!bestFit) {
+        this.emitErrorRaw(
+          `Task '${task.title}' could not be assigned to any executor. Aborting.`,
+          null,
+          false
+        );
+        break;
+      }
 
       if (this.isWorkflow(task, bestFit)) {
         await this.executeWorkflowTask({
@@ -104,6 +131,9 @@ export class MainAgentV1 implements MainAgent {
 
   async abort(): Promise<void> {
     this.aborted = true;
+    if (this.currentWorkflowId) {
+      requestStop(this.currentWorkflowId);
+    }
     this.emitErrorRaw("Execution aborted by user", "", false);
   }
 
@@ -143,36 +173,90 @@ export class MainAgentV1 implements MainAgent {
 
   // STAGE 3: TASK ASSIGNMENT
 
-  private async assignIfNeeded(task: Task, llm: LLMProvider) {
-    if (task.type !== "agentic") return null;
+  /**
+   * Resolves the best executor for a task.
+   *
+   * Priority order:
+   *  1. If task.executorId is set → resolve it directly to a Workflow
+   *     (when task.type === "workflow") or Agent (when task.type ===
+   *     "specific-agent"). Fails if the ID is not found.
+   *  2. If task.type is "agentic" → use LLM-based assignBestFit.
+   *  3. Otherwise → no assignment needed (null).
+   */
+  private async assignIfNeeded(
+    task: Task,
+    llm: LLMProvider
+  ): Promise<BestFitAssignment | null> {
+    let bestFit: BestFitAssignment | null = null;
 
-    this.emitSystem(`Assigning task '${task.title}'...`);
+    // ── Priority 1: Explicit executorId ──────────────────────────────
+    if (task.executorId) {
+      const eid = task.executorId;
 
-    const bestFit = await assignBestFit(
-      llm,
-      task,
-      this.workspaceData.workflows,
-      this.workspaceData.agents
-    );
+      if (task.type === "workflow") {
+        const workflow = this.workspaceData.workflows.find((w) => w.id === eid);
+        if (workflow) {
+          bestFit = {
+            type: "workflow",
+            id: workflow.id,
+            name: workflow.name,
+            confidence: 1,
+            reasoning: "Explicit executorId matched a workflow.",
+          };
+          this.emitSystem(
+            `Assigned task '${task.title}' to workflow '${workflow.name}' (explicit executorId).`
+          );
+        } else {
+          this.emitErrorRaw(
+            `executorId '${eid}' for workflow task '${task.title}' not found.`,
+            null,
+            false
+          );
+        }
+      } else if (task.type === "specific-agent") {
+        const agent = this.workspaceData.agents.find((a) => a.id === eid);
+        if (agent) {
+          bestFit = {
+            type: "agent",
+            id: agent.id,
+            name: agent.name,
+            confidence: 1,
+            reasoning: "Explicit executorId matched an agent.",
+          };
+          this.emitSystem(
+            `Assigned task '${task.title}' to agent '${agent.name}' (explicit executorId).`
+          );
+        } else {
+          this.emitErrorRaw(
+            `executorId '${eid}' for agent task '${task.title}' not found.`,
+            null,
+            false
+          );
+        }
+      }
 
-    this.emitSystem(
-      `Assigned task '${task.title}' to ${bestFit.type} '${
-        bestFit.id
-      }' (confidence ${bestFit.confidence.toFixed(2)}).`
-    );
+      // ── Priority 2: LLM-based assignment for agentic tasks ──────────
+    } else if (task.type === "agentic") {
+      this.emitSystem(`Assigning task '${task.title}' via LLM...`);
+
+      bestFit = await assignBestFit(
+        llm,
+        task,
+        this.workspaceData.workflows,
+        this.workspaceData.agents
+      );
+
+      this.emitSystem(
+        `Assigned task '${task.title}' to ${bestFit.type} '${
+          bestFit.name
+        }' (confidence ${bestFit.confidence.toFixed(2)}).`
+      );
+    }
 
     return bestFit;
   }
 
-  private isWorkflow(
-    task: Task,
-    bestFit: {
-      type: "workflow" | "agent" | "mcp";
-      id: string;
-      confidence: number;
-      reasoning: string;
-    } | null
-  ) {
+  private isWorkflow(task: Task, bestFit: BestFitAssignment | null) {
     return task.type === "workflow" || bestFit?.type === "workflow";
   }
 
@@ -189,33 +273,33 @@ export class MainAgentV1 implements MainAgent {
     task: Task;
     layerIndex: number;
     totalLayers: number;
-    bestFit: {
-      type: "workflow" | "agent" | "mcp";
-      id: string;
-      confidence: number;
-      reasoning: string;
-    } | null;
+    bestFit: BestFitAssignment | null;
     taskContext: string;
     results: Record<string, string>;
   }) {
     if (this.aborted) return;
 
-    const workflowId = task.type === "workflow" ? task.executorId : bestFit?.id;
+    // if bestFit is not null then we have decided already, bestFit could be the same task.executorId
+    const workflowId = bestFit ? bestFit.id : task.executorId;
     if (!workflowId) {
       this.emitError(layerIndex, totalLayers, task.title);
       return;
     }
 
     this.emitInfo(
-      `[${layerIndex}/${totalLayers}] Running task '${task.title}' (workflow: ${workflowId})`
+      `[${layerIndex}/${totalLayers}] Running task '${task.title}' (workflow: ${
+        bestFit ? bestFit.name : workflowId
+      })`
     );
 
+    this.currentWorkflowId = workflowId;
     const finalResult = await workflowExecutor(
-      this.ws,
+      this.ctx,
       workflowId,
       taskContext,
       this.triggerData
     );
+    this.currentWorkflowId = null;
 
     if (this.aborted) return;
     if (finalResult) {
@@ -288,7 +372,7 @@ export class MainAgentV1 implements MainAgent {
       task,
       context,
       plan,
-      this.ws,
+      this.ctx,
       this.workspaceData.apiKey,
       this.workspaceData.mainLLM
     );
@@ -363,15 +447,16 @@ __meta__: ${results["__meta__"]}
 
   private emit(type: string, message: string, results?: string) {
     if (this.aborted && type != "error") return;
-    const event = {
-      id: crypto.randomUUID(),
-      timestamp: Date.now(),
-      type,
-      message,
-      results,
-    };
-
-    this.ws.send(JSON.stringify({ type: "message", data: event }));
+    this.ctx.send({
+      type: "message",
+      data: {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type,
+        message,
+        results,
+      },
+    });
   }
 
   private emitSystem(msg: string) {
@@ -400,7 +485,14 @@ __meta__: ${results["__meta__"]}
   }
 
   private emitError(step: number, total: number, title: string) {
-    this.emit("error", `[${step}/${total}] Task '${title}' failed.`);
+    this.ctx.send({
+      type: "error",
+      requestId: this.ctx.requestId,
+      commandType: "run_workspace" as const,
+      code: "EXECUTION_ERROR" as const,
+      message: `[${step}/${total}] Task '${title}' failed.`,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   private emitErrorRaw(
@@ -408,23 +500,28 @@ __meta__: ${results["__meta__"]}
     err: unknown = null,
     showError: boolean = true
   ) {
-    this.emit(
-      "error",
-      `${message} ${showError ? (err ? String(err) : ": Unknown error") : ""}`
-    );
+    this.ctx.send({
+      type: "error",
+      requestId: this.ctx.requestId,
+      commandType: "run_workspace" as const,
+      code: "EXECUTION_ERROR" as const,
+      message: `${message} ${
+        showError ? (err ? String(err) : ": Unknown error") : ""
+      }`,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   private emitWorkspaceStopped(reason?: string) {
-    const message = reason
-      ? `Workspace execution stopped: ${reason}`
-      : "Workspace execution stopped";
-
-    const event = {
-      id: crypto.randomUUID(),
-      timestamp: Date.now(),
-      message,
-    };
-
-    this.ws.send(JSON.stringify({ type: "workspace_stopped", data: event }));
+    this.ctx.send({
+      type: "workspace_stopped",
+      data: {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        message: reason
+          ? `Workspace execution stopped: ${reason}`
+          : "Workspace execution stopped",
+      },
+    });
   }
 }

@@ -29,7 +29,7 @@ export interface WorkflowInput extends BaseNode {
 
 export function register(nodeRegistry: NodeRegistry): void {
   const metadata: NodeMetadata = {
-    category: "Input/Output",
+        category: "Workflow",
     title: "Workflow Input",
     nodeType: "WorkflowInput",
     nodeValue: "Workflow Input",
@@ -40,18 +40,19 @@ export function register(nodeRegistry: NodeRegistry): void {
     configParameters: [],
     i18n: {
       en: {
-        category: "Input/Output",
+    category: "Workflow",
         title: "Workflow Input",
         nodeType: "WorkflowInput",
         description: "Defines the entry point for a workflow. This node takes the initial input provided to the workflow and passes it to its output socket for downstream processing.",
       },
       ar: {
-        category: "إدخال/إخراج",
+        category: "سير العمل",
         title: "إدخال سير العمل",
         nodeType: "إدخال سير العمل",
         description: "يُحدد نقطة الدخول لسير العمل. تأخذ هذه العقدة الإدخال الأولي المُقدم لسير العمل وتمرره إلى مقبس الإخراج للمعالجة اللاحقة.",
       },
     },
+    allowedCount: 1,
   };
 
   function createWorkflowInputNode(
