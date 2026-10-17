@@ -45,6 +45,7 @@ vi.mock('../../../Execution/WorkspaceRepository', () => ({
 }));
 
 import { executeFlowRuntime } from '../../../Workflow/runtime';
+import { FatalMainLLMError } from '../../../LLM/LLMRunner';
 
 const mockCtx = {
   requestId: 'req-1',
@@ -118,5 +119,60 @@ describe('executeFlowRuntime — NodeExecutionContext injection', () => {
     expect(context.mainLLM).toBeUndefined();
 
     getInstanceSpy.mockRestore();
+  });
+});
+
+describe('executeFlowRuntime — FatalMainLLMError propagation', () => {
+  beforeEach(() => {
+    processSpy.mockClear();
+  });
+
+  it('broadcasts workflow_error and returns the error when a node throws FatalMainLLMError', async () => {
+    // The same branch that returns the error also calls requestStop(workflowId),
+    // so the returned value + broadcast are the observable contract here.
+    processSpy.mockImplementationOnce(async () => {
+      throw new FatalMainLLMError(
+        'Main LLM failed during execution (workflow wf-fatal): boom'
+      );
+    });
+
+    const broadcast = vi.fn();
+    const result = await executeFlowRuntime(
+      makeWorkflow('wf-fatal'),
+      mockCtx,
+      undefined,
+      undefined,
+      broadcast
+    );
+
+    expect(result).toBeInstanceOf(FatalMainLLMError);
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'workflow_error',
+        workflowId: 'wf-fatal',
+        error: expect.stringContaining('boom'),
+      })
+    );
+  });
+
+  it('does not broadcast workflow_error for non-fatal node errors', async () => {
+    processSpy.mockImplementationOnce(async () => {
+      throw new Error('ordinary node failure');
+    });
+
+    const broadcast = vi.fn();
+    const result = await executeFlowRuntime(
+      makeWorkflow('wf-nonfatal'),
+      mockCtx,
+      undefined,
+      undefined,
+      broadcast
+    );
+
+    expect(result).toBeInstanceOf(Error);
+    expect(result).not.toBeInstanceOf(FatalMainLLMError);
+    expect(broadcast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'workflow_error' })
+    );
   });
 });

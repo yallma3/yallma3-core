@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { testLLMHealth } from '../../../LLM/LLMRunner';
+import { executeWithFallback, FatalMainLLMError, testLLMHealth } from '../../../LLM/LLMRunner';
 import type { LLMOption } from '../../../Models/LLM';
 
 interface FetchInit {
@@ -162,5 +162,95 @@ describe('testLLMHealth', () => {
       expect(result.ok).toBe(false);
       expect(elapsed).toBeLessThan(1000);
     });
+  });
+});
+
+describe('executeWithFallback', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const nodeOption: LLMOption = { provider: 'Groq', model };
+  const mainOption: LLMOption = { provider: 'OpenAI', model };
+  const messages = [{ role: 'user' as const, content: 'hello' }];
+
+  const nodeLLM = { option: nodeOption, apiKey: 'node-key' };
+  const mainLLM = { option: mainOption, apiKey: 'main-key' };
+
+  function okResponse(content: string) {
+    return {
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ choices: [{ message: { content, tool_calls: null } }] }),
+    };
+  }
+
+  it('returns the node LLM result without ever invoking the Main LLM', async () => {
+    const fetchMock = mockFetch(() => Promise.resolve(okResponse('from node')));
+
+    const result = await executeWithFallback({
+      nodeLLM,
+      mainLLM,
+      messages,
+      workflowId: 'wf-1',
+    });
+
+    expect(result.content).toBe('from node');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      'https://api.groq.com/openai/v1/chat/completions'
+    );
+  });
+
+  it('falls back to the Main LLM when the node LLM fails, logging a warning', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchMock = mockFetch((url) => {
+      if (url.includes('api.groq.com')) return Promise.reject(new Error('node down'));
+      return Promise.resolve(okResponse('from main'));
+    });
+
+    const result = await executeWithFallback({
+      nodeLLM,
+      mainLLM,
+      messages,
+      workflowId: 'wf-2',
+    });
+
+    expect(result.content).toBe('from main');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![0]).toBe(
+      'https://api.openai.com/v1/chat/completions'
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Node LLM failed'),
+      expect.anything()
+    );
+  });
+
+  it('throws FatalMainLLMError when both the node and Main LLM fail', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockFetch(() => Promise.reject(new Error('everything down')));
+
+    await expect(
+      executeWithFallback({ nodeLLM, mainLLM, messages, workflowId: 'wf-3' })
+    ).rejects.toBeInstanceOf(FatalMainLLMError);
+  });
+
+  it('calls the Main LLM directly when no node LLM is configured', async () => {
+    const fetchMock = mockFetch(() => Promise.resolve(okResponse('main only')));
+
+    const result = await executeWithFallback({
+      mainLLM,
+      messages,
+      workflowId: 'wf-4',
+    });
+
+    expect(result.content).toBe('main only');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      'https://api.openai.com/v1/chat/completions'
+    );
   });
 });

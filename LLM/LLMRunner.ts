@@ -1,4 +1,4 @@
-import type { LLMOption, LLMProvider } from "../Models/LLM";
+import type { LLMMessage, LLMOption, LLMProvider, LLMResponse } from "../Models/LLM";
 import {
   ClaudeProvider,
   GeminiProvider,
@@ -120,5 +120,63 @@ export async function testLLMHealth(
     return { ok: true };
   } catch {
     return { ok: false, error: "timeout or network error" };
+  }
+}
+
+/**
+ * Fatal failure of the Main LLM during workflow execution. Thrown when the
+ * Main LLM fallback itself fails, which must halt the workflow graph and the
+ * task graph rather than being swallowed as a per-node error.
+ */
+export class FatalMainLLMError extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = "FatalMainLLMError";
+  }
+}
+
+async function callLLMWithOption(
+  option: LLMOption,
+  apiKey: string,
+  messages: LLMMessage[]
+): Promise<LLMResponse> {
+  const provider = getLLMProvider(option, apiKey);
+  if (!provider.callLLM) throw new Error(`Provider ${option.provider} does not support callLLM`);
+  return provider.callLLM(messages);
+}
+
+/**
+ * Centralized LLM invocation with graceful fallback to the Main LLM.
+ *
+ * - If a node-level LLM is configured, try it first; on failure, warn and fall back.
+ * - If the Main LLM also fails, throw {@link FatalMainLLMError}.
+ */
+export async function executeWithFallback({
+  nodeLLM,
+  mainLLM,
+  messages,
+  workflowId,
+}: {
+  nodeLLM?: { option: LLMOption; apiKey: string };
+  mainLLM: { option: LLMOption; apiKey: string };
+  messages: LLMMessage[];
+  workflowId?: string;
+}): Promise<LLMResponse> {
+  if (nodeLLM) {
+    try {
+      return await callLLMWithOption(nodeLLM.option, nodeLLM.apiKey, messages);
+    } catch (err) {
+      console.warn(
+        `[executeWithFallback] Node LLM failed (workflow ${workflowId}), falling back to Main LLM:`,
+        err
+      );
+    }
+  }
+  try {
+    return await callLLMWithOption(mainLLM.option, mainLLM.apiKey, messages);
+  } catch (err) {
+    throw new FatalMainLLMError(
+      `Main LLM failed during execution (workflow ${workflowId}): ${(err as Error).message}`
+    );
   }
 }

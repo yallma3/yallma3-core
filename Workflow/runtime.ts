@@ -3,6 +3,7 @@ import { hydrateWorkflowNodes } from "./utils/runtime";
 import type { NodeExecutionContext } from "./types/types";
 import type { ExecutionContext } from "../Execution/ExecutionContext";
 import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
+import { FatalMainLLMError } from "../LLM/LLMRunner";
 import { buildLayeredTopoSort } from "../Execution/toposort";
 
 const stopRegistry = new Map<string, boolean>();
@@ -414,6 +415,11 @@ export const executeFlowRuntime = async (
     const resultsObject = Object.fromEntries(results.entries());
     return { layers: executionLayers, results: resultsObject, finalResult };
   } catch (error) {
+    if (error instanceof FatalMainLLMError) {
+      requestStop(workflowId);
+      broadcast?.({ type: "workflow_error", workflowId, error: error.message });
+      return error;
+    }
     stopRegistry.delete(workflowId);
     console.log(error);
     return error;
