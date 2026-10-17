@@ -19,7 +19,7 @@ import { requestStop } from "../../../Workflow/runtime";
 import type { WorkspaceData } from "../../../Models/Workspace";
 import { WorkspaceRepository } from "../../../Execution/WorkspaceRepository";
 import { Yallma3GenOneAgentRuntime } from "../../Agent";
-import { getLLMProvider } from "../../../LLM/LLMRunner";
+import { FatalMainLLMError, getLLMProvider, testLLMHealth } from "../../../LLM/LLMRunner";
 import type { LLMProvider } from "../../../Models/LLM";
 import type { ExecutionContext } from "../../../Execution/ExecutionContext";
 import { validateWorkspace } from "../../Validation/WorkspaceValidator";
@@ -55,6 +55,7 @@ export class MainAgentV1 implements MainAgent {
     }
 
     await this.initialize();
+    if (this.aborted) return {};
 
     const results: Record<string, string> = {};
     const layers = this.createTaskLayers();
@@ -148,6 +149,15 @@ export class MainAgentV1 implements MainAgent {
 
   private async initialize() {
     this.emitSystem("Main agent initializing...");
+
+    const health = await testLLMHealth(
+      this.workspaceData.mainLLM,
+      this.workspaceData.apiKey
+    );
+    if (!health.ok) {
+      this.emitErrorRaw("Main LLM unreachable at startup", health.error, true);
+      this.aborted = true;
+    }
   }
 
   // STAGE 2: PREP
@@ -300,26 +310,39 @@ export class MainAgentV1 implements MainAgent {
     );
 
     this.currentWorkflowId = workflowId;
-    const finalResult = await workflowExecutor(
-      this.ctx,
-      workflowId,
-      taskContext,
-      this.triggerData
-    );
-    this.currentWorkflowId = null;
+    try {
+      const finalResult = await workflowExecutor(
+        this.ctx,
+        workflowId,
+        taskContext,
+        this.triggerData
+      );
+      this.currentWorkflowId = null;
 
-    if (this.aborted) return;
-    if (finalResult) {
-      results[task.id] =
-        typeof finalResult === "string"
-          ? finalResult
-          : JSON.stringify(finalResult);
+      if (this.aborted) return;
+      if (finalResult) {
+        results[task.id] =
+          typeof finalResult === "string"
+            ? finalResult
+            : JSON.stringify(finalResult);
 
-      this.emitSuccess(layerIndex, totalLayers, task.title, {
-        task: JSON.stringify(finalResult, null, 2),
-      });
-    } else {
-      this.emitError(layerIndex, totalLayers, task.title);
+        this.emitSuccess(layerIndex, totalLayers, task.title, {
+          task: JSON.stringify(finalResult, null, 2),
+        });
+      } else {
+        this.emitError(layerIndex, totalLayers, task.title);
+      }
+    } catch (err) {
+      if (err instanceof FatalMainLLMError) {
+        this.emitErrorRaw(
+          "Main LLM fatal failure during execution",
+          err.message,
+          true
+        );
+        this.aborted = true;
+        return;
+      }
+      throw err;
     }
   }
 

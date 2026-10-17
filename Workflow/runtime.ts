@@ -2,6 +2,8 @@ import type { Workflow } from "../Models/Workflow";
 import { hydrateWorkflowNodes } from "./utils/runtime";
 import type { NodeExecutionContext } from "./types/types";
 import type { ExecutionContext } from "../Execution/ExecutionContext";
+import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
+import { FatalMainLLMError } from "../LLM/LLMRunner";
 import { buildLayeredTopoSort } from "../Execution/toposort";
 
 const stopRegistry = new Map<string, boolean>();
@@ -31,6 +33,13 @@ export const executeFlowRuntime = async (
 ) => {
   const workflowId = String(workflow.id ?? "default");
   stopRegistry.set(workflowId, false);
+
+  // Thread the current workspace's Main LLM credentials into node contexts so
+  // nodes never need to query ambient singletons themselves.
+  const repo = WorkspaceRepository.getInstance();
+  const currentId = repo.getCurrent();
+  const wsData = currentId ? repo.get(currentId) : undefined;
+  const mainLLM = wsData ? { option: wsData.mainLLM, apiKey: wsData.apiKey } : undefined;
 
   try {
     const nodes = hydrateWorkflowNodes(workflow);
@@ -204,6 +213,7 @@ export const executeFlowRuntime = async (
       if (node.process) {
         const execContext: NodeExecutionContext = {
           node, inputs, ctx, triggerData,
+          mainLLM, workflowId,
           ...(node.nodeType === "Loop" ? { workflow, allNodes: nodes } : {}),
         } as NodeExecutionContext;
         output = await node.process(execContext);
@@ -244,7 +254,7 @@ export const executeFlowRuntime = async (
 
       let output: unknown;
       if (node.process) {
-        const execContext: NodeExecutionContext = { node, inputs, ctx, triggerData } as NodeExecutionContext;
+        const execContext: NodeExecutionContext = { node, inputs, ctx, triggerData, mainLLM, workflowId } as NodeExecutionContext;
         output = await node.process(execContext);
       } else {
         output = node.nodeValue ?? null;
@@ -405,6 +415,11 @@ export const executeFlowRuntime = async (
     const resultsObject = Object.fromEntries(results.entries());
     return { layers: executionLayers, results: resultsObject, finalResult };
   } catch (error) {
+    if (error instanceof FatalMainLLMError) {
+      requestStop(workflowId);
+      broadcast?.({ type: "workflow_error", workflowId, error: error.message });
+      return error;
+    }
     stopRegistry.delete(workflowId);
     console.log(error);
     return error;

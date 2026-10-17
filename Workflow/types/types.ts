@@ -1,4 +1,5 @@
 import type { ExecutionContext } from "../../Execution/ExecutionContext";
+import type { LLMOption } from "../../Models/LLM";
 
 // Define possible value types for nodes
 export type NodeValue =
@@ -14,7 +15,9 @@ export type NodeExecutionContext = {
   node: NodeType;
   inputs: Record<string, unknown>;
   ctx: ExecutionContext;
-  triggerData?: unknown; 
+  triggerData?: unknown;
+  mainLLM?: { option: LLMOption; apiKey: string };
+  workflowId?: string;
 };
 export type SourceListOption = {
   key: string;
