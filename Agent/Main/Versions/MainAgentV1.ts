@@ -19,7 +19,7 @@ import { requestStop } from "../../../Workflow/runtime";
 import type { WorkspaceData } from "../../../Models/Workspace";
 import { WorkspaceRepository } from "../../../Execution/WorkspaceRepository";
 import { Yallma3GenOneAgentRuntime } from "../../Agent";
-import { getLLMProvider } from "../../../LLM/LLMRunner";
+import { getLLMProvider, testLLMHealth } from "../../../LLM/LLMRunner";
 import type { LLMProvider } from "../../../Models/LLM";
 import type { ExecutionContext } from "../../../Execution/ExecutionContext";
 import { validateWorkspace } from "../../Validation/WorkspaceValidator";
@@ -55,6 +55,7 @@ export class MainAgentV1 implements MainAgent {
     }
 
     await this.initialize();
+    if (this.aborted) return {};
 
     const results: Record<string, string> = {};
     const layers = this.createTaskLayers();
@@ -148,6 +149,15 @@ export class MainAgentV1 implements MainAgent {
 
   private async initialize() {
     this.emitSystem("Main agent initializing...");
+
+    const health = await testLLMHealth(
+      this.workspaceData.mainLLM,
+      this.workspaceData.apiKey
+    );
+    if (!health.ok) {
+      this.emitErrorRaw("Main LLM unreachable at startup", health.error, true);
+      this.aborted = true;
+    }
   }
 
   // STAGE 2: PREP
