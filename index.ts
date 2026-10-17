@@ -65,6 +65,7 @@ Options:
 Environment Variables:
   YALLMA3_AGENT_HOST    Server host (default: localhost)
   YALLMA3_AGENT_PORT    Server port (default: 3001, auto-increment if busy)
+  OLLAMA_URL            Comma-separated Ollama URLs to discover models (e.g., http://localhost:11434,http://192.168.1.100:11434)
 
 Note: --port command line option takes precedence over YALLMA3_AGENT_PORT
 `);
@@ -88,6 +89,7 @@ import { setupWebSocketServer } from "./Websocket/socket";
 import { initFlowSystem } from "./Workflow/initFlowSystem";
 import mcpRoutes from "./Routes/Mcp.route";
 import llmRoutes from "./Routes/LLM.route";
+import { initializeOllamaModels } from "./LLM/config";
 import { webhookTriggerManager } from "./Trigger/WebhookTriggerManager";
 import { webhookQueue } from "./Trigger/WebhookQueue";
 import { telegramTriggerManager } from "./Trigger/TelegramTriggerManager";
@@ -280,6 +282,9 @@ const wss = new WebSocketServer({
 // Setup your WebSocket utilities
 setupWebSocketServer(wss, instanceId);
 initFlowSystem();
+
+// Initialize Ollama models from configured URLs
+await initializeOllamaModels();
 
 async function startServer() {
   let boundPort: number;
