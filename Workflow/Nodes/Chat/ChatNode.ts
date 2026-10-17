@@ -216,7 +216,9 @@ export function createLLMChatNode(id: number, position: Position): ChatNode {
               }
             : undefined;
 
-        console.log(`Using provider: ${providerName}, model: ${model}`);
+        console.log(
+          `Using provider: ${providerName}, model: ${model?.id || modelId}`
+        );
         console.log(
           `Executing Chat node ${n.id} with prompt: "${prompt.substring(0, 50)}..."`
         );
