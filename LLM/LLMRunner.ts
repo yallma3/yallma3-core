@@ -8,6 +8,13 @@ import {
   OllamaProvider
 } from "./LLMProvider";
 
+const PROVIDER_ENDPOINTS = {
+  OpenAI: "https://api.openai.com/v1/chat/completions",
+  Groq: "https://api.groq.com/openai/v1/chat/completions",
+  OpenRouter: "https://openrouter.ai/api/v1/chat/completions",
+  Anthropic: "https://api.anthropic.com/v1/messages",
+} as const;
+
 export function runLLM(provider: LLMProvider, prompt: string) {
   return provider.generateText(prompt);
 }
@@ -29,5 +36,89 @@ export function getLLMProvider(llmOption: LLMOption, apiKey: string) {
       return new OllamaProvider(llmOption.model.id, "", baseUrl || "http://localhost:11434");
     default:
       return new GroqProvider(llmOption.model.id, apiKey);
+  }
+}
+
+/**
+ * Provider-aware, cost-free health probe for the Main LLM.
+ *
+ * - Ollama: `GET /api/tags` (no auth, no cost)
+ * - OpenAI / Groq / OpenRouter: 1-token chat completion (`max_tokens: 1`)
+ * - Anthropic: Messages API with `max_tokens: 1`
+ * - Gemini: `generateContent` with `maxOutputTokens: 1`
+ *
+ * Returns `{ ok: true }` when reachable; `{ ok: false, error }` on any
+ * non-2xx response, timeout, or network failure.
+ *
+ * @param timeoutMs Abort timeout in ms. Defaults to 8000; overridable for tests.
+ */
+export async function testLLMHealth(
+  llmOption: LLMOption,
+  apiKey: string,
+  timeoutMs: number = 8000
+): Promise<{ ok: boolean; error?: string }> {
+  const signal = AbortSignal.timeout(timeoutMs);
+  try {
+    if (llmOption.provider === "Ollama") {
+      const baseUrl = llmOption.options?.baseUrl || "http://localhost:11434";
+      const res = await fetch(`${baseUrl}/api/tags`, { signal });
+      if (!res.ok) return { ok: false, error: `Ollama /api/tags returned ${res.status}` };
+      return { ok: true };
+    }
+
+    if (llmOption.provider === "Anthropic") {
+      const res = await fetch(PROVIDER_ENDPOINTS.Anthropic, {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: llmOption.model.id,
+          messages: [{ role: "user", content: "hi" }],
+          max_tokens: 1,
+        }),
+        signal,
+      });
+      if (!res.ok) return { ok: false, error: `Anthropic probe returned ${res.status}` };
+      return { ok: true };
+    }
+
+    if (llmOption.provider === "Gemini") {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${llmOption.model.id}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: "hi" }] }],
+            generationConfig: { maxOutputTokens: 1 },
+          }),
+          signal,
+        }
+      );
+      if (!res.ok) return { ok: false, error: `Gemini probe returned ${res.status}` };
+      return { ok: true };
+    }
+
+    // OpenAI / Groq / OpenRouter — OpenAI-compatible chat completions
+    const res = await fetch(PROVIDER_ENDPOINTS[llmOption.provider], {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: llmOption.model.id,
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 1,
+      }),
+      signal,
+    });
+    if (!res.ok) return { ok: false, error: `${llmOption.provider} probe returned ${res.status}` };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "timeout or network error" };
   }
 }
