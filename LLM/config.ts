@@ -16,7 +16,9 @@ function loadModels(): ProviderModels {
       Gemini: [],
       Groq: [],
       OpenRouter: [],
-      Ollama: []
+      Ollama: [],
+      DeepSeek: [],
+      Deepseek: []
     };
   }
   try {
@@ -35,7 +37,9 @@ function loadModels(): ProviderModels {
       Gemini: [],
       Groq: [],
       OpenRouter: [],
-      Ollama: []
+      Ollama: [],
+      DeepSeek: [],
+      Deepseek: []
     };
   }
 }
