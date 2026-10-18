@@ -3,7 +3,6 @@ import type { Task } from "../../Models/Task";
 import type { Workflow } from "../../Models/Workflow";
 import type { LLMProvider } from "../../Models/LLM";
 import { Helper } from "../../Utils/Helper";
-
 export type BestFitAssignment = {
   type: "workflow" | "agent";
   id: string;
@@ -79,6 +78,16 @@ Analyze the task and provide your decision:`;
       throw new Error("No valid JSON found in response");
     }
     const result = parsed.data as Record<string, unknown>;
+
+    // Validate the response structure
+    if (
+      !result.type ||
+      !result.id ||
+      typeof result.confidence !== "number" ||
+      !result.reasoning
+    ) {
+      throw new Error("Invalid response structure from LLM");
+    }
 
     const type = String(result.type) as "workflow" | "agent";
     const id = String(result.id);
