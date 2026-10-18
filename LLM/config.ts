@@ -65,7 +65,7 @@ export async function initializeOllamaModels(): Promise<void> {
   for (const baseUrl of urls) {
     try {
       const normalizedUrl = baseUrl.replace(/\/+$/, "");
-      const res = await fetch(`${normalizedUrl}/api/tags`);
+      const res = await fetch(`${normalizedUrl}/api/tags`, { signal: AbortSignal.timeout(5000) });
       if (!res.ok) {
         console.warn(`⚠️  Failed to fetch Ollama models from ${normalizedUrl}: HTTP ${res.status}`);
         continue;

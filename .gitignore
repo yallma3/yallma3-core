@@ -38,3 +38,5 @@ Output/
 bin/
 .vscode/
 Memory/agent-memory/
+
+agent-memory/

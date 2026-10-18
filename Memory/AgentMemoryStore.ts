@@ -12,8 +12,7 @@ export class FileAgentMemoryStore implements AgentMemoryStore {
   private basePath: string;
 
   constructor(basePath?: string) {
-    this.basePath = basePath ?? path.join(import.meta.dirname, "agent-memory");
-    fs.mkdirSync(this.basePath, { recursive: true });
+    this.basePath = basePath ?? path.join(process.cwd(), "agent-memory");
   }
 
   recordOutcome(agent: Agent, success: boolean): void {
@@ -113,6 +112,7 @@ export class FileAgentMemoryStore implements AgentMemoryStore {
   }
 
   private saveRecord(record: AgentMemoryRecord): void {
+    try { fs.mkdirSync(this.basePath, { recursive: true }); } catch { /* ignore */ }
     const filePath = this.recordPath(record.agentId);
     const tmpPath = filePath + ".tmp";
     const data = JSON.stringify(record, null, 2);

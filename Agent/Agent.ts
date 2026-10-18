@@ -67,10 +67,10 @@ export class AgentRuntime {
 
         iteration++;
       }
-      memoryStore.recordOutcome(this.agent, true);
+      try { memoryStore.recordOutcome(this.agent, true); } catch { /* best-effort */ }
       return output;
     } catch (e) {
-      memoryStore.recordOutcome(this.agent, false);
+      try { memoryStore.recordOutcome(this.agent, false); } catch { /* best-effort */ }
       throw e;
     }
   }
@@ -295,10 +295,10 @@ export class Yallma3GenOneAgentRuntime {
         console.warn("⚠️ Max iterations reached, returning last output.");
       }
 
-      memoryStore.recordOutcome(this.agent, true);
+      try { memoryStore.recordOutcome(this.agent, true); } catch { /* best-effort */ }
       return output;
     } catch (e) {
-      memoryStore.recordOutcome(this.agent, false);
+      try { memoryStore.recordOutcome(this.agent, false); } catch { /* best-effort */ }
       throw e;
     } finally {
       // Clean up MCP connections

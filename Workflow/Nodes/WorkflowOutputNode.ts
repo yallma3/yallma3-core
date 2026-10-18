@@ -81,7 +81,7 @@ export function register(nodeRegistry: NodeRegistry): void {
       selected: false,
       processing: false,
       process: async (context: NodeExecutionContext) => {
-        const input = context.inputs[0];
+        const input = context.inputs[id * 100 + 2] ?? context.inputs[0];
         if (input !== undefined && input !== null) {
           if (typeof input === 'string') {
             console.log("📤 Workflow Output:", input.substring(0, 200) + "...");

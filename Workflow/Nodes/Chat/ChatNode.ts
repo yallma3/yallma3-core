@@ -23,7 +23,7 @@ import { NodeRegistry } from "../../NodeRegistry";
 import type { LLMModel, ProviderModels } from "../../../Models/LLM";
 import { AvailableLLMs } from "../../../LLM/config";
 import type { LLMMessage, LLMOption } from "../../../Models/LLM";
-import { executeWithFallback, FatalMainLLMError } from "../../../LLM/LLMRunner";
+import { executeWithFallback, FatalMainLLMError, getLLMProvider } from "../../../LLM/LLMRunner";
 export interface ChatNode extends BaseNode {
   nodeType: string;
   nodeValue?: NodeValue;
@@ -231,20 +231,25 @@ export function createLLMChatNode(id: number, position: Position): ChatNode {
             ]
           : [{ role: "user", content: prompt }];
 
-        if (!context.mainLLM) {
+        let response;
+        if (context.mainLLM) {
+          // Delegate to the centralized fallback runner. A FatalMainLLMError
+          // signals the Main LLM itself is down and must halt the workflow.
+          response = await executeWithFallback({
+            nodeLLM,
+            mainLLM: context.mainLLM,
+            messages,
+            workflowId: context.workflowId,
+          });
+        } else if (nodeLLM) {
+          const provider = getLLMProvider(nodeLLM.option, nodeLLM.apiKey);
+          if (!provider.callLLM) throw new Error(`Provider ${nodeLLM.option.provider} does not support callLLM`);
+          response = await provider.callLLM(messages);
+        } else {
           throw new Error(
             "mainLLM not available in NodeExecutionContext — workspace may not be loaded"
           );
         }
-
-        // Delegate to the centralized fallback runner. A FatalMainLLMError
-        // signals the Main LLM itself is down and must halt the workflow.
-        const response = await executeWithFallback({
-          nodeLLM,
-          mainLLM: context.mainLLM,
-          messages,
-          workflowId: context.workflowId,
-        });
 
         console.log(
           `Chat node ${n.id} received response:`,

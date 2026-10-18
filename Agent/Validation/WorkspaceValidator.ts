@@ -268,19 +268,21 @@ export function validateWorkflow(workflow: unknown, index: number): ValidationRe
         );
       }
     }
-    for (const [nid, sids] of nodeSocketIds) {
-      if (sids.size > 0) {
-        const hasConnection = (connections as Array<Record<string, unknown>>).some(
-          (c) =>
-            (c.fromSocket !== undefined && sids.has(c.fromSocket as number)) ||
-            (c.toSocket !== undefined && sids.has(c.toSocket as number)),
-        );
-        if (!hasConnection) {
-          return error(
-            `workflows[${index}].nodes`,
-            `Node ${nid} in workflow '${String(w.id)}' has sockets but no connections reference them (orphan node)`,
-            "ORPHAN_NODE",
+    if (nodeSocketIds.size > 1) {
+      for (const [nid, sids] of nodeSocketIds) {
+        if (sids.size > 0) {
+          const hasConnection = (connections as Array<Record<string, unknown>>).some(
+            (c) =>
+              (c.fromSocket !== undefined && sids.has(c.fromSocket as number)) ||
+              (c.toSocket !== undefined && sids.has(c.toSocket as number)),
           );
+          if (!hasConnection) {
+            return error(
+              `workflows[${index}].nodes`,
+              `Node ${nid} in workflow '${String(w.id)}' has sockets but no connections reference them (orphan node)`,
+              "ORPHAN_NODE",
+            );
+          }
         }
       }
     }
