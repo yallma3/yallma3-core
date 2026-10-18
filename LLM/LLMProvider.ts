@@ -993,3 +993,166 @@ export class OllamaProvider implements LLMProvider {
     }
   }
 }
+
+export class DeepSeekProvider implements LLMProvider {
+  private model: string;
+  private apiKey: string;
+  private tools: LLMSpecTool[] = [];
+
+  supportsTools = true;
+
+  constructor(model: string, apiKey: string) {
+    this.model = model;
+    this.apiKey = apiKey;
+  }
+
+  registerTools(tools: LLMSpecTool[]) {
+    this.tools = tools;
+  }
+
+  private async executeTools(toolCalls: ToolCall[]): Promise<LLMMessage[]> {
+    const toolMessages: LLMMessage[] = [];
+
+    for (const call of toolCalls) {
+      const tool = this.tools.find((t) => t.name === call.name);
+      if (!tool?.executor) {
+        console.warn(`Tool ${call.name} not found or has no executor`);
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: `Tool ${call.name} not found` }),
+        });
+        continue;
+      }
+
+      try {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Tool execution timeout")), 30000)
+        );
+        const result = await Promise.race([
+          tool.executor(call.input),
+          timeoutPromise,
+        ]);
+
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+      } catch (error) {
+        console.error(`Tool ${call.name} execution failed:`, error);
+        toolMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: String(error) }),
+        });
+      }
+    }
+
+    return toolMessages;
+  }
+
+  async generateText(prompt: string): Promise<string> {
+    let messages: LLMMessage[] = [{ role: "user", content: prompt }];
+    let maxIterations = 10;
+    let iteration = 0;
+
+    while (iteration < maxIterations) {
+      const response = await this.callLLM(messages);
+
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        return response.content || "";
+      }
+
+      const toolMessages = await this.executeTools(response.toolCalls);
+
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: response.toolCalls.map((t) => ({
+            id: t.id,
+            type: "function",
+            function: {
+              name: t.name,
+              arguments: JSON.stringify(t.input),
+            },
+          })),
+        } as LLMMessage,
+        ...toolMessages,
+      ];
+
+      iteration++;
+    }
+
+    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+  }
+
+  async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    const body: Record<string, unknown> = {
+      model: this.model,
+      messages: messages,
+      temperature: 0.7,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0,
+    };
+
+    if (this.supportsTools && this.tools.length > 0) {
+      body.tools = this.tools.map((t) => ({
+        type: "function",
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        },
+      }));
+    }
+
+    const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      throw new Error(`Chat API returned status ${res.status}: ${errorBody}`);
+    }
+
+    const json = (await res.json()) as OpenAIResponse;
+
+    const message = json.choices[0]?.message;
+    if (!message) {
+      throw new Error("Invalid DeepSeek response format");
+    }
+
+    const rawContent: string | null = message.content ?? null;
+    const toolCalls: ToolCall[] | null =
+      message.tool_calls?.map((t: OpenAIToolCall) => {
+        const parsed = Helper.JsonParser.safeParse<Record<string, unknown>>(
+          t.function?.arguments ?? "{}"
+        );
+        if (!parsed.success) {
+          console.warn(`Failed to parse tool arguments for ${t.function?.name}: ${parsed.error}`);
+        }
+        return {
+          id: t.id,
+          name: t.function?.name ?? "",
+          input: parsed.success ? parsed.data : {} as Record<string, unknown>,
+        };
+      }) || null;
+
+    const content =
+      rawContent ||
+      (toolCalls?.length && toolCalls[0] ? `calling tool ${toolCalls[0].name}` : "");
+
+    return { content, toolCalls };
+  }
+}
+
+export class DeepseekProvider extends DeepSeekProvider {}
