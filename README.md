@@ -179,7 +179,7 @@ bun run test:coverage
 ## CI/CD
 
 - **Build CI** (`.github/workflows/build.yml`): Runs on push/PR to `main` — installs deps, lints, runs tests with coverage, builds binary.
-- **Release** (`.github/workflows/release.yml`): On tag push (`v*`) — cross-compiles for darwin-arm64, darwin-x64, linux-x64, windows-x64, then creates a GitHub Release with artifacts.
+- **Release** (`.github/workflows/release.yml`): On tag push matching `v<major>.<minor>.<patch>` (semver) — cross-compiles for darwin-arm64, darwin-x64, linux-x64, windows-x64, then creates a GitHub Release with artifacts.
 
 ## Deployment Model
 

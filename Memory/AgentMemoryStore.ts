@@ -33,9 +33,9 @@ export class FileAgentMemoryStore implements AgentMemoryStore {
         objective: agent.objective,
         background: agent.background,
         llm: {
-          provider: agent.llm.provider,
-          model: agent.llm.model.name,
-          modelId: agent.llm.model.id,
+          provider: agent.llm?.provider ?? null,
+          model: agent.llm?.model?.name ?? null,
+          modelId: agent.llm?.model?.id ?? null,
         },
         tools: agent.tools.map((t) => t.name),
         successes: success ? 1 : 0,

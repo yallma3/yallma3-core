@@ -19,8 +19,24 @@ export async function assignBestFit(
 ): Promise<BestFitAssignment> {
   const workflowYamls = workflows.map((w) => generateWorkflowYaml(w));
 
+  const yamlCache = new Map<string, string>();
   const agentYamls = await Promise.all(
-    agents.map((a) => generateAgentYaml(llm, a))
+    agents.map((a) => {
+      if (yamlCache.has(a.id)) return Promise.resolve(yamlCache.get(a.id)!);
+      return generateAgentYaml(llm, a).catch(() => {
+        const fallback = [
+          `ID: ${a.id}`,
+          `Type: agent`,
+          `Name: ${a.name}`,
+          `Objective: ${a.objective || a.role || ""}`,
+          `Capabilities: ${a.capabilities || ""}`,
+        ].join("\n");
+        return fallback;
+      }).then((yaml) => {
+        yamlCache.set(a.id, yaml);
+        return yaml;
+      });
+    })
   );
 
   const executorsSection = [

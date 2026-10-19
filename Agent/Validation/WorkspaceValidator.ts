@@ -224,8 +224,13 @@ export function validateWorkflow(workflow: unknown, index: number): ValidationRe
   }
   const allSocketIds = new Set<number>();
   const nodeSocketIds = new Map<number, Set<number>>();
+  const seenNodeIds = new Set<number>();
   for (let ni = 0; ni < nodes.length; ni++) {
     const node = nodes[ni];
+    if (typeof node?.id === "number" && seenNodeIds.has(node.id)) {
+      return error(`workflows[${index}].nodes[${ni}].id`, `Duplicate node id ${node.id}`, "DUPLICATE_NODE_ID");
+    }
+    if (typeof node?.id === "number") seenNodeIds.add(node.id);
     if (!node || typeof node !== "object") {
       return error(`workflows[${index}].nodes[${ni}]`, "Node is missing or invalid", "MISSING_FIELD");
     }

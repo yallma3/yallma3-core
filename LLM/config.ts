@@ -46,8 +46,16 @@ function loadModels(): ProviderModels {
 
 export const AvailableLLMs: ProviderModels = loadModels();
 
+// Runtime-discovered Ollama models (not persisted to models.json)
+const discoveredOllamaModels: LLMModel[] = [];
+
 export function fetchPublicModels(): ProviderModels {
-  return JSON.parse(JSON.stringify(AvailableLLMs));
+  const clone = JSON.parse(JSON.stringify(AvailableLLMs));
+  const existingIds = new Set(clone.Ollama.map((m: LLMModel) => m.id));
+  for (const m of discoveredOllamaModels) {
+    if (!existingIds.has(m.id)) clone.Ollama.push(JSON.parse(JSON.stringify(m)));
+  }
+  return clone;
 }
 
 // Fetch Ollama models from configured URLs and merge into AvailableLLMs
@@ -82,12 +90,15 @@ export async function initializeOllamaModels(): Promise<void> {
         readonly: false,
       }));
 
-      const existingIds = new Set(AvailableLLMs.Ollama.map(m => m.id));
+      const existingIds = new Set([
+        ...AvailableLLMs.Ollama.map(m => m.id),
+        ...discoveredOllamaModels.map(m => m.id),
+      ]);
       const newModels = models.filter(m => !existingIds.has(m.id));
-      
+
       if (newModels.length > 0) {
-        AvailableLLMs.Ollama.push(...newModels);
-        console.log(`✅ Added ${newModels.length} Ollama models from ${normalizedUrl}`);
+        discoveredOllamaModels.push(...newModels);
+        console.log(`✅ Discovered ${newModels.length} Ollama models from ${normalizedUrl}`);
       } else {
         console.log(`ℹ️  No new Ollama models from ${normalizedUrl}`);
       }

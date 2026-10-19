@@ -18,8 +18,8 @@ export function hashAgent(agent: Agent): string {
     objective: agent.objective,
     background: agent.background,
     llm: {
-      provider: agent.llm.provider,
-      model: agent.llm.model.id,
+      provider: agent.llm?.provider ?? null,
+      model: agent.llm?.model?.id ?? null,
     },
     tools: toolNames,
   };
