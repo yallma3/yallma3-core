@@ -124,8 +124,9 @@ export async function testLLMHealth(
     });
     if (!res.ok) return { ok: false, error: `${llmOption.provider} probe returned ${res.status}` };
     return { ok: true };
-  } catch {
-    return { ok: false, error: "timeout or network error" };
+  } catch (err) {
+    if (signal.aborted) return { ok: false, error: `timeout after ${timeoutMs}ms` };
+    return { ok: false, error: `network error: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 

@@ -66,7 +66,7 @@ describe('testLLMHealth', () => {
 
       await expect(testLLMHealth(ollamaOption, '')).resolves.toEqual({
         ok: false,
-        error: 'timeout or network error',
+        error: 'network error: ECONNREFUSED',
       });
     });
   });
@@ -143,7 +143,7 @@ describe('testLLMHealth', () => {
       // Real timers + small timeout — AbortSignal.timeout is not driven by vi.useFakeTimers
       await expect(testLLMHealth(openaiOption, 'sk-test', 50)).resolves.toEqual({
         ok: false,
-        error: 'timeout or network error',
+        error: 'timeout after 50ms',
       });
     });
 

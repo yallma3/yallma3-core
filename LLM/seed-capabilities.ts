@@ -66,14 +66,19 @@ function normalize(str: string): string {
 
 function matchesModelsDev(devId: string, llmModel: LlmRingModel): boolean {
   const devIdNorm = normalize(devId);
-  const names = [llmModel.model_name, llmModel.display_name, ...(llmModel.model_aliases || [])];
+  const names = [llmModel.model_name, llmModel.display_name, ...(llmModel.model_aliases || [])]
+    .map(normalize)
+    .filter(Boolean);
 
-  for (const name of names) {
-    const nameNorm = normalize(name);
+  // Exact match first
+  for (const nameNorm of names) {
     if (devIdNorm === nameNorm) return true;
-    if (devIdNorm.endsWith(nameNorm)) return true;
-    if (devIdNorm.includes(nameNorm)) return true;
   }
+  // Then longest suffix match
+  const suffixMatches = names
+    .filter((n) => devIdNorm.endsWith(n))
+    .sort((a, b) => b.length - a.length);
+  if (suffixMatches.length > 0) return true;
 
   return false;
 }
@@ -125,14 +130,24 @@ async function main() {
   const capabilities: ModelCapability[] = [];
   let matched = 0;
 
-  if (modelsDevData?.data) {
+  if (!Array.isArray(modelsDevData?.data)) {
+    throw new Error("models.dev data unavailable or unexpected shape; refusing to overwrite registry");
+  }
+  {
     for (const entry of modelsDevData.data) {
       const modelId: string = entry.id;
       const provider = modelId.includes("/") ? modelId.split("/")[0] : "unknown";
       const name: string = entry.name || modelId;
       const description: string | undefined = entry.description;
 
-      const llmRingEntry = llmRingModels.find((m) => matchesModelsDev(modelId, m));
+      const candidates = llmRingModels.filter((m) => matchesModelsDev(modelId, m));
+      const llmRingEntry = candidates.sort((a, b) => {
+        const aNames = [a.model_name, a.display_name, ...(a.model_aliases || [])].map(normalize).filter(Boolean);
+        const bNames = [b.model_name, b.display_name, ...(b.model_aliases || [])].map(normalize).filter(Boolean);
+        const aMax = Math.max(0, ...aNames.map((n) => n.length));
+        const bMax = Math.max(0, ...bNames.map((n) => n.length));
+        return bMax - aMax;
+      })[0];
       const tags = deriveTags(llmRingEntry);
 
       if (llmRingEntry) matched++;
@@ -151,6 +166,9 @@ async function main() {
     }
   }
 
+  if (capabilities.length === 0) {
+    throw new Error("No capabilities produced; refusing to overwrite registry");
+  }
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(capabilities, null, 2));
   console.log(`\nWrote ${capabilities.length} capabilities to ${OUTPUT_PATH}`);
   console.log(`Matched ${matched} models with llmring/registry capability tags`);
