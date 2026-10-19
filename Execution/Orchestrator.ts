@@ -354,6 +354,7 @@ export class ExecutionOrchestrator {
       ctx.send({
         type: "workflow_json",
         id: workflowId as string,
+        requestId: workflowId as string,
         data: result,
         timestamp: new Date().toISOString(),
       });
