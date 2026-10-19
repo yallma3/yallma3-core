@@ -15,7 +15,6 @@ const PROVIDER_ENDPOINTS = {
   OpenRouter: "https://openrouter.ai/api/v1/chat/completions",
   Anthropic: "https://api.anthropic.com/v1/messages",
   DeepSeek: "https://api.deepseek.com/v1/chat/completions",
-  Deepseek: "https://api.deepseek.com/v1/chat/completions",
 } as const;
 
 export function runLLM(provider: LLMProvider, prompt: string) {
@@ -38,7 +37,6 @@ export function getLLMProvider(llmOption: LLMOption, apiKey: string) {
     case "Ollama":
       return new OllamaProvider(llmOption.model.id, "", baseUrl || "http://localhost:11434");
     case "DeepSeek":
-    case "Deepseek":
       return new DeepSeekProvider(llmOption.model.id, apiKey);
     default:
       return new GroqProvider(llmOption.model.id, apiKey);

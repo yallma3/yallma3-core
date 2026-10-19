@@ -17,8 +17,7 @@ function loadModels(): ProviderModels {
       Groq: [],
       OpenRouter: [],
       Ollama: [],
-      DeepSeek: [],
-      Deepseek: []
+      DeepSeek: []
     };
   }
   try {
@@ -38,8 +37,7 @@ function loadModels(): ProviderModels {
       Groq: [],
       OpenRouter: [],
       Ollama: [],
-      DeepSeek: [],
-      Deepseek: []
+      DeepSeek: []
     };
   }
 }
