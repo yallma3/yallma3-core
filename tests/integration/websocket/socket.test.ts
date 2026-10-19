@@ -187,6 +187,104 @@ describe("WebSocket Server", () => {
     });
   });
 
+  it("should send exactly one console_input_resolved event to the requesting socket", async () => {
+    const port = wss.address().port;
+    const promptId = "dedupe_prompt_1";
+    const requestId = "req-console-1";
+    registerPrompt(promptId, 1);
+
+    return new Promise<void>((resolve, reject) => {
+      const ws1 = new WebSocket(`ws://localhost:${port}`);
+      const ws2 = new WebSocket(`ws://localhost:${port}`);
+      let connectedCount = 0;
+      const ws1Events: Array<Record<string, unknown>> = [];
+      const ws2Events: Array<Record<string, unknown>> = [];
+
+      const sendInput = () => {
+        if (connectedCount === 2) {
+          ws1.send(
+            JSON.stringify({
+              type: "console_input",
+              requestId,
+              data: {
+                promptId,
+                message: "test input",
+                type: "input",
+                details: "User input",
+              },
+            })
+          );
+        }
+      };
+
+      const onMessage = (
+        target: Array<Record<string, unknown>>,
+        data: unknown
+      ) => {
+        const message = JSON.parse(String(data));
+        if (message.type === "connected") {
+          connectedCount++;
+          sendInput();
+        } else if (message.type === "console_input_resolved") {
+          target.push(message);
+        }
+      };
+
+      ws1.on("message", (data) => onMessage(ws1Events, data));
+      ws2.on("message", (data) => onMessage(ws2Events, data));
+
+      setTimeout(() => {
+        try {
+          // Requesting socket gets exactly one event, correlated by requestId.
+          expect(ws1Events).toHaveLength(1);
+          expect(ws1Events[0]?.requestId).toBe(requestId);
+          // Other sockets get exactly one broadcast without a requestId.
+          expect(ws2Events).toHaveLength(1);
+          expect(ws2Events[0]?.requestId).toBeUndefined();
+          ws1.close();
+          ws2.close();
+          resolve();
+        } catch (error) {
+          ws1.close();
+          ws2.close();
+          reject(error);
+        }
+      }, 400);
+    });
+  });
+
+  it("should echo requestId in the manual trigger registration ack", async () => {
+    const port = wss.address().port;
+    const requestId = "req-manual-1";
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "connected") {
+          ws.send(
+            JSON.stringify({
+              type: "register_trigger",
+              requestId,
+              data: JSON.stringify({
+                workspaceId: "test-manual-ws",
+                trigger: { type: "manual" },
+              }),
+            })
+          );
+        } else if (message.type === "trigger_registered") {
+          expect(message.success).toBe(true);
+          expect(message.requestId).toBe(requestId);
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
   it("should reject console input without promptId", async () => {
     const port = wss.address().port;
 

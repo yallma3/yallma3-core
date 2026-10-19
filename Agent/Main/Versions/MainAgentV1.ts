@@ -545,6 +545,7 @@ __meta__: ${results["__meta__"]}
   private emitWorkspaceStopped(reason?: string) {
     this.ctx.send({
       type: "workspace_stopped",
+      requestId: this.ctx.requestId,
       data: {
         id: crypto.randomUUID(),
         timestamp: Date.now(),

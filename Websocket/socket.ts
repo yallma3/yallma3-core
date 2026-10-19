@@ -42,10 +42,10 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
   const clients = new Set<WebSocket>();
   let currentWorkspaceAgent: MainAgent | null = null;
 
-  function broadcast(message: unknown) {
+  function broadcast(message: unknown, except?: WebSocket) {
     const messageStr = JSON.stringify(message);
     clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
+      if (client !== except && client.readyState === WebSocket.OPEN) {
         client.send(messageStr);
       }
     });
@@ -130,6 +130,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   type: "user_prompt_acknowledged",
                   promptId,
                   success: true,
+                  requestId: data.requestId,
                   timestamp: new Date().toISOString(),
                 })
               );
@@ -146,7 +147,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               const workflowId = String(payload?.workflowId ?? "default");
               orchestrator.abortWorkspace(workflowId);
               console.log(`[SERVER STDOUT] [Stop] Received stop request for workflow: ${workflowId}`);
-              ws.send(JSON.stringify({ type: "workflow_stopped", workflowId, timestamp: new Date().toISOString() }));
+              ws.send(JSON.stringify({ type: "workflow_stopped", workflowId, requestId: data.requestId, timestamp: new Date().toISOString() }));
             } catch (e) {
               console.error("Failed to parse stop_workflow payload:", e);
               sendCommandError(ws, data.type, 'VALIDATION_ERROR', `Failed to parse stop_workflow payload: ${e}`, data.requestId)
@@ -204,6 +205,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                       success: true,
                       workspaceId,
                       trigger,
+                      requestId: data.requestId,
                       data: {
                         nextExecutionTime: result.nextExecutionTime,
                         cronExpression: trigger.config.cronExpression,
@@ -250,6 +252,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                       success: true,
                       workspaceId,
                       trigger,
+                      requestId: data.requestId,
                       data: {
                         webhookUrl: result.webhookUrl,
                         secret: result.secret,
@@ -305,6 +308,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                       success: true,
                       workspaceId,
                       trigger,
+                      requestId: data.requestId,
                       data: {
                         webhookUrl: result.webhookUrl,
                         secretToken: result.secretToken,
@@ -336,6 +340,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   success: true,
                   workspaceId,
                   trigger,
+                  requestId: data.requestId,
                   message: "Manual trigger configured (runs on-demand)",
                   timestamp: new Date().toISOString(),
                 })
@@ -370,6 +375,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                 type: "trigger_unregistered",
                 success: true,
                 workspaceId,
+                requestId: data.requestId,
                 timestamp: new Date().toISOString(),
               })
             );
@@ -416,6 +422,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               JSON.stringify({
                 type: "workspace_aborted",
                 message: "Workspace execution aborted by user.",
+                requestId: data.requestId,
                 timestamp: new Date().toISOString(),
               })
             );
@@ -440,6 +447,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
 
             const workflow = Helper.JsonParser.parse(data.data);
             const ctx = new WebSocketContext(ws, broadcast);
+            ctx.requestId = data.requestId;
             const result = await orchestrator.runWorkflow(workflow, ctx);
 
             if (result instanceof Error) {
@@ -450,6 +458,8 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   id: workflow.id,
                   type: "workflow_result",
                   data: result,
+                  // run requestId echoed for client correlation; `id` remains workflow.id
+                  requestId: data.requestId,
                   timestamp: new Date().toISOString(),
                 })
               );
@@ -457,7 +467,13 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             break;
           }
           case "workflow_json":
-            // console.log(data.data);
+            ws.send(
+              JSON.stringify({
+                type: "workflow_json_ack",
+                requestId: data.requestId,
+                timestamp: new Date().toISOString(),
+              })
+            );
             break;
           case "command_response":
             console.log("Command response:", data.payload);
@@ -488,16 +504,36 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   // Add the event to console history
                   ConsoleInputUtils.addEvent(event);
 
-                  // Broadcast confirmation to all clients
-                  broadcast({
-                    type: "console_input_resolved",
-                    data: {
-                      promptId,
-                      message: inputMessage,
+                  // Broadcast confirmation to every other client (no requestId
+                  // on the broadcast). The requesting socket is excluded here so
+                  // it receives exactly one success event: the correlated ack
+                  // below.
+                  broadcast(
+                    {
+                      type: "console_input_resolved",
+                      data: {
+                        promptId,
+                        message: inputMessage,
+                        timestamp: new Date().toISOString(),
+                      },
                       timestamp: new Date().toISOString(),
                     },
-                    timestamp: new Date().toISOString(),
-                  });
+                    ws
+                  );
+
+                  // Correlation ack to the requesting socket
+                  ws.send(
+                    JSON.stringify({
+                      type: "console_input_resolved",
+                      data: {
+                        promptId,
+                        message: inputMessage,
+                        timestamp: new Date().toISOString(),
+                      },
+                      requestId: data.requestId,
+                      timestamp: new Date().toISOString(),
+                    })
+                  );
                 } else {
                   console.warn(
                     `Failed to resolve prompt ${promptId} - prompt not found or already resolved`
@@ -520,6 +556,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               JSON.stringify({
                 type: "pending_prompts",
                 data: pendingPrompts,
+                requestId: data.requestId,
                 timestamp: new Date().toISOString(),
               })
             );
