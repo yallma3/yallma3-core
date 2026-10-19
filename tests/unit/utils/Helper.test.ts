@@ -256,6 +256,62 @@ describe('Helper.JsonParser', () => {
     });
   });
 
+  describe('double-serialized JSON (outer-quoted string)', () => {
+    // When JSON output is wrapped in quotes — a common LLM artifact —
+    // safeParse receives a JSON string literal instead of a JSON object.
+    // Example literal: '"{\\"key\\": \\"val\\"}"'  (outer quotes + escaped inner)
+    it('fails when the payload is a JSON string (escaped inner quotes)', () => {
+      const coreTaskAnalysisJson =
+        '"{\\n    \\"taskId\\": \\"tk-601794axs\\",\\n    \\"intent\\": \\"Perform mathematical calculations and provide the result.\\",\\n    \\"classification\\": \\"simple\\",\\n    \\"needsDecomposition\\": false,\\n    \\"userInput\\": null\\n}"';
+      const result = JsonParser.safeParse(coreTaskAnalysisJson);
+      expect(result.success).toBe(false);
+    });
+
+    // Same content but with raw (unescaped) inner quotes — invalid JSON string
+    it('fails when the payload has outer quotes with unescaped inner quotes', () => {
+      const raw = `"{
+    "taskId": "tk-601794axs",
+    "intent": "Perform mathematical calculations",
+    "classification": "simple",
+    "needsDecomposition": false,
+    "userInput": null
+}"`;
+      const result = JsonParser.safeParse(raw);
+      expect(result.success).toBe(false);
+    });
+
+    it('error says "does not contain valid JSON" (JSON_LIKE_BLOCK fails first)', () => {
+      const coreTaskAnalysisJson =
+        '"{\\n    \\"taskId\\": \\"tk-601794axs\\"\\n}"';
+      const result = JsonParser.safeParse(coreTaskAnalysisJson);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain('does not contain valid JSON');
+      }
+    });
+
+    // The fallback regex in analyzeTaskCore ({…}) can extract the inner object
+    it('inner JSON can be extracted via {…} regex fallback', () => {
+      const trimmed = `"{
+    "taskId": "tk-601794axs",
+    "classification": "simple",
+    "needsDecomposition": false,
+    "userInput": null
+}"`;
+      const match = trimmed.match(/(\{[\s\S]*\})/);
+      expect(match).not.toBeNull();
+      const inner = match![1];
+      const retry = JsonParser.safeParse(inner);
+      expect(retry.success).toBe(true);
+      if (retry.success) {
+        expect(retry.data).toMatchObject({
+          taskId: 'tk-601794axs',
+          classification: 'simple',
+        });
+      }
+    });
+  });
+
   describe('reviver parameter', () => {
     it('applies reviver in safeParse', () => {
       const reviver = (key: string, value: unknown) => {

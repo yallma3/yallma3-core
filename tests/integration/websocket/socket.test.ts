@@ -36,13 +36,13 @@ vi.mock("../../../Task/TaskIntrepreter", () => ({
 
 vi.mock("../../../Agent/Utls/ToolCallingHelper", () => ({
   workflowExecutor: vi.fn(),
-  setWorkspaceDataForTools: vi.fn(),
 }));
 
 import { planAgenticTask } from "../../../Task/TaskIntrepreter";
 import { workflowExecutor } from "../../../Agent/Utls/ToolCallingHelper";
 import { createMainAgent } from "../../../Utils/Runtime";
 import type { MainAgent } from "../../../Agent/Main/MainAgent";
+import { executeFlowRuntime } from "../../../Workflow/runtime";
 
 describe("WebSocket Server", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -245,7 +245,8 @@ describe("WebSocket Server", () => {
           );
         } else if (message.type === "error" && connectedReceived) {
           expect(message.message).toContain("not found or already resolved");
-          expect(message.promptId).toBe("non_existent_prompt");
+          expect(message.commandType).toBe("console_input");
+          expect(message.code).toBe("EXECUTION_ERROR");
           ws.close();
           resolve();
         }
@@ -286,6 +287,259 @@ describe("WebSocket Server", () => {
           new Error("Test timed out waiting for pending_prompts response")
         );
       }, 5000);
+    });
+  });
+
+  it("should send unified error shape for missing promptId in user_prompt_response", async () => {
+    const port = wss.address().port;
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "connected") {
+          ws.send(
+            JSON.stringify({
+              type: "user_prompt_response",
+              data: { response: "test" },
+            })
+          );
+        } else if (message.type === "error") {
+          expect(message.commandType).toBe("user_prompt_response");
+          expect(message.code).toBe("VALIDATION_ERROR");
+          expect(message.message).toContain("Missing promptId");
+          expect(message.timestamp).toBeDefined();
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
+  it("should echo requestId from client in error response", async () => {
+    const port = wss.address().port;
+    const requestId = "test-req-123";
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "connected") {
+          ws.send(
+            JSON.stringify({
+              type: "register_trigger",
+              requestId,
+              data: JSON.stringify({}),
+            })
+          );
+        } else if (message.type === "error") {
+          expect(message.requestId).toBe(requestId);
+          expect(message.commandType).toBe("register_trigger");
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
+  it("should use EXECUTION_ERROR code for trigger registration failure", async () => {
+    const port = wss.address().port;
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "connected") {
+          ws.send(
+            JSON.stringify({
+              type: "register_trigger",
+              data: { workspaceId: "test", trigger: { type: "invalid_type" } },
+            })
+          );
+        } else if (message.type === "error") {
+          expect(message.code).toMatch(/^(VALIDATION_ERROR|EXECUTION_ERROR|TIMEOUT|NOT_FOUND|INTERNAL_ERROR)$/);
+          expect(message.timestamp).toBeDefined();
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
+  it("should return error for stop_workflow with invalid payload", async () => {
+    const port = wss.address().port;
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+      let connectedReceived = false;
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "connected") {
+          connectedReceived = true;
+          ws.send(
+            JSON.stringify({
+              type: "stop_workflow",
+              data: "not valid json",
+              requestId: "req-stop-1",
+            })
+          );
+        } else if (message.type === "error" && connectedReceived) {
+          expect(message.commandType).toBe("stop_workflow");
+          expect(message.code).toBe("VALIDATION_ERROR");
+          expect(message.message).toContain("Failed to parse stop_workflow payload");
+          expect(message.requestId).toBe("req-stop-1");
+          expect(message.timestamp).toBeDefined();
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
+  it("should return error for register_trigger scheduled missing cronExpression", async () => {
+    const port = wss.address().port;
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+
+      ws.on("open", () => {
+        ws.send(
+          JSON.stringify({
+            type: "register_trigger",
+            data: JSON.stringify({ workspaceId: "test", trigger: { type: "scheduled", config: {} } }),
+          })
+        );
+      });
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "error") {
+          expect(message.commandType).toBe("register_trigger");
+          expect(message.code).toBe("VALIDATION_ERROR");
+          expect(message.message).toContain("Missing cronExpression");
+          expect(message.timestamp).toBeDefined();
+          ws.close();
+          resolve();
+        } else if (message.type === "connected") {
+          // Ignore connected message
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
+  it("should return error for register_trigger telegram missing botToken", async () => {
+    const port = wss.address().port;
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+
+      ws.on("open", () => {
+        ws.send(
+          JSON.stringify({
+            type: "register_trigger",
+            data: JSON.stringify({ workspaceId: "test", trigger: { type: "telegram" } }),
+          })
+        );
+      });
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "error") {
+          expect(message.commandType).toBe("register_trigger");
+          expect(message.code).toBe("VALIDATION_ERROR");
+          expect(message.message).toContain("Missing bot token");
+          expect(message.timestamp).toBeDefined();
+          ws.close();
+          resolve();
+        } else if (message.type === "connected") {
+          // Ignore connected message
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
+  it("should return error for unregister_trigger missing workspaceId", async () => {
+    const port = wss.address().port;
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+      let connectedReceived = false;
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "connected") {
+          connectedReceived = true;
+          ws.send(
+            JSON.stringify({
+              type: "unregister_trigger",
+              requestId: "req-unreg-1",
+            })
+          );
+        } else if (message.type === "error" && connectedReceived) {
+          expect(message.commandType).toBe("unregister_trigger");
+          expect(message.code).toBe("VALIDATION_ERROR");
+          expect(message.message).toContain("Missing workspaceId");
+          expect(message.requestId).toBe("req-unreg-1");
+          expect(message.timestamp).toBeDefined();
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
+  it("should return error for run_workflow when workflow execution fails", async () => {
+    const port = wss.address().port;
+
+    vi.mocked(executeFlowRuntime).mockResolvedValueOnce(new Error("Workflow crashed"));
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+      let connectedReceived = false;
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "connected") {
+          connectedReceived = true;
+          ws.send(
+            JSON.stringify({
+              type: "run_workflow",
+              data: JSON.stringify({ id: "test", nodes: [], edges: [] }),
+              requestId: "req-wf-1",
+            })
+          );
+        } else if (message.type === "message" && message.data?.message?.includes("Starting workflow") && connectedReceived) {
+          // Ignore the startup message, wait for error
+        } else if (message.type === "error" && connectedReceived) {
+          expect(message.commandType).toBe("run_workflow");
+          expect(message.code).toBe("EXECUTION_ERROR");
+          expect(message.message).toContain("Workflow execution failed");
+          expect(message.requestId).toBe("req-wf-1");
+          expect(message.timestamp).toBeDefined();
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
     });
   });
 

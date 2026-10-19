@@ -2,20 +2,14 @@ import { describe, it, expect, vi, beforeAll } from "vitest";
 import { executeFlowRuntime } from "../../../Workflow/runtime";
 import { initFlowSystem } from "../../../Workflow/initFlowSystem";
 import type { Workflow } from "../../../Models/Workflow";
-import type { WebSocket } from "ws";
+import type { WorkflowMessage } from "../../../Execution/ExecutionContext";
 
-// Mock WebSocket
-const mockWebSocket = {
-  send: vi.fn(),
-  close: vi.fn(),
-  onmessage: vi.fn(),
-  onclose: vi.fn(),
-  onerror: vi.fn(),
+const mockCtx = {
+  send: vi.fn() as (msg: WorkflowMessage) => Promise<void>,
+  onMessage: vi.fn(),
+  onClose: vi.fn(() => () => {}),
+  broadcast: vi.fn(),
 };
-
-vi.mock('ws', () => ({
-  WebSocket: vi.fn().mockImplementation(() => mockWebSocket),
-}));
 
 describe("Complex Workflow Scenarios", () => {
   beforeAll(async () => {
@@ -65,7 +59,7 @@ describe("Complex Workflow Scenarios", () => {
         ],
       };
 
-      const result = await executeFlowRuntime(workflow, mockWebSocket as unknown as WebSocket, "test input") as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
+      const result = await executeFlowRuntime(workflow, mockCtx, "test input") as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
 
       expect(result).toHaveProperty("layers");
       expect(result).toHaveProperty("results");
@@ -119,7 +113,7 @@ describe("Complex Workflow Scenarios", () => {
       };
 
       const startTime = Date.now();
-      const result = await executeFlowRuntime(workflow, mockWebSocket as unknown as WebSocket, "delay test") as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
+      const result = await executeFlowRuntime(workflow, mockCtx, "delay test") as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
 
       const endTime = Date.now();
       const duration = endTime - startTime;
@@ -192,7 +186,7 @@ describe("Complex Workflow Scenarios", () => {
       };
 
       const testJson = JSON.stringify({ user: { name: "John", age: 30 } });
-      const result = await executeFlowRuntime(workflow, mockWebSocket as unknown as WebSocket, testJson) as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
+      const result = await executeFlowRuntime(workflow, mockCtx, testJson) as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
 
       expect(result).toHaveProperty("layers");
       expect(result).toHaveProperty("results");
@@ -263,7 +257,7 @@ describe("Complex Workflow Scenarios", () => {
         ],
       };
 
-      const result = await executeFlowRuntime(workflow, mockWebSocket as unknown as WebSocket, "test") as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
+      const result = await executeFlowRuntime(workflow, mockCtx, "test") as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
 
       expect(result).toHaveProperty("layers");
       expect(result).toHaveProperty("results");

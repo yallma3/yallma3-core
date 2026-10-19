@@ -1,8 +1,10 @@
 import type { Workflow } from "../Models/Workflow";
 import { hydrateWorkflowNodes } from "./utils/runtime";
-import { globalBroadcast } from "../Websocket/socket";
-import { WebSocket } from "ws";
 import type { NodeExecutionContext } from "./types/types";
+import type { ExecutionContext } from "../Execution/ExecutionContext";
+import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
+import { FatalMainLLMError } from "../LLM/LLMRunner";
+import { buildLayeredTopoSort } from "../Execution/toposort";
 
 const stopRegistry = new Map<string, boolean>();
 
@@ -24,12 +26,20 @@ const CHAT_LOOP_NODE_TYPES = new Set([
 
 export const executeFlowRuntime = async (
   workflow: Workflow,
-  ws: WebSocket,
+  ctx: ExecutionContext,
   context?: string,
-  triggerData?: unknown
+  triggerData?: unknown,
+  broadcast?: (data: unknown) => void,
 ) => {
   const workflowId = String(workflow.id ?? "default");
   stopRegistry.set(workflowId, false);
+
+  // Thread the current workspace's Main LLM credentials into node contexts so
+  // nodes never need to query ambient singletons themselves.
+  const repo = WorkspaceRepository.getInstance();
+  const currentId = repo.getCurrent();
+  const wsData = currentId ? repo.get(currentId) : undefined;
+  const mainLLM = wsData ? { option: wsData.mainLLM, apiKey: wsData.apiKey } : undefined;
 
   try {
     const nodes = hydrateWorkflowNodes(workflow);
@@ -73,34 +83,10 @@ export const executeFlowRuntime = async (
       upstreamEdges[edge.toNodeId]?.push(edge);
     }
 
-    const adjList = new Map<number, Set<number>>();
-    const indegree = new Map<number, number>();
-    for (const node of nodes) {
-      adjList.set(node.id, new Set());
-      indegree.set(node.id, 0);
-    }
-    for (const edge of edges) {
-      if (!adjList.get(edge.fromNodeId)?.has(edge.toNodeId)) {
-        adjList.get(edge.fromNodeId)!.add(edge.toNodeId);
-        indegree.set(edge.toNodeId, (indegree.get(edge.toNodeId) ?? 0) + 1);
-      }
-    }
-    const executionLayers: number[][] = [];
-    let currentLayer = [...indegree.entries()]
-      .filter(([, deg]) => deg === 0)
-      .map(([id]) => id);
-    while (currentLayer.length > 0) {
-      executionLayers.push(currentLayer);
-      const nextLayer: number[] = [];
-      for (const nid of currentLayer) {
-        for (const neighbor of adjList.get(nid) ?? []) {
-          const newDeg = (indegree.get(neighbor) ?? 0) - 1;
-          indegree.set(neighbor, newDeg);
-          if (newDeg === 0) nextLayer.push(neighbor);
-        }
-      }
-      currentLayer = nextLayer;
-    }
+    const executionLayers = buildLayeredTopoSort(
+      nodes,
+      edges.map(e => ({ fromId: e.fromNodeId, toId: e.toNodeId })),
+    );
 
     const results = new Map<number, unknown>();
     const skippedNodes = new Set<number>();
@@ -218,7 +204,7 @@ export const executeFlowRuntime = async (
         if (fedBySkipped || allUndefined) {
           skippedNodes.add(nodeId);
           console.log(`Node ${nodeId} (${node.title}) skipped — branch not taken.`);
-          globalBroadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} skipped (branch not taken).`, details: null } });
+          broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} skipped (branch not taken).`, details: null } });
           return;
         }
       }
@@ -226,7 +212,8 @@ export const executeFlowRuntime = async (
       let output: unknown;
       if (node.process) {
         const execContext: NodeExecutionContext = {
-          node, inputs, ws, triggerData,
+          node, inputs, ctx, triggerData,
+          mainLLM, workflowId,
           ...(node.nodeType === "Loop" ? { workflow, allNodes: nodes } : {}),
         } as NodeExecutionContext;
         output = await node.process(execContext);
@@ -236,7 +223,7 @@ export const executeFlowRuntime = async (
 
       results.set(nodeId, output);
       console.log(`Node ${nodeId} executed. Output:`, String(output).substring(0, 60));
-      globalBroadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
+      broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
     }
     async function executeNodeWithInputs(nodeId: number, extraInputs: Record<number, unknown>): Promise<void> {
       if (isStopped(workflowId)) return;
@@ -267,7 +254,7 @@ export const executeFlowRuntime = async (
 
       let output: unknown;
       if (node.process) {
-        const execContext: NodeExecutionContext = { node, inputs, ws, triggerData } as NodeExecutionContext;
+        const execContext: NodeExecutionContext = { node, inputs, ctx, triggerData, mainLLM, workflowId } as NodeExecutionContext;
         output = await node.process(execContext);
       } else {
         output = node.nodeValue ?? null;
@@ -275,13 +262,13 @@ export const executeFlowRuntime = async (
 
       results.set(nodeId, output);
       console.log(`Node ${nodeId} (chat) executed. Output:`, String(output).substring(0, 60));
-      globalBroadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
+      broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
     }
 
     function broadcastIterationResults(iterationIndex: number): void {
       const iterResults: Record<string, unknown> = {};
       for (const [nodeId, result] of results.entries()) iterResults[String(nodeId)] = result;
-      globalBroadcast?.({ type: "workflow_iteration", data: { workflowId, iterationIndex, results: iterResults } });
+      broadcast?.({ type: "workflow_iteration", data: { workflowId, iterationIndex, results: iterResults } });
     }
 
     async function runChatLoop(pair: ChatLoopPair): Promise<void> {
@@ -299,10 +286,10 @@ export const executeFlowRuntime = async (
       let turn = 0;
       let chatResponse = ""; 
 
-      ws.send(JSON.stringify({
+      await ctx.send({
         type: "message",
         data: { id: crypto.randomUUID(), timestamp: Date.now(), type: "info", message: `💬 Chat loop started (${chatNode.title})` },
-      }));
+      });
 
       while (turn < MAX_TURNS) {
         if (isStopped(workflowId)) {
@@ -325,10 +312,10 @@ export const executeFlowRuntime = async (
 
         if (userInputValue === undefined || userInputValue === null || userInputValue === "") {
           console.log(`[Chat] Exit detected. Ending after ${turn} turn(s).`);
-          ws.send(JSON.stringify({
+          await ctx.send({
             type: "message",
             data: { id: crypto.randomUUID(), timestamp: Date.now(), type: "success", message: `💬 Chat ended after ${turn} turn(s)` },
-          }));
+          });
           break;
         }
 
@@ -344,10 +331,10 @@ export const executeFlowRuntime = async (
             ? String(gcResult[gcResponseSocketId] ?? "")
             : "";
 
-        ws.send(JSON.stringify({
+        await ctx.send({
           type: "message",
           data: { id: crypto.randomUUID(), timestamp: Date.now(), type: "info", message: `💬 Turn ${turn + 1} completed` },
-        }));
+        });
 
         broadcastIterationResults(turn);
         turn++;
@@ -428,6 +415,11 @@ export const executeFlowRuntime = async (
     const resultsObject = Object.fromEntries(results.entries());
     return { layers: executionLayers, results: resultsObject, finalResult };
   } catch (error) {
+    if (error instanceof FatalMainLLMError) {
+      requestStop(workflowId);
+      broadcast?.({ type: "workflow_error", workflowId, error: error.message });
+      return error;
+    }
     stopRegistry.delete(workflowId);
     console.log(error);
     return error;

@@ -772,5 +772,41 @@
       },
       "readonly": false
     }
+  ],
+  "DeepSeek": [
+    {
+      "id": "deepseek-chat",
+      "name": "DeepSeek Chat",
+      "contextWindow": {
+        "input": 64000,
+        "output": 8000
+      }
+    },
+    {
+      "id": "deepseek-reasoner",
+      "name": "DeepSeek Reasoner",
+      "contextWindow": {
+        "input": 64000,
+        "output": 8000
+      }
+    }
+  ],
+  "Deepseek": [
+    {
+      "id": "deepseek-chat",
+      "name": "DeepSeek Chat",
+      "contextWindow": {
+        "input": 64000,
+        "output": 8000
+      }
+    },
+    {
+      "id": "deepseek-reasoner",
+      "name": "DeepSeek Reasoner",
+      "contextWindow": {
+        "input": 64000,
+        "output": 8000
+      }
+    }
   ]
 }

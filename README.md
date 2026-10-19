@@ -146,6 +146,17 @@ The application starts an HTTP server with WebSocket support. The host and port 
 └── index.ts         # Main application entry point
 ```
 
+## Seed Data Attribution
+
+The LLM capability registry (`LLM/models-capabilities.json`) is seeded with data from the following MIT-licensed sources:
+
+| Source | License | Data Used |
+|--------|---------|-----------|
+| [anomalyco/models.dev](https://github.com/anomalyco/models.dev) | MIT | Model IDs, names, descriptions |
+| [llmring/registry](https://github.com/llmring/registry) | MIT | Capability flags (function-calling, vision, audio, etc.) |
+
+Run `bun run seed:capabilities` to refresh the data.
+
 ## Build & Test
 
 ```bash
@@ -164,3 +175,12 @@ bun run test
 # Run tests with coverage
 bun run test:coverage
 ```
+
+## CI/CD
+
+- **Build CI** (`.github/workflows/build.yml`): Runs on push/PR to `main` — installs deps, lints, runs tests with coverage, builds binary.
+- **Release** (`.github/workflows/release.yml`): On tag push matching `v<major>.<minor>.<patch>` (semver) — cross-compiles for darwin-arm64, darwin-x64, linux-x64, windows-x64, then creates a GitHub Release with artifacts.
+
+## Deployment Model
+
+yallma3-core is designed primarily as an **embedded/child process** — frontends (CLI or GUI) spawn it as a subprocess and communicate via the binding file mechanism. The binding file (`yallma3-bind.<instance-id>`) contains the host and port for connection, and is automatically cleaned up on process exit. This pattern enables seamless integration without service discovery or configuration sharing.

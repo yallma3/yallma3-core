@@ -20,10 +20,10 @@ import type {
   Position,
 } from "../../types/types";
 import { NodeRegistry } from "../../NodeRegistry";
-import type { LLMModel } from "../../../Models/LLM";
+import type { LLMModel, ProviderModels } from "../../../Models/LLM";
 import { AvailableLLMs } from "../../../LLM/config";
 import type { LLMMessage, LLMOption } from "../../../Models/LLM";
-import { getLLMProvider } from "../../../LLM/LLMRunner";
+import { executeWithFallback, FatalMainLLMError, getLLMProvider } from "../../../LLM/LLMRunner";
 export interface ChatNode extends BaseNode {
   nodeType: string;
   nodeValue?: NodeValue;
@@ -197,55 +197,31 @@ export function createLLMChatNode(id: number, position: Position): ChatNode {
         const modelId =
           (n.getConfigParameter?.("Model")?.paramValue as string) ||
           "llama-3.1-8b-instant";
-
-        // Find provider based on model ID
-        let provider = findProviderByModelId(modelId) as
-          | "Groq"
-          | "OpenAI"
-          | "OpenRouter"
-          | "Gemini"
-          | "Anthropic"
+        const providerName = findProviderByModelId(modelId) as
+          | keyof ProviderModels
           | null;
-
-        if (!provider) {
-          // Fallback to Groq if provider not found
-          provider = "Groq";
-        }
-
-        let model = AvailableLLMs[provider]?.find((m) => m.id === modelId);
-
-        const apiKey =
+        const nodeApiKey =
           (n.getConfigParameter?.("API Key")?.paramValue as string) || "";
+        const model = providerName
+          ? AvailableLLMs[providerName]?.find((m) => m.id === modelId)
+          : undefined;
 
-        if (!apiKey) {
-          throw new Error(`API Key not found for provider: ${provider}`);
-        }
+        // Only use a node-level LLM when the provider, key and model all resolve;
+        // otherwise executeWithFallback goes straight to the Main LLM.
+        const nodeLLM =
+          providerName && nodeApiKey && model
+            ? {
+                option: { provider: providerName, model } as LLMOption,
+                apiKey: nodeApiKey,
+              }
+            : undefined;
 
-        console.log(`Using provider: ${provider}, model: ${model}`);
         console.log(
-          `Executing Chat node ${n.id} with prompt: "${prompt.substring(
-            0,
-            50
-          )}..."`
+          `Using provider: ${providerName}, model: ${model?.id || modelId}`
         );
-
-        if (!model) {
-          // Fallback model
-          provider = "Groq";
-          model = {
-            name: "Llama 3.1 8B",
-            id: "llama-3.1-8b-instant",
-            contextWindow: {
-              input: 64000,
-              output: 64000,
-            },
-          };
-        }
-        const llmOption: LLMOption = {
-          provider: provider,
-          model: model,
-        };
-        const llmProvider = getLLMProvider(llmOption, apiKey);
+        console.log(
+          `Executing Chat node ${n.id} with prompt: "${prompt.substring(0, 50)}..."`
+        );
 
         // Build messages array
         const messages: LLMMessage[] = system
@@ -255,13 +231,25 @@ export function createLLMChatNode(id: number, position: Position): ChatNode {
             ]
           : [{ role: "user", content: prompt }];
 
-        // Use the provider's callLLM method for direct API call
-        if (!llmProvider.callLLM) {
+        let response;
+        if (context.mainLLM) {
+          // Delegate to the centralized fallback runner. A FatalMainLLMError
+          // signals the Main LLM itself is down and must halt the workflow.
+          response = await executeWithFallback({
+            nodeLLM,
+            mainLLM: context.mainLLM,
+            messages,
+            workflowId: context.workflowId,
+          });
+        } else if (nodeLLM) {
+          const provider = getLLMProvider(nodeLLM.option, nodeLLM.apiKey);
+          if (!provider.callLLM) throw new Error(`Provider ${nodeLLM.option.provider} does not support callLLM`);
+          response = await provider.callLLM(messages);
+        } else {
           throw new Error(
-            `Provider ${provider} does not support direct LLM calls`
+            "mainLLM not available in NodeExecutionContext — workspace may not be loaded"
           );
         }
-        const response = await llmProvider.callLLM(messages);
 
         console.log(
           `Chat node ${n.id} received response:`,
@@ -273,6 +261,7 @@ export function createLLMChatNode(id: number, position: Position): ChatNode {
           [n.id * 100 + 4]: 0, // Token count not available in unified response
         };
       } catch (error) {
+        if (error instanceof FatalMainLLMError) throw error;
         console.error("Error in Chat node:", error);
         return {
           [n.id * 100 + 3]: `Error: ${

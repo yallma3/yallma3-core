@@ -49,6 +49,7 @@ vi.mock('../../../Agent/Utls/MainAgentHelper', () => ({
   assignBestFit: vi.fn(() => ({
     type: 'agent' as const,
     id: 'test-agent',
+    name: 'Test Agent',
     confidence: 0.9,
     reasoning: 'Test reasoning',
   })),

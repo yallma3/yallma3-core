@@ -212,16 +212,11 @@ function createUserPromptNode(id: number, position: Position): UserPromptNode {
 
       const promptData = { promptId, nodeId: n.id, message: promptMessage };
 
-      if (context.ws) {
-        context.ws.send(JSON.stringify({
-          type: "user_prompt_request",
-          data: promptData,
-          timestamp: new Date().toISOString(),
-        }));
-      } else {
-        console.error("❌ WebSocket not available in context!");
-        return "Error: WebSocket not available";
-      }
+      await context.ctx.send({
+        type: "user_prompt_request",
+        data: promptData,
+        timestamp: new Date().toISOString(),
+      });
 
       const userInput = await new Promise<string>((resolve, reject) => {
         const startTime = Date.now();
@@ -232,34 +227,25 @@ function createUserPromptNode(id: number, position: Position): UserPromptNode {
           pendingUserPrompts.delete(promptId);
         };
 
-        const handleWsDisconnect = () => {
+        const handleDisconnect = () => {
           cleanup();
-          if (context.ws) {
-            context.ws.removeListener("close", handleWsDisconnect);
-            context.ws.removeListener("error", handleWsDisconnect);
-          }
+          unsubClose();
           reject(new Error("WebSocket disconnected"));
         };
 
-        if (context.ws) {
-          context.ws.on("close", handleWsDisconnect);
-          context.ws.on("error", handleWsDisconnect);
-        }
+        const unsubClose = context.ctx.onClose(handleDisconnect);
 
         checkInterval = setInterval(() => {
           if (timeoutSeconds > 0) {
             const elapsed = (Date.now() - startTime) / 1000;
             if (elapsed >= timeoutSeconds) {
               cleanup();
-              if (context.ws) {
-                context.ws.removeListener("close", handleWsDisconnect);
-                context.ws.removeListener("error", handleWsDisconnect);
-                context.ws.send(JSON.stringify({
-                  type: "user_prompt_timeout",
-                  data: { promptId },
-                  timestamp: new Date().toISOString(),
-                }));
-              }
+              unsubClose();
+              context.ctx.send({
+                type: "user_prompt_timeout",
+                data: { promptId },
+                timestamp: new Date().toISOString(),
+              });
               reject(new Error(`User prompt timeout after ${timeoutSeconds} seconds`));
               return;
             }
@@ -269,15 +255,12 @@ function createUserPromptNode(id: number, position: Position): UserPromptNode {
           if (response !== null) {
             cleanup();
             console.log(`✅ UserInput ${promptId} resolved: "${response}"`);
-            if (context.ws) {
-              context.ws.removeListener("close", handleWsDisconnect);
-              context.ws.removeListener("error", handleWsDisconnect);
-              context.ws.send(JSON.stringify({
-                type: "user_prompt_resolved",
-                data: { promptId, response },
-                timestamp: new Date().toISOString(),
-              }));
-            }
+            unsubClose();
+            context.ctx.send({
+              type: "user_prompt_resolved",
+              data: { promptId, response },
+              timestamp: new Date().toISOString(),
+            });
             resolve(response);
           }
         }, 100);

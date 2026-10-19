@@ -4,6 +4,7 @@ import { WebSocket } from "ws";
 import { AgentRuntime, Yallma3GenOneAgentRuntime } from "./Agent";
 import { executeFlowRuntime } from "../Workflow/runtime";
 import type { Workflow } from "../Models/Workflow";
+import { WebSocketContext } from "../Execution/ExecutionContext";
 import { getTaskExecutionOrderWithContext } from "../Task/TaskGraph";
 import type { AgentStep, TaskGraph } from "../Models/Task";
 import {
@@ -138,6 +139,7 @@ function generateWorkspacePrompt(workspaceData: WorkspaceData): string {
 }
 
 
+/** @deprecated Use `ExecutionOrchestrator` instead. Legacy pre-Orchestrator path retained only for test coverage. */
 export const BasicAgentRuntime = async (
   workspaceData: WorkspaceData,
   ws: WebSocket
@@ -212,7 +214,8 @@ export const BasicAgentRuntime = async (
      
       if (workflow) {
         try {
-          const result = await executeFlowRuntime(workflow, ws);
+          const wsCtx = new WebSocketContext(ws, () => {});
+          const result = await executeFlowRuntime(workflow, wsCtx);
           if (result && typeof result === 'object' && 'finalResult' in result) {
             const flowResult = result as FlowResult;
             if (flowResult.finalResult) {
@@ -269,6 +272,7 @@ export const BasicAgentRuntime = async (
   return prevResults;
 };
 
+/** @deprecated Use `ExecutionOrchestrator` instead. Legacy pre-Orchestrator path retained only for test coverage. */
 export const yallma3GenSeqential = async (
   workspaceData: WorkspaceData,
   ws: WebSocket
@@ -382,7 +386,8 @@ export const yallma3GenSeqential = async (
 
 
       try {
-        const result = await executeFlowRuntime(workflow, ws, taskContext);
+        const wsCtx = new WebSocketContext(ws, () => {});
+        const result = await executeFlowRuntime(workflow, wsCtx, taskContext);
        
         let finalResult = result;
         if (result && typeof result === 'object' && 'finalResult' in result) {
@@ -545,12 +550,13 @@ export const yallma3GenSeqential = async (
         return;
       }
 
+      const agentCtx = new WebSocketContext(ws, () => {});
       const agentRuntime = new Yallma3GenOneAgentRuntime(
         agent,
         task,
         taskContext,
         agentPlan,
-        ws,
+        agentCtx,
         workspaceData.apiKey,
         workspaceData.mainLLM
       );

@@ -16,7 +16,9 @@ function loadModels(): ProviderModels {
       Gemini: [],
       Groq: [],
       OpenRouter: [],
-      Ollama: []
+      Ollama: [],
+      DeepSeek: [],
+      Deepseek: []
     };
   }
   try {
@@ -36,14 +38,74 @@ function loadModels(): ProviderModels {
       Groq: [],
       OpenRouter: [],
       Ollama: [],
+      DeepSeek: [],
+      Deepseek: []
     };
   }
 }
 
 export const AvailableLLMs: ProviderModels = loadModels();
 
+// Runtime-discovered Ollama models (not persisted to models.json)
+const discoveredOllamaModels: LLMModel[] = [];
+
 export function fetchPublicModels(): ProviderModels {
-  return JSON.parse(JSON.stringify(AvailableLLMs));
+  const clone = JSON.parse(JSON.stringify(AvailableLLMs));
+  const existingIds = new Set(clone.Ollama.map((m: LLMModel) => m.id));
+  for (const m of discoveredOllamaModels) {
+    if (!existingIds.has(m.id)) clone.Ollama.push(JSON.parse(JSON.stringify(m)));
+  }
+  return clone;
+}
+
+// Fetch Ollama models from configured URLs and merge into AvailableLLMs
+export async function initializeOllamaModels(): Promise<void> {
+  const ollamaUrls = process.env.OLLAMA_URL;
+  if (!ollamaUrls) {
+    console.log("ℹ️  OLLAMA_URL not set, skipping Ollama model discovery");
+    return;
+  }
+
+  const urls = ollamaUrls.split(",").map(u => u.trim()).filter(Boolean);
+  if (urls.length === 0) {
+    console.log("ℹ️  OLLAMA_URL is empty, skipping Ollama model discovery");
+    return;
+  }
+
+  console.log(`🔍 Discovering Ollama models from: ${urls.join(", ")}`);
+
+  for (const baseUrl of urls) {
+    try {
+      const normalizedUrl = baseUrl.replace(/\/+$/, "");
+      const res = await fetch(`${normalizedUrl}/api/tags`, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) {
+        console.warn(`⚠️  Failed to fetch Ollama models from ${normalizedUrl}: HTTP ${res.status}`);
+        continue;
+      }
+      const data = await res.json();
+      const models: LLMModel[] = (data.models || []).map((m: { name: string }) => ({
+        name: m.name,
+        id: m.name,
+        contextWindow: { input: 4096, output: 2048 },
+        readonly: false,
+      }));
+
+      const existingIds = new Set([
+        ...AvailableLLMs.Ollama.map(m => m.id),
+        ...discoveredOllamaModels.map(m => m.id),
+      ]);
+      const newModels = models.filter(m => !existingIds.has(m.id));
+
+      if (newModels.length > 0) {
+        discoveredOllamaModels.push(...newModels);
+        console.log(`✅ Discovered ${newModels.length} Ollama models from ${normalizedUrl}`);
+      } else {
+        console.log(`ℹ️  No new Ollama models from ${normalizedUrl}`);
+      }
+    } catch (error) {
+      console.warn(`⚠️  Error fetching Ollama models from ${baseUrl}:`, error instanceof Error ? error.message : String(error));
+    }
+  }
 }
 
 function saveModels() {
@@ -66,13 +128,11 @@ export function addModel(provider: keyof ProviderModels, model: LLMModel) {
     AvailableLLMs[provider] = [];
   }
 
-  // Check for duplicate model ID
   const exists = AvailableLLMs[provider].some((m) => m.id === model.id);
   if (exists) {
     throw new Error(`Model with id ${model.id} already exists in ${provider}`);
   }
 
-  // Ensure the new model is not readonly by default unless specified
   if (model.readonly === undefined) {
     model.readonly = false;
   }

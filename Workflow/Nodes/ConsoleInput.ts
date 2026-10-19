@@ -279,15 +279,11 @@ export function register(nodeRegistry: NodeRegistry): void {
           addConsoleEvent(promptEvent);
         }
 
-        if (context.ws) {
-          context.ws.send(
-            JSON.stringify({
-              type: "console_prompt",
-              data: promptEvent,
-              timestamp: new Date().toISOString(),
-            })
-          );
-        }
+        await context.ctx.send({
+          type: "console_prompt",
+          data: promptEvent,
+          timestamp: new Date().toISOString(),
+        });
 
         return new Promise<string>((resolve, reject) => {
           const checkInterval = setInterval(() => {
@@ -308,15 +304,11 @@ export function register(nodeRegistry: NodeRegistry): void {
 
                 addConsoleEvent(timeoutEvent);
 
-                if (context.ws) {
-                  context.ws.send(
-                    JSON.stringify({
-                      type: "console_event",
-                      data: timeoutEvent,
-                      timestamp: new Date().toISOString(),
-                    })
-                  );
-                }
+                context.ctx.send({
+                  type: "console_event",
+                  data: timeoutEvent,
+                  timestamp: new Date().toISOString(),
+                });
 
                 reject(new Error(`Input timeout after ${timeoutSeconds} seconds`));
                 return;
@@ -340,15 +332,11 @@ export function register(nodeRegistry: NodeRegistry): void {
 
               addConsoleEvent(successEvent);
 
-              if (context.ws) {
-                context.ws.send(
-                  JSON.stringify({
-                    type: "console_event",
-                    data: successEvent,
-                    timestamp: new Date().toISOString(),
-                  })
-                );
-              }
+              context.ctx.send({
+                type: "console_event",
+                data: successEvent,
+                timestamp: new Date().toISOString(),
+              });
 
               resolve(response);
             }

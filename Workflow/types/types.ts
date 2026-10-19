@@ -1,4 +1,5 @@
-import { WebSocket } from "ws";
+import type { ExecutionContext } from "../../Execution/ExecutionContext";
+import type { LLMOption } from "../../Models/LLM";
 
 // Define possible value types for nodes
 export type NodeValue =
@@ -13,8 +14,10 @@ export type NodeValue =
 export type NodeExecutionContext = {
   node: NodeType;
   inputs: Record<string, unknown>;
-  ws?: WebSocket;
-  triggerData?: unknown; 
+  ctx: ExecutionContext;
+  triggerData?: unknown;
+  mainLLM?: { option: LLMOption; apiKey: string };
+  workflowId?: string;
 };
 export type SourceListOption = {
   key: string;
@@ -118,5 +121,6 @@ export interface NodeMetadata {
     title?: string;
     description?: string;
     nodeType?: string; 
-  }>; 
+  }>;
+  allowedCount?: number | null;
 }
