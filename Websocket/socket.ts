@@ -42,10 +42,10 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
   const clients = new Set<WebSocket>();
   let currentWorkspaceAgent: MainAgent | null = null;
 
-  function broadcast(message: unknown) {
+  function broadcast(message: unknown, except?: WebSocket) {
     const messageStr = JSON.stringify(message);
     clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
+      if (client !== except && client.readyState === WebSocket.OPEN) {
         client.send(messageStr);
       }
     });
@@ -340,6 +340,7 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   success: true,
                   workspaceId,
                   trigger,
+                  requestId: data.requestId,
                   message: "Manual trigger configured (runs on-demand)",
                   timestamp: new Date().toISOString(),
                 })
@@ -503,16 +504,22 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
                   // Add the event to console history
                   ConsoleInputUtils.addEvent(event);
 
-                  // Broadcast confirmation to all clients (no requestId on broadcast)
-                  broadcast({
-                    type: "console_input_resolved",
-                    data: {
-                      promptId,
-                      message: inputMessage,
+                  // Broadcast confirmation to every other client (no requestId
+                  // on the broadcast). The requesting socket is excluded here so
+                  // it receives exactly one success event: the correlated ack
+                  // below.
+                  broadcast(
+                    {
+                      type: "console_input_resolved",
+                      data: {
+                        promptId,
+                        message: inputMessage,
+                        timestamp: new Date().toISOString(),
+                      },
                       timestamp: new Date().toISOString(),
                     },
-                    timestamp: new Date().toISOString(),
-                  });
+                    ws
+                  );
 
                   // Correlation ack to the requesting socket
                   ws.send(
