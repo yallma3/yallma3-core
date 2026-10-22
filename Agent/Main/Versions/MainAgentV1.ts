@@ -473,6 +473,7 @@ __meta__: ${results["__meta__"]}
         const jsonPath = join(outputDir, `${workspaceName}_${timestamp}.json`);
         const jsonPayload = {
           workspace: this.workspaceData.name,
+          workflows: this.workspaceData.workflows.map((w: { id: string; name: string }) => ({ id: w.id, name: w.name })),
           generatedAt: new Date().toISOString(),
           mainLLM: {
             provider: this.workspaceData.mainLLM.provider,
