@@ -467,6 +467,30 @@ __meta__: ${results["__meta__"]}
 
       await writeFile(filepath, output, "utf8");
 
+      // Optional structured sidecar file (same process) controlled by env var
+      if (process.env.YALLMA3_OUTPUT_JSON === "1" || process.env.YALLMA3_OUTPUT_JSON === "true") {
+        const jsonPath = join(outputDir, `${workspaceName}_${timestamp}.json`);
+        const jsonPayload = {
+          workspace: this.workspaceData.name,
+          generatedAt: new Date().toISOString(),
+          mainLLM: {
+            provider: this.workspaceData.mainLLM.provider,
+            model: this.workspaceData.mainLLM.model.name,
+            modelId: this.workspaceData.mainLLM.model.id,
+          },
+          agents: this.workspaceData.agents.map((a) => ({
+            name: a.name,
+            provider: a.llm.provider,
+            model: a.llm.model.name,
+            modelId: a.llm.model.id,
+          })),
+          tasks: layers.map((l) => ({ taskId: l.taskId, result: results[l.taskId] })),
+          meta: results["__meta__"],
+        };
+        await writeFile(jsonPath, JSON.stringify(jsonPayload, null, 2), "utf8");
+        this.emitSuccessRaw(`Results saved to ${jsonPath}`);
+      }
+
       this.emitSuccessRaw(`Results saved to ${filepath}`);
     } catch (error) {
       this.emitErrorRaw("Failed to save results", error);
