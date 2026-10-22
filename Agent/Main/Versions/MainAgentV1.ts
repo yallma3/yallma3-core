@@ -432,6 +432,7 @@ export class MainAgentV1 implements MainAgent {
       version: this.version,
       timestamp: Date.now(),
     });
+    results["__final__"] = finalResult;
 
     console.log(`✅ Workspace '${this.workspaceData.name}' completed successfully.`);
     this.emitSuccessRaw("Workspace completed successfully.", finalResult);
@@ -497,6 +498,10 @@ __meta__: ${results["__meta__"]}
               result: results[l.taskId],
             };
           }),
+          finalResult: results["__final__"],
+          aborted: this.aborted,
+          version: this.version,
+          layerCount: layers.length,
           meta: results["__meta__"],
         };
         await writeFile(jsonPath, JSON.stringify(jsonPayload, null, 2), "utf8");
