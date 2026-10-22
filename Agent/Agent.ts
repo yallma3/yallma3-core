@@ -55,7 +55,7 @@ export class AgentRuntime {
 
         const prompt = this.buildPrompt(iteration, output, feedback);
         output = await this.llm.generateText(prompt);
-        console.log("🧠 Agent Response: ", output);
+        console.log(`🧠 Agent Response [${this.agent.name}]: `, output);
 
         const reviewPrompt = this.buildReviewPrompt(output);
         const reviewResult = await this.llm.generateText(reviewPrompt);
@@ -242,7 +242,7 @@ export class Yallma3GenOneAgentRuntime {
         const prompt = this.buildPrompt(iteration, output, feedback);
         this.checkAbort();
         output = await this.llm.generateText(prompt);
-        console.log("🧠 Agent Response:\n", output);
+        console.log(`🧠 Agent Response [${this.agent.name}]:\n`, output);
 
         // Step 2: Review the output
         const reviewPrompt = this.buildReviewPrompt(output);

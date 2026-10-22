@@ -222,7 +222,7 @@ export const executeFlowRuntime = async (
       }
 
       results.set(nodeId, output);
-      console.log(`Node ${nodeId} executed. Output:`, String(output).substring(0, 60));
+      console.log(`Node ${nodeId} (${node.title || node.nodeType}) executed. Output:`, typeof output === "object" ? JSON.stringify(output).substring(0, 120) : String(output).substring(0, 120));
       broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
     }
     async function executeNodeWithInputs(nodeId: number, extraInputs: Record<number, unknown>): Promise<void> {
@@ -261,7 +261,7 @@ export const executeFlowRuntime = async (
       }
 
       results.set(nodeId, output);
-      console.log(`Node ${nodeId} (chat) executed. Output:`, String(output).substring(0, 60));
+      console.log(`Node ${nodeId} (${node.title || node.nodeType}) (chat) executed. Output:`, typeof output === "object" ? JSON.stringify(output).substring(0, 120) : String(output).substring(0, 120));
       broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
     }
 

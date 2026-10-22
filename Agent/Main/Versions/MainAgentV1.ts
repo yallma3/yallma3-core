@@ -433,6 +433,7 @@ export class MainAgentV1 implements MainAgent {
       timestamp: Date.now(),
     });
 
+    console.log(`✅ Workspace '${this.workspaceData.name}' completed successfully.`);
     this.emitSuccessRaw("Workspace completed successfully.", finalResult);
     this.emitWorkspaceStopped();
     await this.saveResults(layers, results);
