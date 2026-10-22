@@ -58,6 +58,7 @@ export class MainAgentV1 implements MainAgent {
     if (this.aborted) return {};
 
     const results: Record<string, string> = {};
+    const taskStatuses: Record<string, { status: string; reason?: string }> = {};
     const layers = this.createTaskLayers();
     const MainLLM = this.createLLM();
 
@@ -69,7 +70,7 @@ export class MainAgentV1 implements MainAgent {
       const task = this.getTask(layer.taskId);
       if (!task) continue;
 
-      const taskContext = this.buildTaskContext(layer, results);
+      const taskContext = this.buildTaskContext(layer, results, taskStatuses);
 
       const bestFit = await this.assignIfNeeded(task, MainLLM);
 
@@ -90,6 +91,7 @@ export class MainAgentV1 implements MainAgent {
           bestFit,
           taskContext,
           results,
+          taskStatuses,
         });
         step++;
         continue;
@@ -122,11 +124,13 @@ export class MainAgentV1 implements MainAgent {
       );
 
       if (agentResult) {
+        taskStatuses[task.id] = { status: 'success' };
         results[task.id] = agentResult;
         this.emitSuccess(step, layers.length, task.title, {
           result: agentResult,
         });
       } else {
+        taskStatuses[task.id] = { status: 'failed', reason: 'Agent execution failed' };
         this.emitError(step, layers.length, task.title);
       }
 
@@ -182,9 +186,21 @@ export class MainAgentV1 implements MainAgent {
   }
 
   private buildTaskContext(
-    layer: { context: string[] },
-    results: Record<string, string>
+    layer: { taskId: string; context: string[] },
+    results: Record<string, string>,
+    statuses: Record<string, { status: string; reason?: string }>
   ) {
+    // If a dependency failed or was blocked, mark this task blocked
+    for (const dep of layer.context) {
+      const st = statuses[dep];
+      if (st?.status !== 'success') {
+        statuses[layer.taskId] = {
+          status: 'blocked',
+          reason: `Upstream task dependency '${dep}' not completed successfully`,
+        };
+        return "";
+      }
+    }
     return layer.context.map((c) => results[c]).join(" , ");
   }
 
@@ -286,6 +302,7 @@ export class MainAgentV1 implements MainAgent {
     bestFit,
     taskContext,
     results,
+    taskStatuses,
   }: {
     task: Task;
     layerIndex: number;
@@ -293,6 +310,7 @@ export class MainAgentV1 implements MainAgent {
     bestFit: BestFitAssignment | null;
     taskContext: string;
     results: Record<string, string>;
+    taskStatuses: Record<string, { status: string; reason?: string }>;
   }) {
     if (this.aborted) return;
 
@@ -308,6 +326,10 @@ export class MainAgentV1 implements MainAgent {
         bestFit ? bestFit.name : workflowId
       })`
     );
+    if (taskContext === "") {
+      // Upstream dependency already recorded as blocked by buildTaskContext
+      return;
+    }
 
     this.currentWorkflowId = workflowId;
     try {
@@ -321,6 +343,7 @@ export class MainAgentV1 implements MainAgent {
 
       if (this.aborted) return;
       if (finalResult) {
+        taskStatuses[task.id] = { status: 'success' };
         results[task.id] =
           typeof finalResult === "string"
             ? finalResult
@@ -330,6 +353,7 @@ export class MainAgentV1 implements MainAgent {
           task: JSON.stringify(finalResult, null, 2),
         });
       } else {
+        taskStatuses[task.id] = { status: 'failed', reason: 'No result returned' };
         this.emitError(layerIndex, totalLayers, task.title);
       }
     } catch (err) {
@@ -342,6 +366,7 @@ export class MainAgentV1 implements MainAgent {
         this.aborted = true;
         return;
       }
+      taskStatuses[task.id] = { status: 'failed', reason: (err as Error).message };
       throw err;
     }
   }

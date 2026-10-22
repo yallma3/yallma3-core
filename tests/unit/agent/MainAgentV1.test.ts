@@ -130,7 +130,7 @@ describe('MainAgentV1 — Startup Gate 1 (Main LLM health check)', () => {
     expect(getTaskExecutionOrderWithContext).toHaveBeenCalledTimes(1);
     expect((agent as unknown as TestAgent).aborted).toBe(false);
     expect(testLLMHealth).toHaveBeenCalledWith(mockWorkspaceData.mainLLM, 'test-key');
-    expect(result).toEqual({ __meta__: expect.any(String) });
+    expect(result).toEqual({ __meta__: expect.any(String), __final__: expect.any(String) });
 
     // No startup error emitted
     expect(send).not.toHaveBeenCalledWith(
