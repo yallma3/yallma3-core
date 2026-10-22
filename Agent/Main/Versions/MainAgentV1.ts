@@ -333,7 +333,7 @@ export class MainAgentV1 implements MainAgent {
 
     this.currentWorkflowId = workflowId;
     try {
-      const finalResult = await workflowExecutor(
+      const execution = await workflowExecutor(
         this.ctx,
         workflowId,
         taskContext,
@@ -342,18 +342,20 @@ export class MainAgentV1 implements MainAgent {
       this.currentWorkflowId = null;
 
       if (this.aborted) return;
-      if (finalResult) {
+      if (execution.status === "completed" && execution.result) {
         taskStatuses[task.id] = { status: 'success' };
+        const value = execution.result;
         results[task.id] =
-          typeof finalResult === "string"
-            ? finalResult
-            : JSON.stringify(finalResult);
+          typeof value === "string" ? value : JSON.stringify(value);
 
         this.emitSuccess(layerIndex, totalLayers, task.title, {
-          task: JSON.stringify(finalResult, null, 2),
+          task: JSON.stringify(value, null, 2),
         });
       } else {
-        taskStatuses[task.id] = { status: 'failed', reason: 'No result returned' };
+        taskStatuses[task.id] = {
+          status: 'failed',
+          reason: execution.reason ?? 'No result returned',
+        };
         this.emitError(layerIndex, totalLayers, task.title);
       }
     } catch (err) {

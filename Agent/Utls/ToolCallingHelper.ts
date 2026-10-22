@@ -50,9 +50,18 @@ export async function workflowExecutor(
   input?: string,
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
-): Promise<unknown> {
+): Promise<{ status: "completed" | "failed"; reason?: string; result?: unknown }> {
   const b = broadcast ?? ctx?.broadcast?.bind(ctx);
-  return triggeredPath(ctx, workflowId, input, triggerData, b);
+  try {
+    const result = await triggeredPath(ctx, workflowId, input, triggerData, b);
+    return { status: "completed", result };
+  } catch (err) {
+    return {
+      status: "failed",
+      reason:
+        err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export const toolExecutorAttacher = async (ctx: ExecutionContext, tools: Tool[]): Promise<LLMSpecTool[]> => {
@@ -122,7 +131,7 @@ export const toolExecutorAttacher = async (ctx: ExecutionContext, tools: Tool[])
         executor: async (args: Record<string, unknown>) => {
           const workflowInput = args.workflowInput as string;
           const result = await workflowExecutor(ctx, workflowID, workflowInput);
-          return result;
+          return result.result ?? result;
         },
       };
 
