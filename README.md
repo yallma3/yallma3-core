@@ -23,6 +23,9 @@ Bun is used as the runtime, package manager, and TypeScript executor.
 |----------|---------|-------------|
 | `YALLMA3_AGENT_PORT` | `3001` (auto-increment if busy) | Server port. If set, fails if port unavailable. Can be overridden by `--port` CLI option. |
 | `YALLMA3_AGENT_HOST` | `localhost` | Server host |
+| `OLLAMA_URL` | (unset) | Comma-separated Ollama base URLs for model discovery at startup. |
+| `MAIN_AGENT_VERSION` | `1.0.0` | Default main agent version when not specified. |
+| `YALLMA3_OUTPUT_JSON` | (unset) | When `1` or `true`, write a structured JSON sidecar file alongside the text Output file. |
 
 ### Command Line Options
 
