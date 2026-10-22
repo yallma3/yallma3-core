@@ -481,12 +481,22 @@ __meta__: ${results["__meta__"]}
             modelId: this.workspaceData.mainLLM.model.id,
           },
           agents: this.workspaceData.agents.map((a) => ({
+            id: a.id,
             name: a.name,
+            role: a.role,
             provider: a.llm.provider,
             model: a.llm.model.name,
             modelId: a.llm.model.id,
           })),
-          tasks: layers.map((l) => ({ taskId: l.taskId, result: results[l.taskId] })),
+          tasks: layers.map((l) => {
+            const t = this.workspaceData.tasks.find((x: { id: string }) => x.id === l.taskId);
+            return {
+              taskId: l.taskId,
+              title: t?.title,
+              executorId: t?.executorId,
+              result: results[l.taskId],
+            };
+          }),
           meta: results["__meta__"],
         };
         await writeFile(jsonPath, JSON.stringify(jsonPayload, null, 2), "utf8");
