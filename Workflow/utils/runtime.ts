@@ -52,6 +52,7 @@ export function hydrateWorkflowNodes(workflow: Workflow): BaseNode[] {
     return {
       ...freshNode,
       ...nodeData,
+      category: nodeData.category ?? freshNode.category,
       sockets: freshNode.sockets, 
     };
   });

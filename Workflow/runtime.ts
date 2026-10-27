@@ -46,8 +46,15 @@ export const executeFlowRuntime = async (
     const connections = workflow.connections;
     const savedSocketToNode: Record<number, number> = {};
     for (const nodeData of workflow.nodes) {
-      for (const s of nodeData.sockets) {
+      for (const s of nodeData.sockets ?? []) {
         savedSocketToNode[s.id] = nodeData.id;
+      }
+    }
+    for (const node of nodes) {
+      for (const s of node.sockets ?? []) {
+        if (savedSocketToNode[s.id] === undefined) {
+          savedSocketToNode[s.id] = node.id;
+        }
       }
     }
 
@@ -64,10 +71,15 @@ export const executeFlowRuntime = async (
       const toNodeId   = savedSocketToNode[conn.toSocket];
       if (fromNodeId === undefined || toNodeId === undefined) continue;
 
-      const fromNodeData = workflow.nodes.find(n => n.id === fromNodeId);
-      const toNodeData   = workflow.nodes.find(n => n.id === toNodeId);
-      const fromSocket   = fromNodeData?.sockets.find(s => s.id === conn.fromSocket);
-      const toSocket     = toNodeData?.sockets.find(s => s.id === conn.toSocket);
+      const fromNode = nodes.find(n => n.id === fromNodeId);
+      const toNode   = nodes.find(n => n.id === toNodeId);
+      const fromWireNode = workflow.nodes.find(n => n.id === fromNodeId);
+      const toWireNode   = workflow.nodes.find(n => n.id === toNodeId);
+
+      const fromSocket = fromNode?.sockets?.find(s => s.id === conn.fromSocket) ??
+                         fromWireNode?.sockets?.find(s => s.id === conn.fromSocket);
+      const toSocket   = toNode?.sockets?.find(s => s.id === conn.toSocket) ??
+                         toWireNode?.sockets?.find(s => s.id === conn.toSocket);
 
       edges.push({
         fromNodeId,

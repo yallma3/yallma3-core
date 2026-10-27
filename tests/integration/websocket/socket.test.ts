@@ -13,6 +13,7 @@ import {
   ConsoleInputUtils,
   registerPrompt,
 } from "../../../Workflow/Nodes/ConsoleInput";
+import { createGoal2WorkflowPayload } from "../../__mocks__/goal2PayloadFixtures";
 
 // Mock dependencies
 vi.mock("../../../Workflow/runtime", () => ({
@@ -631,6 +632,50 @@ describe("WebSocket Server", () => {
           expect(message.code).toBe("EXECUTION_ERROR");
           expect(message.message).toContain("Workflow execution failed");
           expect(message.requestId).toBe("req-wf-1");
+          expect(message.timestamp).toBeDefined();
+          ws.close();
+          resolve();
+        }
+      });
+
+      setTimeout(() => reject(new Error("Timed out")), 5000);
+    });
+  });
+
+  it("should successfully execute a Goal 2 serialized workflow via run_workflow", async () => {
+    const port = wss.address().port;
+
+    vi.mocked(executeFlowRuntime).mockResolvedValueOnce({
+      layers: [[1], [2]],
+      results: { 1: "http ok", 2: "join ok" },
+      finalResult: "join ok",
+    } as unknown as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown });
+
+    return new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+      let connectedReceived = false;
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "connected") {
+          connectedReceived = true;
+          ws.send(
+            JSON.stringify({
+              type: "run_workflow",
+              data: JSON.stringify(createGoal2WorkflowPayload()),
+              requestId: "req-goal2-ws",
+            })
+          );
+        } else if (message.type === "message" && message.data?.message?.includes("Starting workflow") && connectedReceived) {
+          // Starting message, wait for result
+        } else if (message.type === "workflow_result" && connectedReceived) {
+          expect(message.id).toBe("wf-goal2-demo");
+          expect(message.requestId).toBe("req-goal2-ws");
+          expect(message.data).toEqual({
+            layers: [[1], [2]],
+            results: { 1: "http ok", 2: "join ok" },
+            finalResult: "join ok",
+          });
           expect(message.timestamp).toBeDefined();
           ws.close();
           resolve();

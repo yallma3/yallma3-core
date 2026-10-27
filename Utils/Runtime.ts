@@ -2,10 +2,12 @@ import type { ExecutionContext } from "../Execution/ExecutionContext";
 import { getMainAgent } from "../Agent/Main/MainAgentRegistry";
 import { Helper } from "./Helper";
 import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
+import { normalizeWorkspacePayload } from "../Workflow/utils/normalizeWorkflow";
 
 export function createMainAgent(data: string, ctx: ExecutionContext, triggerData?: unknown) {
   try {
-    const workspaceData = Helper.JsonParser.parse(data);
+    const rawWorkspaceData = Helper.JsonParser.parse(data);
+    const workspaceData = normalizeWorkspacePayload(rawWorkspaceData);
     const repo = WorkspaceRepository.getInstance();
     repo.set(workspaceData.id, workspaceData);
     repo.setCurrent(workspaceData.id);

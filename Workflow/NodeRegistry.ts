@@ -48,6 +48,10 @@ export class NodeRegistry {
     return this.nodeDefinitions[nodeType]?.factory;
   }
 
+  getMetadata(nodeType: string): NodeMetadata | undefined {
+    return this.nodeDefinitions[nodeType]?.metadata;
+  }
+
   listNodeTypes(): string[] {
     return Object.keys(this.nodeDefinitions);
   }

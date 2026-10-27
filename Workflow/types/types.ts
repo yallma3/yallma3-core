@@ -41,7 +41,7 @@ export type ConfigParameterType = {
 
 export interface BaseNode {
   id: number;
-  category: string;
+  category?: string;
   title: string;
   nodeType: string;
   nodeValue?: NodeValue;
