@@ -403,13 +403,13 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
 
             const wsCtx = new WebSocketContext(ws, broadcast);
             wsCtx.requestId = data.requestId;
-            currentWorkspaceAgent = createMainAgent(data.data, wsCtx);
             try {
+              currentWorkspaceAgent = createMainAgent(data.data, wsCtx);
               await currentWorkspaceAgent.run();
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
               console.error("Workspace execution error:", errorMessage);
-              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workspace execution failed: ${errorMessage}`, data.requestId)
+              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workspace execution failed: ${errorMessage}`, data.requestId);
             }
             break;
           }

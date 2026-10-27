@@ -233,20 +233,23 @@ export function logVerboseWorkflowGraph(workflow: Workflow): void {
  */
 export function logVerboseWorkspaceGraph(
   workspaceData: WorkspaceData,
-  workflows: CleanWorkflowGraph[]
+  workflows: CleanWorkflowGraph[] = []
 ): void {
   if (isVerboseOutputJson()) {
+    const tasks = Array.isArray(workspaceData?.tasks)
+      ? workspaceData.tasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          type: t.type,
+          executorId: t.executorId,
+        }))
+      : [];
     console.log(
-      `[Workspace Graph Received] '${workspaceData.name}':\n${JSON.stringify(
+      `[Workspace Graph Received] '${workspaceData?.name || workspaceData?.id || "unnamed"}':\n${JSON.stringify(
         {
-          workspace: workspaceData.name,
-          tasks: workspaceData.tasks.map((t) => ({
-            id: t.id,
-            title: t.title,
-            type: t.type,
-            executorId: t.executorId,
-          })),
-          connections: workspaceData.connections,
+          workspace: workspaceData?.name || "unnamed",
+          tasks,
+          connections: workspaceData?.connections || [],
           workflows,
         },
         null,

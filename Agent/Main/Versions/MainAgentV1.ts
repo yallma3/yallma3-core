@@ -52,18 +52,26 @@ export class MainAgentV1 implements MainAgent {
   }
 
   async run(): Promise<Record<string, string>> {
-    if (!this.workspaceData) return {};
+    if (!this.workspaceData) {
+      console.warn("[MainAgentV1] No workspace data available for execution.");
+      return {};
+    }
+
+    // Verbose stdio printing immediately once received for execution
+    logVerboseWorkspaceGraph(this.workspaceData, this.tracer.getWorkflows());
 
     const validation = validateWorkspace(this.workspaceData);
     if (!validation.valid) {
+      console.error(`[Workspace Validation Failed] ${validation.error.message}`);
       this.emitErrorRaw(validation.error.message, null, false);
       return {};
     }
 
     await this.initialize();
-    if (this.aborted) return {};
-
-    logVerboseWorkspaceGraph(this.workspaceData, this.tracer.getWorkflows());
+    if (this.aborted) {
+      console.warn(`[Workspace Aborted] Initialization failed or LLM unreachable.`);
+      return {};
+    }
 
     const results: Record<string, string> = {};
     const taskStatuses: Record<string, { status: string; reason?: string }> = {};
@@ -726,12 +734,14 @@ __meta__: ${results["__meta__"]}
   }
 
   private emitError(step: number, total: number, title: string) {
+    const errorMsg = `[${step}/${total}] Task '${title}' failed.`;
+    console.error(`[Workspace Error] ${errorMsg}`);
     this.ctx.send({
       type: "error",
       requestId: this.ctx.requestId,
       commandType: "run_workspace" as const,
       code: "EXECUTION_ERROR" as const,
-      message: `[${step}/${total}] Task '${title}' failed.`,
+      message: errorMsg,
       timestamp: new Date().toISOString(),
     });
   }
@@ -741,14 +751,16 @@ __meta__: ${results["__meta__"]}
     err: unknown = null,
     showError: boolean = true
   ) {
+    const fullMsg = `${message} ${
+      showError ? (err ? String(err) : ": Unknown error") : ""
+    }`.trim();
+    console.error(`[Workspace Error] ${fullMsg}`);
     this.ctx.send({
       type: "error",
       requestId: this.ctx.requestId,
       commandType: "run_workspace" as const,
       code: "EXECUTION_ERROR" as const,
-      message: `${message} ${
-        showError ? (err ? String(err) : ": Unknown error") : ""
-      }`,
+      message: fullMsg,
       timestamp: new Date().toISOString(),
     });
   }
