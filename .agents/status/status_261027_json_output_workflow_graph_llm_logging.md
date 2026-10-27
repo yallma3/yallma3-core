@@ -29,8 +29,12 @@
    - `MainAgentV1.saveResults()` automatically populates the JSON sidecar when `YALLMA3_OUTPUT_JSON=1` or `true`.
    - Emits structured JSON payload alongside the text output file without data redundancy.
 
+5. **Verbose Stdio Graph & Step Output**:
+   - `logVerboseWorkspaceGraph` and `logVerboseWorkflowGraph` print the clean serialized graphs to stdout immediately once received for execution when `YALLMA3_OUTPUT_JSON` is enabled.
+   - Granular step logs and LLM interactions are printed in real-time to stdio for immediate developer and agent observation.
+
 ## Verification & Test Results
-- `tests/unit/execution/ExecutionTracer.test.ts`: 5 unit tests covering pure graph sanitization, step recording, and LLM provider proxying (pass).
-- `tests/integration/output/JsonSidecarOutput.test.ts`: 2 integration tests verifying end-to-end sidecar generation with workflows, tasks, LLM interactions, and sidecar omission when env var is unset (pass).
-- Full Vitest test suite: 29 test files, 363 passed, 2 skipped, 0 failed.
+- `tests/unit/execution/ExecutionTracer.test.ts`: 10 unit tests covering pure graph sanitization, step recording, LLM provider proxying, and verbose stdio logging (pass).
+- `tests/integration/output/JsonSidecarOutput.test.ts`: 2 integration tests verifying end-to-end sidecar generation with workflows, tasks, LLM interactions, verbose stdio graph printing, and sidecar omission when env var is unset (pass).
+- Full Vitest test suite: 29 test files, 368 passed, 2 skipped, 0 failed.
 - ESLint: zero errors.

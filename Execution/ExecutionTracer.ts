@@ -1,4 +1,5 @@
 import type { Workflow } from "../Models/Workflow";
+import type { WorkspaceData } from "../Models/Workspace";
 import type { BaseNode, Connection } from "../Workflow/types/types";
 import type { LLMProvider } from "../Models/LLM";
 
@@ -203,6 +204,58 @@ export function sanitizeWorkflowGraph(workflow: Workflow): CleanWorkflowGraph {
   };
 }
 
+/**
+ * Returns true when YALLMA3_OUTPUT_JSON is set to "1" or "true",
+ * indicating structured JSON sidecar output and verbose stdio output are enabled.
+ */
+export function isVerboseOutputJson(): boolean {
+  return process.env.YALLMA3_OUTPUT_JSON === "1" || process.env.YALLMA3_OUTPUT_JSON === "true";
+}
+
+/**
+ * Verbously prints the received clean workflow graph to stdio when YALLMA3_OUTPUT_JSON is enabled.
+ */
+export function logVerboseWorkflowGraph(workflow: Workflow): void {
+  if (isVerboseOutputJson()) {
+    const clean = sanitizeWorkflowGraph(workflow);
+    console.log(
+      `[Workflow Graph Received] '${workflow.name || workflow.id}':\n${JSON.stringify(
+        clean,
+        null,
+        2
+      )}`
+    );
+  }
+}
+
+/**
+ * Verbously prints the received workspace graph and workflows to stdio when YALLMA3_OUTPUT_JSON is enabled.
+ */
+export function logVerboseWorkspaceGraph(
+  workspaceData: WorkspaceData,
+  workflows: CleanWorkflowGraph[]
+): void {
+  if (isVerboseOutputJson()) {
+    console.log(
+      `[Workspace Graph Received] '${workspaceData.name}':\n${JSON.stringify(
+        {
+          workspace: workspaceData.name,
+          tasks: workspaceData.tasks.map((t) => ({
+            id: t.id,
+            title: t.title,
+            type: t.type,
+            executorId: t.executorId,
+          })),
+          connections: workspaceData.connections,
+          workflows,
+        },
+        null,
+        2
+      )}`
+    );
+  }
+}
+
 export class ExecutionTracer {
   private workflows = new Map<string, CleanWorkflowGraph>();
   private steps: ExecutionStep[] = [];
@@ -231,7 +284,7 @@ export class ExecutionTracer {
    */
   recordStep(step: Omit<ExecutionStep, "stepIndex" | "timestamp"> & { timestamp?: string }): void {
     this.stepCounter++;
-    this.steps.push({
+    const stepEntry: ExecutionStep = {
       stepIndex: this.stepCounter,
       timestamp: step.timestamp ?? new Date().toISOString(),
       type: step.type,
@@ -244,7 +297,13 @@ export class ExecutionTracer {
       ...(step.inputs !== undefined ? { inputs: safeSanitizeValue(step.inputs) } : {}),
       ...(step.output !== undefined ? { output: safeSanitizeValue(step.output) } : {}),
       ...(step.details !== undefined ? { details: safeSanitizeValue(step.details) } : {}),
-    });
+    };
+    this.steps.push(stepEntry);
+
+    if (isVerboseOutputJson()) {
+      const dur = stepEntry.durationMs !== undefined ? ` (${stepEntry.durationMs}ms)` : "";
+      console.log(`[Step ${stepEntry.stepIndex}] [${stepEntry.type}] '${stepEntry.name}': ${stepEntry.status}${dur}`);
+    }
   }
 
   /**
@@ -258,7 +317,7 @@ export class ExecutionTracer {
    * Records an LLM interaction.
    */
   recordLLMInteraction(interaction: LLMInteraction): void {
-    this.llmInteractions.push({
+    const entry: LLMInteraction = {
       ...interaction,
       prompt: interaction.prompt,
       messages: interaction.messages
@@ -268,7 +327,14 @@ export class ExecutionTracer {
       toolCalls: interaction.toolCalls
         ? (safeSanitizeValue(interaction.toolCalls) as unknown[])
         : undefined,
-    });
+    };
+    this.llmInteractions.push(entry);
+
+    if (isVerboseOutputJson()) {
+      const callerStr = `${entry.caller.source}${entry.caller.action ? `:${entry.caller.action}` : ""}`;
+      const dur = entry.durationMs !== undefined ? ` (${entry.durationMs}ms)` : "";
+      console.log(`[LLM Interaction] [${entry.provider}/${entry.model}] [${callerStr}]${dur}`);
+    }
   }
 
   /**

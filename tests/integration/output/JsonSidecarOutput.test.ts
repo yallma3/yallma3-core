@@ -206,12 +206,19 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
       ],
     };
 
+    const consoleSpy = vi.spyOn(console, "log");
+
     const { ctx } = createMockContext();
     const agent = new MainAgentV1(workspace, ctx);
     const results = await agent.run();
 
     expect(results).toBeDefined();
     expect(writeFile).toHaveBeenCalled();
+
+    // Verify stdio verbose graph output
+    const allLogs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(allLogs).toContain("[Workspace Graph Received] 'Demo Analytics Workspace':");
+    expect(allLogs).toContain("[Workflow Graph Received] 'Clean Ingestion Flow':");
 
     // Find the call for the .json sidecar
     const jsonCall = vi.mocked(writeFile).mock.calls.find((call) =>
@@ -358,6 +365,8 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
       connections: [],
     };
 
+    const consoleSpy = vi.spyOn(console, "log");
+
     const { ctx } = createMockContext();
     const agent = new MainAgentV1(workspace, ctx);
     await agent.run();
@@ -369,5 +378,10 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
 
     expect(txtCall).toBeDefined();
     expect(jsonCall).toBeUndefined();
+
+    // Verify stdio did not print verbose graph dumps
+    const allLogs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(allLogs).not.toContain("[Workspace Graph Received]");
+    expect(allLogs).not.toContain("[Workflow Graph Received]");
   });
 });

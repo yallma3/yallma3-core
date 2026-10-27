@@ -60,6 +60,15 @@
 - **Complexity**: Low
 - **Criticality**: Important
 
+### UC-04: Verbose Stdio Output of Received Graph
+- **Description**: When `YALLMA3_OUTPUT_JSON` is enabled, the runtime outputs verbose logging to stdio, printing the exact clean graph definition immediately once received for execution.
+- **Trigger**: Workspace or workflow is received by `MainAgentV1` or `executeFlowRuntime`.
+- **Preconditions**: `YALLMA3_OUTPUT_JSON` is `"true"` or `"1"`.
+- **Postconditions**: The clean, machine-readable graph structure (nodes, config, sockets, connections) is printed to stdout / console.
+- **Frequency**: At the beginning of each execution run.
+- **Complexity**: Low
+- **Criticality**: Important
+
 ## Volumetrics
 - **Expected users**: Internal developers, autonomous AI agents, CI evaluation pipelines.
 - **Transactions per day**: 500–5,000 runs/day.

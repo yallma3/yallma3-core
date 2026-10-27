@@ -1,9 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   ExecutionTracer,
   sanitizeWorkflowGraph,
+  isVerboseOutputJson,
+  logVerboseWorkflowGraph,
+  logVerboseWorkspaceGraph,
 } from "../../../Execution/ExecutionTracer";
 import type { Workflow } from "../../../Models/Workflow";
+import type { WorkspaceData } from "../../../Models/Workspace";
 import type { LLMProvider } from "../../../Models/LLM";
 
 describe("ExecutionTracer — sanitizeWorkflowGraph", () => {
@@ -248,5 +252,143 @@ describe("ExecutionTracer — Core Capabilities", () => {
     const interactions = tracer.getLLMInteractions();
     expect(interactions).toHaveLength(1);
     expect(interactions[0].response).toContain("Error: Rate limit exceeded");
+  });
+});
+
+describe("ExecutionTracer — Verbose stdio output on YALLMA3_OUTPUT_JSON", () => {
+  const origEnv = process.env.YALLMA3_OUTPUT_JSON;
+
+  afterEach(() => {
+    if (origEnv === undefined) {
+      delete process.env.YALLMA3_OUTPUT_JSON;
+    } else {
+      process.env.YALLMA3_OUTPUT_JSON = origEnv;
+    }
+    vi.restoreAllMocks();
+  });
+
+  it("detects isVerboseOutputJson correctly for true, 1, false, and unset", () => {
+    process.env.YALLMA3_OUTPUT_JSON = "true";
+    expect(isVerboseOutputJson()).toBe(true);
+
+    process.env.YALLMA3_OUTPUT_JSON = "1";
+    expect(isVerboseOutputJson()).toBe(true);
+
+    process.env.YALLMA3_OUTPUT_JSON = "false";
+    expect(isVerboseOutputJson()).toBe(false);
+
+    delete process.env.YALLMA3_OUTPUT_JSON;
+    expect(isVerboseOutputJson()).toBe(false);
+  });
+
+  it("prints workflow graph once received to stdio when YALLMA3_OUTPUT_JSON=true", () => {
+    process.env.YALLMA3_OUTPUT_JSON = "true";
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const mockWf: Workflow = {
+      id: "wf-verbose-1",
+      name: "Verbose Test Flow",
+      description: "Testing stdio output",
+      nodes: [
+        {
+          id: 1,
+          title: "Input Node",
+          nodeType: "WorkflowInput",
+          sockets: [{ id: 101, title: "Out", type: "output", nodeId: 1 }],
+        },
+      ],
+      connections: [],
+    };
+
+    logVerboseWorkflowGraph(mockWf);
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    const logged = consoleSpy.mock.calls[0][0];
+    expect(logged).toContain("[Workflow Graph Received] 'Verbose Test Flow':");
+    expect(logged).toContain('"id": "wf-verbose-1"');
+    expect(logged).toContain('"type": "WorkflowInput"');
+  });
+
+  it("does not print workflow graph to stdio when YALLMA3_OUTPUT_JSON is not enabled", () => {
+    delete process.env.YALLMA3_OUTPUT_JSON;
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const mockWf: Workflow = {
+      id: "wf-silent",
+      name: "Silent Flow",
+      description: "",
+      nodes: [],
+      connections: [],
+    };
+
+    logVerboseWorkflowGraph(mockWf);
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it("prints workspace graph once received to stdio when YALLMA3_OUTPUT_JSON=true", () => {
+    process.env.YALLMA3_OUTPUT_JSON = "true";
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const mockWs = {
+      id: "ws-verbose",
+      name: "Verbose Workspace",
+      tasks: [
+        {
+          id: "task-1",
+          title: "Ingest",
+          type: "workflow",
+          executorId: "wf-1",
+        },
+      ],
+      connections: [],
+    } as unknown as WorkspaceData;
+
+    logVerboseWorkspaceGraph(mockWs, [
+      {
+        id: "wf-1",
+        name: "Flow 1",
+        nodes: [],
+        connections: [],
+      },
+    ]);
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    const logged = consoleSpy.mock.calls[0][0];
+    expect(logged).toContain("[Workspace Graph Received] 'Verbose Workspace':");
+    expect(logged).toContain('"workspace": "Verbose Workspace"');
+    expect(logged).toContain('"title": "Ingest"');
+  });
+
+  it("verbosely logs steps and LLM interactions when enabled", () => {
+    process.env.YALLMA3_OUTPUT_JSON = "true";
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const tracer = new ExecutionTracer();
+
+    tracer.recordStep({
+      type: "workflow_node",
+      name: "ProcessData",
+      status: "success",
+      durationMs: 45,
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[Step 1] [workflow_node] 'ProcessData': success (45ms)")
+    );
+
+    tracer.recordLLMInteraction({
+      id: "llm-test",
+      timestamp: new Date().toISOString(),
+      caller: { source: "agent", action: "generate_text" },
+      provider: "OpenAI",
+      model: "gpt-4o",
+      response: "Done",
+      durationMs: 150,
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[LLM Interaction] [OpenAI/gpt-4o] [agent:generate_text] (150ms)")
+    );
   });
 });

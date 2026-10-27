@@ -5,6 +5,7 @@ import type { ExecutionContext } from "../Execution/ExecutionContext";
 import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
 import { FatalMainLLMError } from "../LLM/LLMRunner";
 import { buildLayeredTopoSort } from "../Execution/toposort";
+import { logVerboseWorkflowGraph } from "../Execution/ExecutionTracer";
 import type { ExecutionTracer } from "../Execution/ExecutionTracer";
 
 const stopRegistry = new Map<string, boolean>();
@@ -35,6 +36,8 @@ export const executeFlowRuntime = async (
 ) => {
   const workflowId = String(workflow.id ?? "default");
   stopRegistry.set(workflowId, false);
+
+  logVerboseWorkflowGraph(workflow);
 
   if (tracer) {
     tracer.recordWorkflow(workflow);

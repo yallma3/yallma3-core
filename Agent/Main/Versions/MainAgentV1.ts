@@ -23,7 +23,7 @@ import { FatalMainLLMError, getLLMProvider, testLLMHealth } from "../../../LLM/L
 import type { LLMProvider } from "../../../Models/LLM";
 import type { ExecutionContext } from "../../../Execution/ExecutionContext";
 import { validateWorkspace } from "../../Validation/WorkspaceValidator";
-import { ExecutionTracer } from "../../../Execution/ExecutionTracer";
+import { ExecutionTracer, logVerboseWorkspaceGraph } from "../../../Execution/ExecutionTracer";
 
 export class MainAgentV1 implements MainAgent {
   version = "1.0.0";
@@ -62,6 +62,8 @@ export class MainAgentV1 implements MainAgent {
 
     await this.initialize();
     if (this.aborted) return {};
+
+    logVerboseWorkspaceGraph(this.workspaceData, this.tracer.getWorkflows());
 
     const results: Record<string, string> = {};
     const taskStatuses: Record<string, { status: string; reason?: string }> = {};
