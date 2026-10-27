@@ -1,4 +1,21 @@
 {
+  "client-output-download": {
+    "plan": ".agents/plans/plan_261027_token_gated_output_download.md",
+    "designOptions": ".agents/design-options/design-options_261027_client_download_output_files.md",
+    "research": ".agents/research/adr_261027_token_gated_output_download.md",
+    "sourceFiles": [
+      "Execution/OutputTokenManager.ts",
+      "Routes/output.route.ts",
+      "Agent/Main/Versions/MainAgentV1.ts",
+      "index.ts"
+    ],
+    "testFiles": [
+      "tests/unit/execution/OutputTokenManager.test.ts",
+      "tests/integration/routes/output.route.test.ts",
+      "tests/integration/output/JsonSidecarOutput.test.ts"
+    ],
+    "description": "Secure Token-Gated HTTP Download & Inspection API for workspace output artifacts with structured WebSocket notification events."
+  },
   "json-output-workflow-graph-llm-logging": {
     "plan": ".agents/plans/plan_261027_json_output_workflow_graph_llm_logging.md",
     "designOptions": ".agents/design-options/design-options_261027_json_output_workflow_graph_llm_logging.md",

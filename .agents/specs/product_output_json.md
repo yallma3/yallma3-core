@@ -69,6 +69,20 @@
 - **Complexity**: Low
 - **Criticality**: Important
 
+### UC-05: Secure Client Output Artifact Retrieval & Download
+- **Description**: Web clients, AI agents, and Studio frontends download or inspect generated execution artifacts (`.json` and `.txt`) securely via HTTP streaming.
+- **Trigger**: Workspace execution finishes and saves artifacts in `./Output/`.
+- **Preconditions**: Client is connected to WebSocket and receives `workspace_artifacts` event with ephemeral capability tokens.
+- **Postconditions**: Client can trigger native browser file download via `GET /output/download/:filename?token=<uuid>` or inline viewing via `GET /output/view/:filename?token=<uuid>`.
+- **Frequency**: On demand per completed workspace run.
+- **Complexity**: Low
+- **Criticality**: Critical
+- **Main flow**:
+  1. `MainAgentV1.saveResults()` saves files and issues ephemeral capability tokens via `OutputTokenManager`.
+  2. Server emits `workspace_artifacts` WebSocket event containing token-gated download and view URLs.
+  3. Client fetches file using capability token.
+  4. Server validates token, enforces path confinement within `./Output/`, and streams file with appropriate headers (`Content-Disposition: attachment` or inline MIME types).
+
 ## Volumetrics
 - **Expected users**: Internal developers, autonomous AI agents, CI evaluation pipelines.
 - **Transactions per day**: 500–5,000 runs/day.

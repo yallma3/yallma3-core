@@ -24,6 +24,7 @@ import type { LLMProvider } from "../../../Models/LLM";
 import type { ExecutionContext } from "../../../Execution/ExecutionContext";
 import { validateWorkspace } from "../../Validation/WorkspaceValidator";
 import { ExecutionTracer, logVerboseWorkspaceGraph } from "../../../Execution/ExecutionTracer";
+import { OutputTokenManager } from "../../../Execution/OutputTokenManager";
 
 export class MainAgentV1 implements MainAgent {
   version = "1.0.0";
@@ -635,9 +636,26 @@ __meta__: ${results["__meta__"]}
 
       await writeFile(filepath, output, "utf8");
 
+      const tokenManager = OutputTokenManager.getInstance();
+      const txtToken = tokenManager.generateToken(filename);
+      const artifacts: Array<{
+        filename: string;
+        format: "text" | "json";
+        downloadUrl: string;
+        viewUrl: string;
+      }> = [
+        {
+          filename,
+          format: "text",
+          downloadUrl: `/output/download/${encodeURIComponent(filename)}?token=${txtToken}`,
+          viewUrl: `/output/view/${encodeURIComponent(filename)}?token=${txtToken}`,
+        },
+      ];
+
       // Optional structured sidecar file (same process) controlled by env var
       if (process.env.YALLMA3_OUTPUT_JSON === "1" || process.env.YALLMA3_OUTPUT_JSON === "true") {
-        const jsonPath = join(outputDir, `${workspaceName}_${timestamp}.json`);
+        const jsonFilename = `${workspaceName}_${timestamp}.json`;
+        const jsonPath = join(outputDir, jsonFilename);
         const jsonPayload = {
           workspace: this.workspaceData.name,
           workflows: this.tracer.getWorkflows(),
@@ -675,10 +693,29 @@ __meta__: ${results["__meta__"]}
           meta: results["__meta__"],
         };
         await writeFile(jsonPath, JSON.stringify(jsonPayload, null, 2), "utf8");
+        const jsonToken = tokenManager.generateToken(jsonFilename);
+        artifacts.push({
+          filename: jsonFilename,
+          format: "json",
+          downloadUrl: `/output/download/${encodeURIComponent(jsonFilename)}?token=${jsonToken}`,
+          viewUrl: `/output/view/${encodeURIComponent(jsonFilename)}?token=${jsonToken}`,
+        });
         this.emitSuccessRaw(`Results saved to ${jsonPath}`);
       }
 
       this.emitSuccessRaw(`Results saved to ${filepath}`);
+
+      // Emit structured workspace_artifacts event to WebSocket client
+      this.ctx.send({
+        type: "workspace_artifacts",
+        requestId: this.ctx.requestId,
+        data: {
+          workspace: this.workspaceData.name,
+          workspaceId: this.workspaceId,
+          artifacts,
+        },
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       this.emitErrorRaw("Failed to save results", error);
     }

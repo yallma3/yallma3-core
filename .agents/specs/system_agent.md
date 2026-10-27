@@ -110,6 +110,7 @@ When `YALLMA3_OUTPUT_JSON=true` or `1`, `MainAgentV1.saveResults()` generates a 
 - **Workflow Graph Sanitization**: Strips UI clutter (`x, y, width, height, selected, processing`, and i18n maps) and produces clean `{ id, type, title, category, config, inputs, outputs }` nodes and semantic `{ fromNodeId, fromSocket, fromSocketTitle, toNodeId, toSocket, toSocketTitle }` connections.
 - **LLM Interaction Interception**: Proxies `LLMProvider` transparently via `tracer.wrapLLM(provider, callerInfo)`, capturing prompts, completions, tool calls, model/provider identity, and execution duration.
 - **Granular Step Tracing**: Records task lifecycle, agent iterations (prompting, review, final check), and workflow node executions (inputs, outputs, status: executed/skipped/failed).
+- **Output Artifact Notification & Capability Token Gating**: Upon completing file saving in `saveResults()`, `MainAgentV1` issues capability tokens via `OutputTokenManager` and sends a `workspace_artifacts` WebSocket event containing `downloadUrl` and `viewUrl` for all generated output files (`.txt` and `.json`), enabling direct client retrieval without CORS exposure or directory traversal risk.
 
 ## File Structure
 | File | Role |

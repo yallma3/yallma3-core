@@ -208,7 +208,7 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
 
     const consoleSpy = vi.spyOn(console, "log");
 
-    const { ctx } = createMockContext();
+    const { ctx, sentMessages } = createMockContext();
     const agent = new MainAgentV1(workspace, ctx);
     const results = await agent.run();
 
@@ -316,6 +316,37 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(payload.tasks[0].status).toBe("success");
     expect(payload.tasks[1].taskId).toBe("task-agent-2");
     expect(payload.tasks[1].status).toBe("success");
+
+    // 6. Verify workspace_artifacts WebSocket event
+    const artifactsMsg = (
+      sentMessages as Array<{
+        type: string;
+        data: {
+          workspace: string;
+          artifacts: Array<{
+            filename: string;
+            format: string;
+            downloadUrl: string;
+            viewUrl: string;
+          }>;
+        };
+      }>
+    ).find((m) => m.type === "workspace_artifacts");
+    expect(artifactsMsg).toBeDefined();
+    expect(artifactsMsg!.data.workspace).toBe("Demo Analytics Workspace");
+    expect(artifactsMsg!.data.artifacts).toHaveLength(2);
+
+    const txtArtifact = artifactsMsg!.data.artifacts.find((a) => a.format === "text");
+    expect(txtArtifact).toBeDefined();
+    expect(txtArtifact!.filename).toMatch(/\.txt$/);
+    expect(txtArtifact!.downloadUrl).toMatch(/^\/output\/download\/.*[?&]token=/);
+    expect(txtArtifact!.viewUrl).toMatch(/^\/output\/view\/.*[?&]token=/);
+
+    const jsonArtifact = artifactsMsg!.data.artifacts.find((a) => a.format === "json");
+    expect(jsonArtifact).toBeDefined();
+    expect(jsonArtifact!.filename).toMatch(/\.json$/);
+    expect(jsonArtifact!.downloadUrl).toMatch(/^\/output\/download\/.*[?&]token=/);
+    expect(jsonArtifact!.viewUrl).toMatch(/^\/output\/view\/.*[?&]token=/);
   });
 
   it("does not write JSON sidecar file when YALLMA3_OUTPUT_JSON is not enabled", async () => {
@@ -367,7 +398,7 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
 
     const consoleSpy = vi.spyOn(console, "log");
 
-    const { ctx } = createMockContext();
+    const { ctx, sentMessages } = createMockContext();
     const agent = new MainAgentV1(workspace, ctx);
     await agent.run();
 
@@ -378,6 +409,19 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
 
     expect(txtCall).toBeDefined();
     expect(jsonCall).toBeUndefined();
+
+    // Verify workspace_artifacts event contains only 1 artifact (.txt)
+    const artifactsMsg = (
+      sentMessages as Array<{
+        type: string;
+        data: {
+          artifacts: Array<{ filename: string; format: string }>;
+        };
+      }>
+    ).find((m) => m.type === "workspace_artifacts");
+    expect(artifactsMsg).toBeDefined();
+    expect(artifactsMsg!.data.artifacts).toHaveLength(1);
+    expect(artifactsMsg!.data.artifacts[0].format).toBe("text");
 
     // Verify stdio did not print verbose graph dumps
     const allLogs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");

@@ -89,6 +89,7 @@ import { setupWebSocketServer } from "./Websocket/socket";
 import { initFlowSystem } from "./Workflow/initFlowSystem";
 import mcpRoutes from "./Routes/Mcp.route";
 import llmRoutes from "./Routes/LLM.route";
+import outputRoute from "./Routes/output.route";
 import { initializeOllamaModels } from "./LLM/config";
 import { webhookTriggerManager } from "./Trigger/WebhookTriggerManager";
 import { webhookQueue } from "./Trigger/WebhookQueue";
@@ -135,6 +136,16 @@ app.use(express.urlencoded({ extended: true }));
 // API Key authentication middleware (only if instance-id is provided)
 if (instanceId) {
   app.use((req, res, next) => {
+    // Health check, webhooks, telegram, and token-gated output routes manage their own authentication
+    if (
+      req.path === "/health" ||
+      req.path.startsWith("/webhook/") ||
+      req.path.startsWith("/telegram/") ||
+      req.path.startsWith("/output/")
+    ) {
+      return next();
+    }
+
     const clientApiKey = req.headers["x-api-key"] as string | undefined;
     
     if (!clientApiKey || clientApiKey !== instanceId) {
@@ -262,6 +273,8 @@ app.use("/mcp", mcpRoutes);
 app.use("/workflow", workflowRoute);
 // LLM routes
 app.use("/llm", llmRoutes);
+// Output artifact routes
+app.use("/output", outputRoute);
 // Create an HTTP server from Express
 const server = createServer(app);
 
