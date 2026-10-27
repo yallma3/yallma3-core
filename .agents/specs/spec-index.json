@@ -1,0 +1,160 @@
+{
+  "json-output-workflow-graph-llm-logging": {
+    "plan": ".agents/plans/plan_261027_json_output_workflow_graph_llm_logging.md",
+    "designOptions": ".agents/design-options/design-options_261027_json_output_workflow_graph_llm_logging.md",
+    "research": ".agents/research/adr_261027_json_output_workflow_graph_llm_logging.md",
+    "sourceFiles": [
+      "Execution/ExecutionTracer.ts",
+      "Agent/Main/Versions/MainAgentV1.ts",
+      "Agent/Agent.ts",
+      "Agent/Utls/ToolCallingHelper.ts",
+      "Workflow/runtime.ts",
+      "Workflow/Nodes/Chat/ChatNode.ts",
+      "Workflow/types/types.ts",
+      "LLM/LLMRunner.ts"
+    ],
+    "testFiles": [
+      "tests/unit/execution/ExecutionTracer.test.ts",
+      "tests/integration/output/JsonSidecarOutput.test.ts"
+    ],
+    "description": "Structured machine-readable JSON sidecar file generation when YALLMA3_OUTPUT_JSON=true, including clean workflow graph serialization, verbatim LLM interaction logs, and granular execution steps."
+  },
+  "websocket-graph-serialization-ingestion": {
+    "plan": ".agents/plans/plan_261027_websocket_graph_serialization_ingestion.md",
+    "designOptions": ".agents/design-options/design-options_261027_websocket_graph_serialization_ingestion.md",
+    "sourceFiles": [
+      "Workflow/utils/normalizeWorkflow.ts",
+      "Workflow/utils/runtime.ts",
+      "Workflow/runtime.ts",
+      "Websocket/socket.ts",
+      "Utils/Runtime.ts",
+      "Execution/Orchestrator.ts",
+      "Workflow/NodeRegistry.ts",
+      "Workflow/types/types.ts"
+    ],
+    "testFiles": [
+      "tests/unit/utils/normalizeWorkflow.test.ts",
+      "tests/integration/workflows/goal2Execution.test.ts",
+      "tests/integration/websocket/socket.test.ts",
+      "tests/__mocks__/goal2PayloadFixtures.ts"
+    ],
+    "description": "Ingress normalization adapter and runtime edge alignment for consuming modular serialized graph payloads (Goal 2 runtime) sent over WebSocket."
+  },
+  "workspace-validation": {
+    "plan": ".agents/plans/plan_200626_workspace-validation.md",
+    "research": ".agents/research/research_200626_workspace-validation.md",
+    "sourceFiles": [
+      "Agent/Validation/WorkspaceValidator.ts"
+    ],
+    "modifiedFiles": [
+      "Agent/Main/Versions/MainAgentV1.ts"
+    ],
+    "testFiles": [
+      "tests/unit/validation/WorkspaceValidator.test.ts"
+    ],
+    "description": "Workspace validation using pure function validators. Called at the top of MainAgentV1.run() to catch malformed workspace data before execution."
+  },
+  "analysis-entry-point": {
+    "type": "analysis",
+    "path": ".agents/specs/system_entry.md",
+    "topic": "Entry Point",
+    "date": ""
+  },
+  "analysis-websocket": {
+    "type": "analysis",
+    "path": ".agents/specs/system_websocket.md",
+    "topic": "WebSocket Server",
+    "date": ""
+  },
+  "analysis-routes": {
+    "type": "analysis",
+    "path": ".agents/specs/system_routes.md",
+    "topic": "Routes",
+    "date": ""
+  },
+  "analysis-agent": {
+    "type": "analysis",
+    "path": ".agents/specs/system_agent.md",
+    "topic": "Agent System",
+    "date": ""
+  },
+  "analysis-agent-memory": {
+    "type": "analysis",
+    "path": ".agents/specs/system_agent_memory.md",
+    "topic": "Agent Memory System",
+    "date": ""
+  },
+  "analysis-llm": {
+    "type": "analysis",
+    "path": ".agents/specs/system_llm.md",
+    "topic": "LLM System",
+    "date": ""
+  },
+  "analysis-workflow": {
+    "type": "analysis",
+    "path": ".agents/specs/system_workflow.md",
+    "topic": "Workflow Engine",
+    "date": ""
+  },
+  "analysis-task": {
+    "type": "analysis",
+    "path": ".agents/specs/system_task.md",
+    "topic": "Task System",
+    "date": ""
+  },
+  "analysis-triggers": {
+    "type": "analysis",
+    "path": ".agents/specs/system_triggers.md",
+    "topic": "Trigger System",
+    "date": ""
+  },
+  "analysis-utils": {
+    "type": "analysis",
+    "path": ".agents/specs/system_utils.md",
+    "topic": "Utilities",
+    "date": ""
+  },
+  "analysis-models": {
+    "type": "analysis",
+    "path": ".agents/specs/system_models.md",
+    "topic": "Data Models",
+    "date": ""
+  },
+  "unified-llm-fallback": {
+    "plan": ".agents/plans/plan_261017_unified-llm-fallback-healthcheck.md",
+    "research": ".agents/design-options/design-options_261017_unified_llm_fallback_healthcheck.md",
+    "sourceFiles": [
+      "LLM/LLMRunner.ts",
+      "Workflow/types/types.ts",
+      "Workflow/runtime.ts",
+      "Workflow/Nodes/Chat/ChatNode.ts"
+    ],
+    "modifiedFiles": [
+      "Agent/Main/Versions/MainAgentV1.ts"
+    ],
+    "testFiles": [
+      "tests/unit/llm/LLMRunner.test.ts",
+      "tests/unit/agent/MainAgentV1.test.ts",
+      "tests/unit/nodes/ChatNode.test.ts",
+      "tests/integration/workflows/runtime.test.ts"
+    ],
+    "description": "Unified Main LLM health-check at startup (Gate 1) and centralized fallback runner with mainLLM + workflowId injection into NodeExecutionContext. FatalMainLLMError halts workflow graph and task graph."
+  },
+  "heavy-lift-requirements": {
+    "type": "product",
+    "path": ".agents/specs/product.md",
+    "topic": "Product Requirements - Reliability & Compatibility",
+    "requirements": [
+      "R1",
+      "R2",
+      "R3",
+      "R4"
+    ],
+    "status": {
+      "R1": "pending",
+      "R2": "pending",
+      "R3": "pending",
+      "R4": "pending"
+    }
+  }
+}

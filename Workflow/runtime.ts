@@ -5,6 +5,7 @@ import type { ExecutionContext } from "../Execution/ExecutionContext";
 import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
 import { FatalMainLLMError } from "../LLM/LLMRunner";
 import { buildLayeredTopoSort } from "../Execution/toposort";
+import type { ExecutionTracer } from "../Execution/ExecutionTracer";
 
 const stopRegistry = new Map<string, boolean>();
 
@@ -30,9 +31,14 @@ export const executeFlowRuntime = async (
   context?: string,
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
+  tracer?: ExecutionTracer,
 ) => {
   const workflowId = String(workflow.id ?? "default");
   stopRegistry.set(workflowId, false);
+
+  if (tracer) {
+    tracer.recordWorkflow(workflow);
+  }
 
   // Thread the current workspace's Main LLM credentials into node contexts so
   // nodes never need to query ambient singletons themselves.
@@ -198,6 +204,7 @@ export const executeFlowRuntime = async (
         if (destSock) inputs[destSock.id] = value;
       }
 
+      const nodeStart = Date.now();
       if (myUpstream.length > 0) {
         const fedBySkipped = myUpstream.some(e => skippedNodes.has(e.fromNodeId));
         const allUndefined = myUpstream.every(e => {
@@ -217,6 +224,14 @@ export const executeFlowRuntime = async (
           skippedNodes.add(nodeId);
           console.log(`Node ${nodeId} (${node.title}) skipped — branch not taken.`);
           broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} skipped (branch not taken).`, details: null } });
+          tracer?.recordStep({
+            type: "workflow_node",
+            name: node.title || String(nodeId),
+            status: "skipped",
+            workflowId,
+            nodeId,
+            details: "Branch not taken",
+          });
           return;
         }
       }
@@ -225,7 +240,7 @@ export const executeFlowRuntime = async (
       if (node.process) {
         const execContext: NodeExecutionContext = {
           node, inputs, ctx, triggerData,
-          mainLLM, workflowId,
+          mainLLM, workflowId, tracer,
           ...(node.nodeType === "Loop" ? { workflow, allNodes: nodes } : {}),
         } as NodeExecutionContext;
         output = await node.process(execContext);
@@ -236,6 +251,16 @@ export const executeFlowRuntime = async (
       results.set(nodeId, output);
       console.log(`[workflow ${workflowId} (${(workflow as {name?: string})?.name || "unnamed"})] Node ${nodeId} (${node.title || node.nodeType}) executed. Output:`, typeof output === "object" ? JSON.stringify(output).substring(0, 120) : String(output).substring(0, 120));
       broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
+      tracer?.recordStep({
+        type: "workflow_node",
+        name: node.title || String(nodeId),
+        status: "success",
+        workflowId,
+        nodeId,
+        inputs,
+        output,
+        durationMs: Date.now() - nodeStart,
+      });
     }
     async function executeNodeWithInputs(nodeId: number, extraInputs: Record<number, unknown>): Promise<void> {
       if (isStopped(workflowId)) return;
@@ -243,6 +268,7 @@ export const executeFlowRuntime = async (
       const node = nodes.find(n => n.id === nodeId);
       if (!node) return;
 
+      const nodeStart = Date.now();
       const inputs: Record<number, unknown> = { ...extraInputs };
       const myUpstream = upstreamEdges[nodeId] ?? [];
       for (const edge of myUpstream) {
@@ -266,7 +292,7 @@ export const executeFlowRuntime = async (
 
       let output: unknown;
       if (node.process) {
-        const execContext: NodeExecutionContext = { node, inputs, ctx, triggerData, mainLLM, workflowId } as NodeExecutionContext;
+        const execContext: NodeExecutionContext = { node, inputs, ctx, triggerData, mainLLM, workflowId, tracer } as NodeExecutionContext;
         output = await node.process(execContext);
       } else {
         output = node.nodeValue ?? null;
@@ -275,6 +301,16 @@ export const executeFlowRuntime = async (
       results.set(nodeId, output);
       console.log(`[workflow ${workflowId} (${(workflow as {name?: string})?.name || "unnamed"})] Node ${nodeId} (${node.title || node.nodeType}) (chat) executed. Output:`, typeof output === "object" ? JSON.stringify(output).substring(0, 120) : String(output).substring(0, 120));
       broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
+      tracer?.recordStep({
+        type: "workflow_node",
+        name: node.title || String(nodeId),
+        status: "success",
+        workflowId,
+        nodeId,
+        inputs,
+        output,
+        durationMs: Date.now() - nodeStart,
+      });
     }
 
     function broadcastIterationResults(iterationIndex: number): void {

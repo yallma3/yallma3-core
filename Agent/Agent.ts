@@ -8,6 +8,7 @@ import { closeMcpConnections } from "./Utls/McpUtils";
 import { Helper } from "../Utils/Helper";
 import { FileAgentMemoryStore } from "../Memory/AgentMemoryStore";
 import type { AgentMemoryStore } from "../Models/AgentMemory";
+import type { ExecutionTracer } from "../Execution/ExecutionTracer";
 
 const memoryStore: AgentMemoryStore = new FileAgentMemoryStore();
 
@@ -33,7 +34,8 @@ export class AgentRuntime {
     task: Task,
     context: string,
     workspaceKey?: string,
-    workspaceLLM?: LLMOption
+    workspaceLLM?: LLMOption,
+    private tracer?: ExecutionTracer
   ) {
     this.agent = agent;
     this.task = task;
@@ -41,7 +43,23 @@ export class AgentRuntime {
     this.apiKey = agent.apiKey || workspaceKey || "No Key Provided";
 
     const llmOption = agent.llm || workspaceLLM;
-    this.llm = getLLMProvider(llmOption, this.apiKey);
+    let provider = getLLMProvider(llmOption, this.apiKey);
+    if (this.tracer && llmOption) {
+      provider = this.tracer.wrapLLM(
+        provider,
+        {
+          source: "agent",
+          name: agent.name,
+          taskId: task.id,
+          action: "agent_runtime",
+        },
+        {
+          providerName: llmOption.provider,
+          modelName: llmOption.model.name,
+        }
+      );
+    }
+    this.llm = provider;
   }
   async run(): Promise<string> {
     console.log("CONTEXRTT", this.context);
@@ -53,6 +71,14 @@ export class AgentRuntime {
       while (iteration < this.maxIterations) {
         console.log("Iteration:", iteration);
 
+        this.tracer?.recordStep({
+          type: "agent_iteration",
+          name: `${this.agent.name} (Iteration ${iteration + 1})`,
+          status: "started",
+          taskId: this.task.id,
+          details: { iteration: iteration + 1, feedback },
+        });
+
         const prompt = this.buildPrompt(iteration, output, feedback);
         output = await this.llm.generateText(prompt);
         console.log(`🧠 Agent Response [${this.agent.name}]: `, output);
@@ -61,6 +87,14 @@ export class AgentRuntime {
         const reviewResult = await this.llm.generateText(reviewPrompt);
         const reviewResultParsed = Helper.JsonParser.parse<Review>(reviewResult);
         if (reviewResultParsed.task_completion_status === "complete") {
+          this.tracer?.recordStep({
+            type: "agent_iteration",
+            name: `${this.agent.name} (Iteration ${iteration + 1})`,
+            status: "success",
+            taskId: this.task.id,
+            output,
+            details: { review: reviewResultParsed },
+          });
           break;
         }
         feedback = reviewResultParsed.feedback;
@@ -196,7 +230,8 @@ export class Yallma3GenOneAgentRuntime {
     ctx: ExecutionContext,
     workspaceKey?: string,
     workspaceLLM?: LLMOption,
-    intent?: string
+    intent?: string,
+    private tracer?: ExecutionTracer
   ) {
     this.agent = agent;
     this.task = task;
@@ -205,7 +240,23 @@ export class Yallma3GenOneAgentRuntime {
     this.apiKey = agent.apiKey || workspaceKey || "No Key Provided";
 
     const llmOption = agent.llm || workspaceLLM;
-    this.llm = getLLMProvider(llmOption, this.apiKey);
+    let provider = getLLMProvider(llmOption, this.apiKey);
+    if (this.tracer && llmOption) {
+      provider = this.tracer.wrapLLM(
+        provider,
+        {
+          source: "agent",
+          name: agent.name,
+          taskId: task.id,
+          action: "agent_execution",
+        },
+        {
+          providerName: llmOption.provider,
+          modelName: llmOption.model.name,
+        }
+      );
+    }
+    this.llm = provider;
     this.intent = intent || "";
     this.ctx = ctx;
   }
@@ -238,6 +289,14 @@ export class Yallma3GenOneAgentRuntime {
       while (iteration < this.maxIterations) {
         console.log(`\n🔄 Iteration ${iteration + 1}/${this.maxIterations}`);
 
+        this.tracer?.recordStep({
+          type: "agent_iteration",
+          name: `${this.agent.name} (Iteration ${iteration + 1})`,
+          status: "started",
+          taskId: this.task.id,
+          details: { iteration: iteration + 1, feedback },
+        });
+
         // Step 1: Agent generates output
         const prompt = this.buildPrompt(iteration, output, feedback);
         this.checkAbort();
@@ -260,6 +319,14 @@ export class Yallma3GenOneAgentRuntime {
         // If the review says the task is complete → accept immediately
         if (review.task_completion_status === "complete") {
           console.log("🎉 Task marked complete by reviewer.");
+          this.tracer?.recordStep({
+            type: "agent_iteration",
+            name: `${this.agent.name} (Iteration ${iteration + 1})`,
+            status: "success",
+            taskId: this.task.id,
+            output,
+            details: { review },
+          });
           break;
         }
 
@@ -281,6 +348,14 @@ export class Yallma3GenOneAgentRuntime {
 
           if (finalCheck.accept) {
             console.log("🎉 Task accepted by final check.");
+            this.tracer?.recordStep({
+              type: "agent_iteration",
+              name: `${this.agent.name} (Iteration ${iteration + 1})`,
+              status: "success",
+              taskId: this.task.id,
+              output,
+              details: { review, finalCheck },
+            });
             break;
           } else {
             console.log("⚠️ Needs revision, applying feedback...");

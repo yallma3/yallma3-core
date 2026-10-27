@@ -1,6 +1,7 @@
 import { executeFlowRuntime } from "../../Workflow/runtime";
 import type { LLMSpecTool, Tool } from "../../Models/Tool";
 import type { Workflow } from "../../Models/Workflow";
+import type { ExecutionTracer } from "../../Execution/ExecutionTracer";
 import {
   connectToMultipleMcpServers,
   executeMcpTool,
@@ -16,6 +17,7 @@ async function triggeredPath(
   input?: string,
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
+  tracer?: ExecutionTracer,
 ): Promise<unknown> {
   const repo = WorkspaceRepository.getInstance();
   const currentId = repo.getCurrent();
@@ -30,7 +32,7 @@ async function triggeredPath(
     throw new Error(`Workflow not found: ${workflowId}`);
   }
 
-  const result = await executeFlowRuntime(workflow, ctx, input, triggerData, broadcast);
+  const result = await executeFlowRuntime(workflow, ctx, input, triggerData, broadcast, tracer);
 
   if (result instanceof Error) {
     console.error(`[ToolCalling] Workflow execution failed for ${workflowId}:`, result);
@@ -50,10 +52,11 @@ export async function workflowExecutor(
   input?: string,
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
+  tracer?: ExecutionTracer,
 ): Promise<{ status: "completed" | "failed"; reason?: string; result?: unknown }> {
   const b = broadcast ?? ctx?.broadcast?.bind(ctx);
   try {
-    const result = await triggeredPath(ctx, workflowId, input, triggerData, b);
+    const result = await triggeredPath(ctx, workflowId, input, triggerData, b, tracer);
     return { status: "completed", result };
   } catch (err) {
     return {
