@@ -67,20 +67,28 @@ Each node processes via `node.process(context: NodeExecutionContext): Promise<No
 `mainLLM` / `workflowId` are resolved once per run from the current `WorkspaceRepository` workspace
 and threaded into the context so nodes never query ambient singletons themselves.
 
-### Fatal Main LLM Stop (dual-graph)
-When `executeWithFallback` cannot reach either the node LLM or the workspace Main LLM it throws
-`FatalMainLLMError`. This halts **both** execution graphs:
+### Error Handling & Node Failure Contracts
 
-- **Workflow graph**: `executeFlowRuntime` catches `FatalMainLLMError`, calls `requestStop(workflowId)`,
-  broadcasts `{ type: "workflow_error", workflowId, error }`, and **returns** the error. Callers
-  (`Orchestrator.runWorkflow` → `Websocket/socket.ts`) keep the return-value contract and emit
-  `EXECUTION_ERROR` rather than a generic `INTERNAL_ERROR`.
-- **Task graph** (`MainAgentV1`): `ToolCallingHelper.triggeredPath` re-throws the returned `Error`;
-  `MainAgentV1.executeWorkflowTask` catches `FatalMainLLMError`, emits a fatal error report, and sets
-  `aborted = true`.
+> **Detailed Specification**: [system_261029_error_capture_and_propagation.md](system_261029_error_capture_and_propagation.md)
 
-Ordinary (non-fatal) node errors keep the prior behavior: the runtime logs, clears the stop-registry
-entry, and returns the error so a node can degrade to an error-string output.
+#### Node-Level Contract
+- **Operational & Transport Failures**: Nodes encountering unrecoverable transport failures (e.g., MCP SSE connection drops, socket timeouts, HTTP network errors) or invalid processing conditions MUST throw an `Error`. Nodes MUST NOT catch external connectivity errors and return them as string payloads on standard output sockets (e.g., `{ [socket]: "Error: ..." }`).
+- **Clean Failure Boundaries**: Catch blocks within nodes must clean up client handles/resources before re-throwing the `Error` to allow runtime tracking.
+
+#### Workflow Runtime Contract (`executeFlowRuntime`)
+- When any node throws an unhandled exception:
+  1. The runtime records the failure in `ExecutionTracer` with `status: "failed"`, the node ID, node title, inputs, and error message.
+  2. Further node execution in the workflow DAG halts immediately (downstream nodes, including `WorkflowOutputNode`, are NOT executed).
+  3. The runtime clears the stop-registry entry and returns the `Error` object (never throwing unhandled rejections).
+  4. Broadcasts `{ type: "workflow_error", workflowId, error }` if broadcast callback is provided.
+
+#### Dual-Graph Error Propagation
+- **Fatal Main LLM Stop**: When `executeWithFallback` cannot reach either the node LLM or the workspace Main LLM, it throws `FatalMainLLMError`. This halts **both** execution graphs:
+  - **Workflow graph**: `executeFlowRuntime` halts DAG execution, broadcasts `{ type: "workflow_error", workflowId, error }`, and returns the `FatalMainLLMError`.
+  - **Task graph** (`MainAgentV1`): `ToolCallingHelper.workflowExecutor` detects `FatalMainLLMError` and re-throws it; `MainAgentV1.executeWorkflowTask` catches it, emits a fatal error report, and sets `aborted = true` to abort the entire workspace.
+- **Ordinary Workflow Node Error**:
+  - **Workflow graph**: Halts only the failing workflow DAG and returns `Error` to the caller.
+  - **Task graph** (`MainAgentV1`): `ToolCallingHelper.workflowExecutor` catches `Error` and returns `{ status: "failed", reason: error.message }`. `MainAgentV1` marks the task as `{ status: "failed", reason }`, emits `EXECUTION_ERROR`, and marks downstream dependent tasks as `blocked` (see [Agent System](system_agent.md)).
 
 ### Node Metadata
 ```typescript

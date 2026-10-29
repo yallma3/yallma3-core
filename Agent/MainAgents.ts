@@ -645,7 +645,7 @@ ${layers.map((l) => {
     consoleMessage = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
-      type: "success",
+      type: "info",
       message: `Results saved to ${filepath}`,
     };
     ws.send(

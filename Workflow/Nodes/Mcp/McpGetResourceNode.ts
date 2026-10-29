@@ -302,18 +302,20 @@ export function createNMcpGetResourcelNode(
             [n.id * 100 + 2]: JSON.stringify(result, null, 2),
           };
         } else {
-          return "Failed to create Resource";
+          throw new Error("Failed to create Resource");
         }
 
         // Process the response
       } catch (error) {
         console.error("Error in MCP Resource node:", error);
-        // Return error in the response output
-        return {
-          [n.id * 100 + 2]: `Error: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        };
+        if (client) {
+          try {
+            await client.close();
+          } catch {
+            /* ignore */
+          }
+        }
+        throw error instanceof Error ? error : new Error(String(error));
       }
     },
     configParameters: metadata.configParameters,

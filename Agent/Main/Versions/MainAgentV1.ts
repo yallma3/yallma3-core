@@ -65,12 +65,35 @@ export class MainAgentV1 implements MainAgent {
     if (!validation.valid) {
       console.error(`[Workspace Validation Failed] ${validation.error.message}`);
       this.emitErrorRaw(validation.error.message, null, false);
+      if (process.env.YALLMA3_OUTPUT_JSON === "1" || process.env.YALLMA3_OUTPUT_JSON === "true") {
+        await this.saveResults(
+          [],
+          {},
+          {},
+          "failed",
+          `Workspace Validation Failed: ${validation.error.message}`,
+          { totalTasks: 0, succeededTasks: 0, failedTasks: 0, blockedTasks: 0 },
+          "validation_error",
+          validation.error.message
+        );
+      }
       return {};
     }
 
     await this.initialize();
     if (this.aborted) {
       console.warn(`[Workspace Aborted] Initialization failed or LLM unreachable.`);
+      if (process.env.YALLMA3_OUTPUT_JSON === "1" || process.env.YALLMA3_OUTPUT_JSON === "true") {
+        await this.saveResults(
+          [],
+          {},
+          {},
+          "aborted",
+          "Workspace initialization failed or LLM unreachable.",
+          { totalTasks: 0, succeededTasks: 0, failedTasks: 0, blockedTasks: 0 },
+          "aborted"
+        );
+      }
       return {};
     }
 
@@ -482,7 +505,7 @@ export class MainAgentV1 implements MainAgent {
           durationMs: Date.now() - start,
           details: execution.reason ?? 'No result returned',
         });
-        this.emitError(layerIndex, totalLayers, task.title);
+        this.emitError(layerIndex, totalLayers, task.title, execution.reason);
       }
     } catch (err) {
       if (err instanceof FatalMainLLMError) {
@@ -613,20 +636,213 @@ export class MainAgentV1 implements MainAgent {
     taskStatuses: Record<string, { status: string; reason?: string }> = {}
   ) {
     if (this.aborted) return;
+
+    const total = layers.length;
+    const succeeded = layers.filter((l) => taskStatuses[l.taskId]?.status === "success").length;
+    const failed = layers.filter((l) => taskStatuses[l.taskId]?.status === "failed").length;
+    const blocked = layers.filter((l) => taskStatuses[l.taskId]?.status === "blocked").length;
+
+    let workspaceStatus: "completed" | "failed" | "partial_success" | "aborted" = "completed";
+    let statusReason = "Workspace completed successfully.";
+
+    if (this.aborted) {
+      workspaceStatus = "aborted";
+      statusReason = "Workspace execution was aborted.";
+    } else if (succeeded === 0 && (failed > 0 || blocked > 0)) {
+      workspaceStatus = "failed";
+      statusReason = `Workspace execution failed: ${failed} task${failed === 1 ? "" : "s"} failed, ${blocked} blocked.`;
+    } else if (failed > 0 || blocked > 0) {
+      workspaceStatus = "partial_success";
+      statusReason = `Workspace execution finished with partial failures: ${succeeded} succeeded, ${failed} failed, ${blocked} blocked.`;
+    }
+
     const finalTaskId = layers[layers.length - 1]?.taskId ?? "";
+    const finalTaskSucceeded = taskStatuses[finalTaskId]?.status === "success";
     const finalResult =
-      (finalTaskId && results[finalTaskId]) || JSON.stringify(results, null, 2);
+      workspaceStatus === "completed"
+        ? (finalTaskId && results[finalTaskId]) || JSON.stringify(results, null, 2)
+        : finalTaskSucceeded && results[finalTaskId]
+        ? results[finalTaskId]
+        : null;
 
     results["__meta__"] = JSON.stringify({
       version: this.version,
       timestamp: Date.now(),
     });
-    results["__final__"] = finalResult;
+    if (finalResult !== null) {
+      results["__final__"] = finalResult;
+    } else {
+      delete results["__final__"];
+    }
 
-    console.log(`✅ Workspace '${this.workspaceData.name}' completed successfully.`);
-    this.emitSuccessRaw("Workspace completed successfully.", finalResult);
+    if (workspaceStatus === "failed") {
+      console.error(`❌ Workspace '${this.workspaceData.name}' execution failed: ${statusReason}`);
+      this.emit("error", statusReason);
+      this.ctx.send({
+        type: "error",
+        requestId: this.ctx.requestId,
+        commandType: "run_workspace" as const,
+        code: "WORKSPACE_FAILED" as const,
+        message: statusReason,
+        timestamp: new Date().toISOString(),
+      });
+    } else if (workspaceStatus === "partial_success") {
+      console.warn(`⚠️ Workspace '${this.workspaceData.name}' completed with partial failures: ${statusReason}`);
+      this.emit("warn", statusReason);
+      this.ctx.send({
+        type: "message",
+        requestId: this.ctx.requestId,
+        commandType: "run_workspace" as const,
+        data: {
+          type: "warning",
+          message: statusReason,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      console.log(`✅ Workspace '${this.workspaceData.name}' completed successfully.`);
+      this.emitSuccessRaw("Workspace completed successfully.", finalResult ?? undefined);
+    }
+
+    let exitStatus: "success" | "aborted" | "blocked" | "validation_error" = "success";
+    if (this.aborted) {
+      exitStatus = "aborted";
+    } else if (failed > 0 || blocked > 0) {
+      exitStatus = "blocked";
+    } else {
+      exitStatus = "success";
+    }
+
     this.emitWorkspaceStopped();
-    await this.saveResults(layers, results, taskStatuses);
+    await this.saveResults(
+      layers,
+      results,
+      taskStatuses,
+      workspaceStatus,
+      statusReason,
+      {
+        totalTasks: total,
+        succeededTasks: succeeded,
+        failedTasks: failed,
+        blockedTasks: blocked,
+      },
+      exitStatus
+    );
+  }
+
+  /**
+   * Builds first-class problem diagnostics attributing failures to root causes and listing impacted tasks.
+   */
+  private buildDiagnostics(
+    taskStatuses: Record<string, { status: string; reason?: string }> = {},
+    validationError?: string
+  ) {
+    if (validationError) {
+      return {
+        hasFailures: true,
+        rootCauses: [
+          {
+            source: "task" as const,
+            errorCategory: "CONFIGURATION_ERROR" as const,
+            message: validationError,
+            suggestedRemediation: "Inspect workspace tasks, sockets, agents, and configuration parameters.",
+          },
+        ],
+        impactedTasks: [],
+      };
+    }
+    const steps = this.tracer.getSteps();
+    const hasFailures = Object.values(taskStatuses).some(
+      (s) => s.status === "failed" || s.status === "blocked"
+    );
+
+    const rootCauses: Array<{
+      source: "workflow_node" | "task";
+      taskId?: string;
+      workflowId?: string;
+      nodeId?: number;
+      nodeTitle?: string;
+      errorCategory: "TRANSPORT_ERROR" | "CONFIGURATION_ERROR" | "AUTH_ERROR" | "LLM_ERROR" | "TIMEOUT_ERROR" | "RUNTIME_ERROR";
+      message: string;
+      failedInput?: unknown;
+      suggestedRemediation: string;
+    }> = [];
+
+    const failedNodeSteps = steps.filter((s) => s.type === "workflow_node" && s.status === "failed");
+    for (const ns of failedNodeSteps) {
+      const msg = ns.details ?? "Workflow node failed";
+      let errorCategory: "TRANSPORT_ERROR" | "CONFIGURATION_ERROR" | "AUTH_ERROR" | "LLM_ERROR" | "TIMEOUT_ERROR" | "RUNTIME_ERROR" = "RUNTIME_ERROR";
+      let suggestedRemediation = "Inspect node inputs and configuration parameters in the workflow.";
+
+      const lowerMsg = msg.toLowerCase();
+      if (lowerMsg.includes("sse") || lowerMsg.includes("connect") || lowerMsg.includes("econnrefused") || lowerMsg.includes("network")) {
+        errorCategory = "TRANSPORT_ERROR";
+        suggestedRemediation = "Verify that the external server endpoint is running and reachable from the host network.";
+      } else if (lowerMsg.includes("timeout") || lowerMsg.includes("timed out") || lowerMsg.includes("etimedout")) {
+        errorCategory = "TIMEOUT_ERROR";
+        suggestedRemediation = "Increase request timeout or verify service responsiveness.";
+      } else if (lowerMsg.includes("not configured") || lowerMsg.includes("invalid") || lowerMsg.includes("missing")) {
+        errorCategory = "CONFIGURATION_ERROR";
+        suggestedRemediation = "Check and update node configuration parameters in the workflow.";
+      } else if (lowerMsg.includes("auth") || lowerMsg.includes("token") || lowerMsg.includes("unauthorized") || lowerMsg.includes("401") || lowerMsg.includes("403")) {
+        errorCategory = "AUTH_ERROR";
+        suggestedRemediation = "Verify authentication tokens, API keys, and authorization permissions.";
+      } else if (lowerMsg.includes("llm") || lowerMsg.includes("quota") || lowerMsg.includes("rate limit")) {
+        errorCategory = "LLM_ERROR";
+        suggestedRemediation = "Check LLM API quota, rate limits, and model configuration.";
+      }
+
+      const parentTask = Object.entries(taskStatuses).find(
+        ([_taskId, st]) => st.status === "failed"
+      );
+
+      rootCauses.push({
+        source: "workflow_node",
+        taskId: parentTask ? parentTask[0] : undefined,
+        workflowId: ns.workflowId,
+        nodeId: ns.nodeId,
+        nodeTitle: ns.name,
+        errorCategory,
+        message: msg,
+        failedInput: ns.inputs,
+        suggestedRemediation,
+      });
+    }
+
+    if (rootCauses.length === 0) {
+      for (const [taskId, st] of Object.entries(taskStatuses)) {
+        if (st.status === "failed") {
+          const t = this.workspaceData.tasks.find((x: { id: string }) => x.id === taskId);
+          const msg = st.reason ?? "Task execution failed";
+          rootCauses.push({
+            source: t?.type === "workflow" ? "workflow_node" : "task",
+            taskId,
+            errorCategory: "RUNTIME_ERROR",
+            message: msg,
+            suggestedRemediation: "Review task instructions, assigned executor, and error logs.",
+          });
+        }
+      }
+    }
+
+    const impactedTasks: Array<{ taskId: string; title?: string; impact: "BLOCKED"; reason?: string }> = [];
+    for (const [taskId, st] of Object.entries(taskStatuses)) {
+      if (st.status === "blocked") {
+        const t = this.workspaceData.tasks.find((x: { id: string }) => x.id === taskId);
+        impactedTasks.push({
+          taskId,
+          title: t?.title,
+          impact: "BLOCKED",
+          reason: st.reason,
+        });
+      }
+    }
+
+    return {
+      hasFailures,
+      rootCauses,
+      impactedTasks,
+    };
   }
 
   /**
@@ -636,7 +852,17 @@ export class MainAgentV1 implements MainAgent {
   private async saveResults(
     layers: { taskId: string }[],
     results: Record<string, string>,
-    taskStatuses: Record<string, { status: string; reason?: string }> = {}
+    taskStatuses: Record<string, { status: string; reason?: string }> = {},
+    workspaceStatus: "completed" | "failed" | "partial_success" | "aborted" = "completed",
+    statusReason: string = "Workspace completed successfully.",
+    summary: {
+      totalTasks: number;
+      succeededTasks: number;
+      failedTasks: number;
+      blockedTasks: number;
+    } = { totalTasks: layers.length, succeededTasks: layers.length, failedTasks: 0, blockedTasks: 0 },
+    exitStatus: "success" | "aborted" | "blocked" | "validation_error" = "success",
+    validationError?: string
   ) {
     try {
       const outputDir = "Output";
@@ -648,16 +874,29 @@ export class MainAgentV1 implements MainAgent {
 
       const filepath = join(outputDir, filename);
 
+      const taskTextLines = layers
+        .map((l) => {
+          const st = taskStatuses[l.taskId];
+          if (st?.status === "failed") {
+            return `${l.taskId}\n[FAILED] ${st.reason ?? "Task failed"}\n`;
+          }
+          if (st?.status === "blocked") {
+            return `${l.taskId}\n[BLOCKED] ${st.reason ?? "Blocked by upstream dependency"}\n`;
+          }
+          return `${l.taskId}\n${results[l.taskId]}\n`;
+        })
+        .join("\n");
+
       const output = `${this.workspaceData.name} Workspace Execution Results
 Generated: ${new Date().toISOString()}
-MainLLM: ${this.workspaceData.mainLLM.provider} -- ${
-        this.workspaceData.mainLLM.model.name
+MainLLM: ${this.workspaceData.mainLLM?.provider} -- ${
+        this.workspaceData.mainLLM?.model?.name
       }
 Agents LLMs: ${this.workspaceData.agents
-        .map((a) => `${a.name} -- ${a.llm.provider} ${a.llm.model.name}`)
-        .join(", ")}
+        ?.map((a) => `${a.name} -- ${a.llm?.provider} ${a.llm?.model?.name}`)
+        ?.join(", ")}
 
-${layers.map((l) => `${l.taskId}\n${results[l.taskId]}\n`).join("\n")}
+${taskTextLines}
 __meta__: ${results["__meta__"]}
 `;
 
@@ -683,38 +922,72 @@ __meta__: ${results["__meta__"]}
       if (process.env.YALLMA3_OUTPUT_JSON === "1" || process.env.YALLMA3_OUTPUT_JSON === "true") {
         const jsonFilename = `${workspaceName}_${timestamp}.json`;
         const jsonPath = join(outputDir, jsonFilename);
+
+        const socketToTask = new Map<number, string>();
+        for (const t of this.workspaceData.tasks ?? []) {
+          for (const s of t.sockets ?? []) {
+            socketToTask.set(s.id, t.id);
+          }
+        }
+        const taskConnections = (this.workspaceData.connections ?? [])
+          .map((c) => {
+            const fromTask =
+              (c as unknown as { fromTask?: string }).fromTask ??
+              (c.fromSocket !== undefined ? socketToTask.get(c.fromSocket) : undefined);
+            const toTask =
+              (c as unknown as { toTask?: string }).toTask ??
+              (c.toSocket !== undefined ? socketToTask.get(c.toSocket) : undefined);
+            return { fromTask, toTask };
+          })
+          .filter((c): c is { fromTask: string; toTask: string } => Boolean(c.fromTask && c.toTask));
+
         const jsonPayload = {
           workspace: this.workspaceData.name,
+          status: workspaceStatus,
+          statusReason,
+          summary,
+          taskConnections,
           workflows: this.tracer.getWorkflows(),
           generatedAt: new Date().toISOString(),
           mainLLM: {
-            provider: this.workspaceData.mainLLM.provider,
-            model: this.workspaceData.mainLLM.model.name,
-            modelId: this.workspaceData.mainLLM.model.id,
+            provider: this.workspaceData.mainLLM?.provider,
+            model: this.workspaceData.mainLLM?.model?.name,
+            modelId: this.workspaceData.mainLLM?.model?.id,
           },
-          agents: this.workspaceData.agents.map((a) => ({
+          agents: (this.workspaceData.agents ?? []).map((a) => ({
             id: a.id,
             name: a.name,
             role: a.role,
-            provider: a.llm.provider,
-            model: a.llm.model.name,
-            modelId: a.llm.model.id,
+            background: a.background,
+            systemPrompt: a.systemPrompt,
+            provider: a.llm?.provider,
+            model: a.llm?.model?.name,
+            modelId: a.llm?.model?.id,
+            tools: a.tools ?? [],
           })),
           tasks: layers.map((l) => {
-            const t = this.workspaceData.tasks.find((x: { id: string }) => x.id === l.taskId);
+            const t = this.workspaceData.tasks?.find((x: { id: string }) => x.id === l.taskId);
+            const st = taskStatuses[l.taskId];
             return {
               taskId: l.taskId,
               title: t?.title,
+              type: t?.type,
+              role: t?.role,
+              description: t?.description,
+              systemPrompt: t?.systemPrompt,
+              expectedOutput: t?.expectedOutput,
               executorId: t?.executorId,
-              status: taskStatuses[l.taskId]?.status ?? "unknown",
-              result: results[l.taskId],
+              status: st?.status ?? "unknown",
+              reason: st?.reason ?? null,
+              result: results[l.taskId] ?? null,
             };
           }),
+          diagnostics: this.buildDiagnostics(taskStatuses, validationError),
           steps: this.tracer.getSteps(),
           llmInteractions: this.tracer.getLLMInteractions(),
           logs: this.tracer.getLogs(),
-          finalResult: results["__final__"],
-          aborted: this.aborted,
+          finalResult: results["__final__"] ?? null,
+          exitStatus,
           version: this.version,
           layerCount: layers.length,
           meta: results["__meta__"],
@@ -727,10 +1000,10 @@ __meta__: ${results["__meta__"]}
           downloadUrl: `/output/download/${encodeURIComponent(jsonFilename)}?token=${jsonToken}`,
           viewUrl: `/output/view/${encodeURIComponent(jsonFilename)}?token=${jsonToken}`,
         });
-        this.emitSuccessRaw(`Results saved to ${jsonPath}`);
+        this.emitInfo(`Results saved to ${jsonPath}`);
       }
 
-      this.emitSuccessRaw(`Results saved to ${filepath}`);
+      this.emitInfo(`Results saved to ${filepath}`);
 
       // Emit structured workspace_artifacts event to WebSocket client
       this.ctx.send({
@@ -797,8 +1070,9 @@ __meta__: ${results["__meta__"]}
     this.emit("success", message, results);
   }
 
-  private emitError(step: number, total: number, title: string) {
-    const errorMsg = `[${step}/${total}] Task '${title}' failed.`;
+  private emitError(step: number, total: number, title: string, reason?: string) {
+    const detail = reason ? `: ${reason}` : ".";
+    const errorMsg = `[${step}/${total}] Task '${title}' failed${detail}`;
     console.error(`[Workspace Error] ${errorMsg}`);
     this.ctx.send({
       type: "error",

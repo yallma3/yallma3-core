@@ -98,13 +98,55 @@ if (!health.ok) {
 ### Task-graph Fatal Stop
 If the Main LLM dies **during** execution, `executeWithFallback` throws `FatalMainLLMError`, which
 surfaces as a returned `Error` from the workflow runtime and is re-thrown by
-`ToolCallingHelper.triggeredPath`. `MainAgentV1.executeWorkflowTask` catches it, emits
+`ToolCallingHelper.workflowExecutor`. `MainAgentV1.executeWorkflowTask` catches it, emits
 `emitErrorRaw("Main LLM fatal failure during execution", err.message, true)`, and sets `aborted = true`
 — mirroring the workflow-graph stop (see [Workflow Engine](system_workflow.md)).
+
+### Task Failure and Dependency Cascade Contract
+
+> **Detailed Specification**: [system_261029_error_capture_and_propagation.md](system_261029_error_capture_and_propagation.md)
+
+1. **Workflow Task Failure Capture**:
+   - `ToolCallingHelper.workflowExecutor()` inspects the return value of `executeFlowRuntime()`. If an `Error` is returned, it returns `{ status: "failed", reason: err.message }` rather than masking it as completed.
+   - `MainAgentV1.executeWorkflowTask()` records the failure in `taskStatuses[task.id] = { status: "failed", reason }`, logs the failed step in `ExecutionTracer`, and emits an `EXECUTION_ERROR` message to the WebSocket client (`[<step>/<total>] Task '<title>' failed: <reason>`).
+2. **Upstream Dependency Guard (`buildTaskContext`)**:
+   - When building context for task layers, `MainAgentV1` iterates through each dependency `dep` in `layer.context`.
+   - If `taskStatuses[dep]?.status !== "success"`, the dependent task is marked as:
+     `taskStatuses[layer.taskId] = { status: "blocked", reason: `Upstream task dependency '${dep}' not completed successfully` }`.
+3. **Blocked Task Short-Circuiting**:
+   - In `MainAgentV1.run()`, before any agent assignment (`assignBestFit`) or LLM execution is performed, the loop checks `taskStatuses[task.id]?.status === "blocked"`.
+   - If blocked, `run()` records a `task` step in `ExecutionTracer` with `status: "blocked"`, emits an `info` skip event (`Task '<title>' skipped: <reason>`), and immediately advances to the next task.
+   - This prevents wasteful downstream LLM execution (such as reasoning models) over failed upstream outputs.
+4. **Workspace Terminal Status & Truthful Reporting (`finalize`)**:
+   - In `MainAgentV1.finalize()`, task outcomes are evaluated across all layers:
+     - `failed`: All tasks either failed or were blocked (`succeeded === 0 && failed > 0`). Emits WebSocket `error` with `code: "WORKSPACE_FAILED"` and records an `error` log.
+     - `partial_success`: Some tasks succeeded, but others failed/blocked. Emits WebSocket warning and records a `warn` log.
+     - `completed`: All tasks succeeded (`failed === 0 && blocked === 0`). Emits WebSocket success and records a `success` log.
+     - `aborted`: Workspace was stopped prematurely.
+   - The engine never emits a false "Workspace completed successfully" event when tasks fail or are blocked.
+   - In `saveResults()`, the JSON sidecar records root `status`, `statusReason`, `summary` (`totalTasks`, `succeededTasks`, `failedTasks`, `blockedTasks`), task-level `reason`, and truthful `finalResult` (null on failure).
+   - The text output file records `[FAILED] <reason>` and `[BLOCKED] <reason>` rather than `undefined`.
 
 ## Structured Output & ExecutionTracer
 
 When `YALLMA3_OUTPUT_JSON=true` or `1`, `MainAgentV1.saveResults()` generates a clean, machine-readable JSON sidecar file (`Output/<workspaceName>_<timestamp>.json`).
+
+### Autonomous Agent Optimization Specimen
+The JSON sidecar serves as an end-to-end specimen for autonomous evaluator and optimizer agents to detect problems and recommend concrete workspace enhancements:
+- **Full Declarative Blueprint**:
+  - `taskConnections`: Preserves task dependency DAG (`fromTask`, `toTask`).
+  - `tasks`: Full declarative configuration (`title`, `type`, `role`, `description`, `systemPrompt`, `expectedOutput`, `executorId`) alongside runtime outcome (`status`, `reason`, `durationMs`, `result`).
+  - `agents`: Full agent configuration (`name`, `role`, `background`, `systemPrompt`, `llm`, `tools`).
+  - `workflows`: Clean, executable node graphs stripped of canvas UI clutter.
+- **First-Class Diagnostics Block (`diagnostics`)**:
+  - `hasFailures`: boolean flag.
+  - `rootCauses`: Array pinpointing root-cause failures to exact components (`source`, `taskId`, `workflowId`, `nodeId`, `nodeType`, `errorCategory`, `message`, `failedInput`, `suggestedRemediation`).
+  - `impactedTasks`: Array of downstream tasks blocked or affected by upstream failures.
+- **Truthful Status & Summary**:
+  - Root `status`: `"completed" | "failed" | "partial_success" | "aborted"`.
+  - Root `statusReason`: Concise human-readable summary.
+  - Root `summary`: Execution counts (`totalTasks`, `succeededTasks`, `failedTasks`, `blockedTasks`).
+  - Trailing `exitStatus`: `"success" | "aborted" | "blocked" | "validation_error"` (repurposing the legacy `aborted: boolean`).
 
 ### ExecutionTracer (`Execution/ExecutionTracer.ts`)
 - **Workflow Graph Sanitization**: Strips UI clutter (`x, y, width, height, selected, processing`, and i18n maps) and produces clean `{ id, type, title, category, config, inputs, outputs }` nodes and semantic `{ fromNodeId, fromSocket, fromSocketTitle, toNodeId, toSocket, toSocketTitle }` connections.

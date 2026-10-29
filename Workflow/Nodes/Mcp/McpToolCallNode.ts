@@ -349,21 +349,20 @@ export function createNMcpToolCallNode(
             [n.id * 100 + 2]: JSON.stringify(result, null, 2),
           };
         } else {
-          return "Failed to create Tool Call node";
+          throw new Error("Failed to create Tool Call node");
         }
 
         // Process the response
       } catch (error) {
         console.error("Error in MCP Tool Call node:", error);
         if (client) {
-          await client.close();
+          try {
+            await client.close();
+          } catch {
+            /* ignore */
+          }
         }
-        // Return error in the response output
-        return {
-          [n.id * 100 + 2]: `Error: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        };
+        throw error instanceof Error ? error : new Error(String(error));
       }
     },
     configParameters: metadata.configParameters,

@@ -529,7 +529,7 @@ export const executeFlowRuntime = async (
       return error;
     }
     stopRegistry.delete(workflowId);
-    console.log(error);
-    return error;
+    console.error(`[workflow ${workflowId}] Runtime error:`, error);
+    return error instanceof Error ? error : new Error(String(error));
   }
 };

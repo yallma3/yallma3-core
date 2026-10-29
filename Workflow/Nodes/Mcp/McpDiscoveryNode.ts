@@ -293,22 +293,20 @@ export function createNMcpDiscoveryNode(
             [n.id * 100 + 4]: JSON.stringify(resources, null, 2),
           };
         } else {
-          return "Failed to create Discovery";
+          throw new Error("Failed to create Discovery");
         }
 
         // Process the response
       } catch (error) {
         console.error("Error in MCP Discovery node:", error);
-
-        // Return error in the response output
         if (client) {
-          await client.close();
+          try {
+            await client.close();
+          } catch {
+            /* ignore */
+          }
         }
-        return {
-          [n.id * 100 + 2]: `Error: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        };
+        throw error instanceof Error ? error : new Error(String(error));
       }
     },
     configParameters: metadata.configParameters,
