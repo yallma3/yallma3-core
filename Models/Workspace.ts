@@ -24,15 +24,6 @@ export interface WorkspaceData {
 
   // Workflows
   workflows: Workflow[];
-
-  // Optional workspace execution settings
-  settings?: WorkspaceSettings;
-}
-
-export interface WorkspaceSettings {
-  outputTokenTtl?: string | number;
-  outputTokenMaxUses?: number;
-  [key: string]: unknown;
 }
 
 export interface ConsoleEvent {

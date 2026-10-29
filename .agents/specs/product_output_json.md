@@ -75,10 +75,9 @@
 - **Preconditions**: Client is connected to WebSocket and receives `workspace_artifacts` event with ephemeral capability tokens.
 - **Postconditions**: Client can trigger native browser file download via `GET /output/download/:filename?token=<uuid>` or inline viewing via `GET /output/view/:filename?token=<uuid>`.
 - **Configuration Hierarchy**:
-  1. Per-workspace override (`workspaceData.settings.outputTokenTtl`, e.g. `"30m"`, `"1h"`, `1800`)
-  2. CLI startup flag (`--output-token-ttl=<duration>`)
-  3. Environment variable (`YALLMA3_OUTPUT_TOKEN_TTL`, default `10m`)
-  4. Default fallback: 10 minutes (clamped between 5 seconds and 7 days).
+  1. CLI startup flag (`--output-token-ttl=<duration>`)
+  2. Environment variable (`YALLMA3_OUTPUT_TOKEN_TTL`, default `10m`)
+  3. Default fallback: 10 minutes (clamped between 5 seconds and 7 days).
 - **Frequency**: On demand per completed workspace run.
 - **Complexity**: Low
 - **Criticality**: Critical

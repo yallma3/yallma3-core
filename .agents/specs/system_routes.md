@@ -48,7 +48,7 @@ Express route handlers for LLM configuration management, MCP server management, 
 | `GET` | `/download/:filename` | Token** | `?token=<uuid>` | Streams file with `Content-Disposition: attachment` |
 | `GET` | `/view/:filename` | Token** | `?token=<uuid>` | Streams file with `Content-Type: application/json` or `text/plain` |
 
-**Requires a valid ephemeral capability token passed in query parameter `?token=...`, issued by `OutputTokenManager`. Token TTL is configurable via `workspaceData.settings.outputTokenTtl`, CLI `--output-token-ttl`, or environment variable `YALLMA3_OUTPUT_TOKEN_TTL` (default: 10m). Exempted from the `--instance-id` header requirement to allow standard browser link downloads. Strictly guards against path traversal (`../`) and confines file access to `./Output/`.
+**Requires a valid ephemeral capability token passed in query parameter `?token=...`, issued by `OutputTokenManager`. Token TTL is configurable via CLI `--output-token-ttl` or environment variable `YALLMA3_OUTPUT_TOKEN_TTL` (default: 10m). Exempted from the `--instance-id` header requirement to allow standard browser link downloads. Strictly guards against path traversal (`../`) and confines file access to `./Output/`.
 
 ### Trigger Endpoints (in `index.ts`)
 

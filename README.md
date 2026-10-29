@@ -26,7 +26,7 @@ Bun is used as the runtime, package manager, and TypeScript executor.
 | `OLLAMA_URL` | (unset) | Comma-separated Ollama base URLs for model discovery at startup. |
 | `MAIN_AGENT_VERSION` | `1.0.0` | Default main agent version when not specified. |
 | `YALLMA3_OUTPUT_JSON` | (unset) | When `1` or `true`, write a structured JSON sidecar file alongside the text Output file. |
-| `YALLMA3_OUTPUT_TOKEN_TTL` | `10m` | Expiration time for output download/preview capability tokens. Accepts duration strings (`10m`, `1h`, `300s`, `1d`) or raw seconds/milliseconds. Min 5s, max 7d. Can be overridden by `--output-token-ttl` or workspace settings. |
+| `YALLMA3_OUTPUT_TOKEN_TTL` | `10m` | Expiration time for output download/preview capability tokens. Accepts duration strings (`10m`, `1h`, `300s`, `1d`) or raw seconds/milliseconds. Min 5s, max 7d. Can be overridden by `--output-token-ttl`. |
 | `YALLMA3_OUTPUT_TOKEN_MAX_USES` | `5` | Maximum number of download/preview requests allowed per capability token before it is invalidated. |
 
 ### Command Line Options

@@ -429,17 +429,18 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(allLogs).not.toContain("[Workflow Graph Received]");
   });
 
-  it("applies custom outputTokenTtl and maxUses from workspace settings", async () => {
+  it("applies custom outputTokenTtl and maxUses from OutputTokenManager configuration", async () => {
+    const { OutputTokenManager } = await import("../../../Execution/OutputTokenManager");
+    const manager = OutputTokenManager.getInstance();
+    manager.setDefaultMaxUses(3);
+    manager.setDefaultTtl("15m");
+
     const workspace: WorkspaceData = {
       id: "ws-custom-ttl",
       name: "Custom TTL Workspace",
       description: "",
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      settings: {
-        outputTokenTtl: "15m",
-        outputTokenMaxUses: 3,
-      },
       mainLLM: {
         provider: "OpenAI",
         model: { id: "gpt-4o", name: "GPT-4o", contextWindow: { input: 128000, output: 4096 } },
@@ -497,8 +498,6 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(urlMatch).toBeDefined();
 
     const token = urlMatch![1];
-    const { OutputTokenManager } = await import("../../../Execution/OutputTokenManager");
-    const manager = OutputTokenManager.getInstance();
 
     // Verify token can be consumed exactly 3 times (custom maxUses)
     expect(manager.validateAndConsumeToken(token, artifact.filename).valid).toBe(true);
