@@ -4,6 +4,10 @@ import { Helper } from "./Helper";
 import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
 import { normalizeWorkspacePayload } from "../Workflow/utils/normalizeWorkflow";
 
+/**
+ * Deserializes and normalizes workspace data, registers it in WorkspaceRepository,
+ * and instantiates the main agent instance.
+ */
 export function createMainAgent(data: string, ctx: ExecutionContext, triggerData?: unknown) {
   try {
     const rawWorkspaceData = Helper.JsonParser.parse(data);

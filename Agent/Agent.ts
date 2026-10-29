@@ -29,6 +29,9 @@ export class AgentRuntime {
   private apiKey: string;
   private maxIterations = 5;
 
+  /**
+   * Initializes the AgentRuntime with executor agent metadata, target task, context, and optional execution tracer.
+   */
   constructor(
     agent: Agent,
     task: Task,
@@ -61,6 +64,9 @@ export class AgentRuntime {
     }
     this.llm = provider;
   }
+  /**
+   * Executes the agent review loop until completion or maximum iterations are reached.
+   */
   async run(): Promise<string> {
     console.log("CONTEXRTT", this.context);
     let iteration = 0;
@@ -222,6 +228,9 @@ export class Yallma3GenOneAgentRuntime {
   private ctx: ExecutionContext;
   private maxIterations = 1;
 
+  /**
+   * Initializes the GenOne runtime with execution context, tool specs, planning steps, and optional tracer.
+   */
   constructor(
     agent: Agent,
     task: Task,
@@ -271,6 +280,9 @@ export class Yallma3GenOneAgentRuntime {
     if (this.abortChecker?.()) throw new Error("Agent execution aborted");
   }
 
+  /**
+   * Executes the agent review loop until completion or maximum iterations are reached.
+   */
   async run(): Promise<string> {
     let iteration = 0;
     let output = "";

@@ -10,10 +10,16 @@ import type { ExecutionTracer } from "../Execution/ExecutionTracer";
 
 const stopRegistry = new Map<string, boolean>();
 
+/**
+ * Requests premature cancellation and termination of an active workflow execution.
+ */
 export function requestStop(workflowId: string): void {
   stopRegistry.set(workflowId, true);
 }
 
+/**
+ * Returns true if execution cancellation has been requested for the workflow.
+ */
 function isStopped(workflowId: string): boolean {
   return stopRegistry.get(workflowId) === true;
 }
@@ -26,6 +32,10 @@ const CHAT_LOOP_NODE_TYPES = new Set([
   "OpenRouterChat",
 ]);
 
+/**
+ * Executes a full workflow graph runtime, resolving layers, executing nodes,
+ * supporting chat loops, and recording granular execution tracing.
+ */
 export const executeFlowRuntime = async (
   workflow: Workflow,
   ctx: ExecutionContext,
@@ -149,6 +159,9 @@ export const executeFlowRuntime = async (
       chatLoopNodeIds.add(pair.userInputId);
       chatLoopNodeIds.add(pair.chatNodeId);
     }
+    /**
+     * Traverses downstream edges to find all node IDs belonging to a loop body.
+     */
     function getLoopBodyIds(startId: number): Set<number> {
       const visited = new Set<number>();
       const queue = [startId];
@@ -166,6 +179,9 @@ export const executeFlowRuntime = async (
       return visited;
     }
 
+    /**
+     * Checks if a target node is positioned inside any active loop body.
+     */
     function isInsideLoopBody(nodeId: number): boolean {
       for (const loopId of loopNodeIds) {
         if (getLoopBodyIds(loopId).has(nodeId)) return true;
@@ -173,6 +189,10 @@ export const executeFlowRuntime = async (
       return false;
     }
 
+    /**
+     * Executes a single workflow node by resolving input values from upstream results
+     * and recording execution step outcomes in the tracer.
+     */
     async function executeNode(nodeId: number): Promise<void> {
       if (isStopped(workflowId)) return;
 
@@ -246,7 +266,21 @@ export const executeFlowRuntime = async (
           mainLLM, workflowId, tracer,
           ...(node.nodeType === "Loop" ? { workflow, allNodes: nodes } : {}),
         } as NodeExecutionContext;
-        output = await node.process(execContext);
+        try {
+          output = await node.process(execContext);
+        } catch (err) {
+          tracer?.recordStep({
+            type: "workflow_node",
+            name: node.title || String(nodeId),
+            status: "failed",
+            workflowId,
+            nodeId,
+            inputs,
+            durationMs: Date.now() - nodeStart,
+            details: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        }
       } else {
         output = node.nodeValue ?? null;
       }
@@ -265,6 +299,9 @@ export const executeFlowRuntime = async (
         durationMs: Date.now() - nodeStart,
       });
     }
+    /**
+     * Executes a node with explicitly provided input values, such as in chat loop iterations.
+     */
     async function executeNodeWithInputs(nodeId: number, extraInputs: Record<number, unknown>): Promise<void> {
       if (isStopped(workflowId)) return;
 
@@ -296,7 +333,21 @@ export const executeFlowRuntime = async (
       let output: unknown;
       if (node.process) {
         const execContext: NodeExecutionContext = { node, inputs, ctx, triggerData, mainLLM, workflowId, tracer } as NodeExecutionContext;
-        output = await node.process(execContext);
+        try {
+          output = await node.process(execContext);
+        } catch (err) {
+          tracer?.recordStep({
+            type: "workflow_node",
+            name: node.title || String(nodeId),
+            status: "failed",
+            workflowId,
+            nodeId,
+            inputs,
+            durationMs: Date.now() - nodeStart,
+            details: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        }
       } else {
         output = node.nodeValue ?? null;
       }
@@ -316,12 +367,18 @@ export const executeFlowRuntime = async (
       });
     }
 
+    /**
+     * Broadcasts current workflow results for a specific loop iteration.
+     */
     function broadcastIterationResults(iterationIndex: number): void {
       const iterResults: Record<string, unknown> = {};
       for (const [nodeId, result] of results.entries()) iterResults[String(nodeId)] = result;
       broadcast?.({ type: "workflow_iteration", data: { workflowId, iterationIndex, results: iterResults } });
     }
 
+    /**
+     * Executes interactive conversational turn loop between a UserPrompt node and ChatNode.
+     */
     async function runChatLoop(pair: ChatLoopPair): Promise<void> {
       const { userInputId, chatNodeId } = pair;
 

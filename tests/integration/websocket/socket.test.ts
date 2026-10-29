@@ -13,6 +13,7 @@ import {
   ConsoleInputUtils,
   registerPrompt,
 } from "../../../Workflow/Nodes/ConsoleInput";
+import { initFlowSystem } from "../../../Workflow/initFlowSystem";
 import { createGoal2WorkflowPayload } from "../../__mocks__/goal2PayloadFixtures";
 
 // Mock dependencies
@@ -643,13 +644,19 @@ describe("WebSocket Server", () => {
   });
 
   it("should successfully execute a Goal 2 serialized workflow via run_workflow", async () => {
+    initFlowSystem();
     const port = wss.address().port;
 
-    vi.mocked(executeFlowRuntime).mockResolvedValueOnce({
-      layers: [[1], [2]],
-      results: { 1: "http ok", 2: "join ok" },
-      finalResult: "join ok",
-    } as unknown as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown });
+    vi.mocked(executeFlowRuntime).mockImplementationOnce(async (wf) => {
+      expect(wf.nodes[0].category).toBeDefined();
+      expect(wf.nodes[0].category).not.toBe("");
+      expect(wf.nodes[0].sockets.length).toBeGreaterThan(0);
+      return {
+        layers: [[1], [2]],
+        results: { 1: "http ok", 2: "join ok" },
+        finalResult: "join ok",
+      } as unknown as { layers: number[][]; results: Record<string, unknown>; finalResult: unknown };
+    });
 
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(`ws://localhost:${port}`);

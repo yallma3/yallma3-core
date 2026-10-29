@@ -27,6 +27,9 @@ interface NodeDefinition {
 export class NodeRegistry {
   private nodeDefinitions: Record<string, NodeDefinition> = {};
 
+  /**
+   * Registers a node type with its creation factory and associated metadata.
+   */
   registerNodeType(
     name: string,
     factory: NodeFactory,
@@ -35,6 +38,9 @@ export class NodeRegistry {
     this.nodeDefinitions[name] = { factory, metadata };
   }
 
+  /**
+   * Creates an instance of a registered node type at the specified position.
+   */
   createNode(name: string, id: number, position: { x: number; y: number }) {
     const def = this.nodeDefinitions[name];
     if (!def) {
@@ -44,10 +50,16 @@ export class NodeRegistry {
     return def.factory(id, position);
   }
 
+  /**
+   * Returns the factory function registered for a given node type.
+   */
   getFactory(nodeType: string): NodeFactory | undefined {
     return this.nodeDefinitions[nodeType]?.factory;
   }
 
+  /**
+   * Retrieves the metadata definition for a registered node type.
+   */
   getMetadata(nodeType: string): NodeMetadata | undefined {
     return this.nodeDefinitions[nodeType]?.metadata;
   }

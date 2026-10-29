@@ -113,6 +113,21 @@ function safeSanitizeValue(value: unknown, depth = 0): unknown {
   return String(value);
 }
 
+const SENSITIVE_PARAM_NAME =
+  /(api[-_ ]?key|secret|(?:auth|access|bearer|session|oauth|refresh|bot)?[-_ ]?token(?!s)|password|credential|authorization)/i;
+const TOKEN_COUNT_PARAM_NAME = /(max|total|prompt|completion)[-_ ]?tokens?/i;
+
+/**
+ * Determines whether a workflow node configuration parameter represents sensitive
+ * credentials (such as API keys, secrets, or passwords) or originates from RuntimeVault.
+ */
+function isSensitiveParam(param: { parameterName?: string; valueSource?: string }): boolean {
+  if (!param?.parameterName) return false;
+  if (param.valueSource === "RuntimeVault") return true;
+  if (TOKEN_COUNT_PARAM_NAME.test(param.parameterName)) return false;
+  return SENSITIVE_PARAM_NAME.test(param.parameterName);
+}
+
 /**
  * Transforms a raw or hydrated Workflow object into a clean, machine-readable
  * graph representation stripped of UI clutter (coordinates, visual flags, i18n maps).
@@ -154,6 +169,10 @@ export function sanitizeWorkflowGraph(workflow: Workflow): CleanWorkflowGraph {
     if (Array.isArray(rawParams)) {
       for (const param of rawParams) {
         if (!param || !param.parameterName) continue;
+        if (isSensitiveParam(param as { parameterName?: string; valueSource?: string })) {
+          config[param.parameterName] = "[REDACTED]";
+          continue;
+        }
         config[param.parameterName] =
           param.paramValue !== undefined ? param.paramValue : param.defaultValue;
       }

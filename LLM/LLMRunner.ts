@@ -141,6 +141,9 @@ export class FatalMainLLMError extends Error {
   }
 }
 
+/**
+ * Invokes an LLM provider for a given option and key, wrapping it in execution tracing if provided.
+ */
 async function callLLMWithOption(
   option: LLMOption,
   apiKey: string,

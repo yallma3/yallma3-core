@@ -72,6 +72,39 @@ describe("normalizeWorkflow utils", () => {
       expect(node.sockets.some((s) => s.title === "URL")).toBe(true);
     });
 
+    it("applies saved config parameters when re-deriving dynamic sockets for node omitting sockets", () => {
+      const dynamicPayload: Workflow = {
+        id: "wf-dynamic",
+        name: "Dynamic Flow",
+        description: "Flow with dynamic node omitting sockets",
+        nodes: [
+          {
+            id: 20,
+            nodeType: "Join",
+            title: "Join Text",
+            configParameters: [
+              {
+                parameterName: "Input Count",
+                paramValue: 4,
+              },
+            ],
+          } as unknown as BaseNode,
+        ],
+        connections: [],
+      };
+
+      const normalized = normalizeWorkflowPayload(dynamicPayload);
+      const node = normalized.nodes[0]!;
+      expect(node.sockets).toHaveLength(5); // 4 inputs + 1 output
+      expect(node.sockets.map((s) => s.title)).toEqual([
+        "Input 1",
+        "Input 2",
+        "Input 3",
+        "Input 4",
+        "Output",
+      ]);
+    });
+
     it("falls back gracefully for unknown node types without throwing", () => {
       const unknownPayload = {
         id: "wf-unknown",

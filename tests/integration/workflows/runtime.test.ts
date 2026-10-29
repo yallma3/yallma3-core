@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Workflow } from '../../../Models/Workflow';
 import type { LLMOption } from '../../../Models/LLM';
 import type { ExecutionContext } from '../../../Execution/ExecutionContext';
+import type { ExecutionTracer } from '../../../Execution/ExecutionTracer';
 
 // Capture the context each node's process() is invoked with.
 const { processSpy } = vi.hoisted(() => ({
@@ -173,6 +174,36 @@ describe('executeFlowRuntime — FatalMainLLMError propagation', () => {
     expect(result).not.toBeInstanceOf(FatalMainLLMError);
     expect(broadcast).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'workflow_error' })
+    );
+  });
+
+  it('records a failed workflow_node step in tracer when node.process throws', async () => {
+    processSpy.mockImplementationOnce(async () => {
+      throw new Error('processing explosion');
+    });
+
+    const mockTracer = {
+      recordStep: vi.fn(),
+      recordWorkflow: vi.fn(),
+    } as unknown as ExecutionTracer;
+
+    await executeFlowRuntime(
+      makeWorkflow('wf-fail-trace'),
+      mockCtx,
+      undefined,
+      undefined,
+      undefined,
+      mockTracer
+    );
+
+    expect(mockTracer.recordStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'workflow_node',
+        status: 'failed',
+        workflowId: 'wf-fail-trace',
+        nodeId: 1,
+        details: 'processing explosion',
+      })
     );
   });
 });

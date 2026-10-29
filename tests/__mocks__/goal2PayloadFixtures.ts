@@ -22,10 +22,10 @@ export const createGoal2WorkflowPayload = () => ({
         { id: 101, title: "URL", type: "input", nodeId: 1, dataType: "string" },
         { id: 102, title: "Headers", type: "input", nodeId: 1, dataType: "json" },
         { id: 103, title: "Body", type: "input", nodeId: 1, dataType: "unknown" },
-        { id: 201, title: "Response Body", type: "output", nodeId: 1, dataType: "unknown" },
-        { id: 202, title: "Status Code", type: "output", nodeId: 1, dataType: "number" },
-        { id: 203, title: "OK?", type: "output", nodeId: 1, dataType: "boolean" },
-        { id: 204, title: "Error", type: "output", nodeId: 1, dataType: "string" },
+        { id: 104, title: "Response Body", type: "output", nodeId: 1, dataType: "unknown" },
+        { id: 105, title: "Status Code", type: "output", nodeId: 1, dataType: "number" },
+        { id: 106, title: "OK?", type: "output", nodeId: 1, dataType: "boolean" },
+        { id: 107, title: "Error", type: "output", nodeId: 1, dataType: "string" },
       ],
       configParameters: [
         {
@@ -75,7 +75,7 @@ export const createGoal2WorkflowPayload = () => ({
   ],
   connections: [
     {
-      fromSocket: 201,
+      fromSocket: 104,
       toSocket: 201,
     },
   ],

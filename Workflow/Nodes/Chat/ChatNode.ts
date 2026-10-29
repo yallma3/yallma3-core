@@ -133,6 +133,9 @@ const metadata: NodeMetadata = {
   },
 };
 
+/**
+ * Factory that creates an LLM Chat node configured with prompt inputs and response outputs.
+ */
 export function createLLMChatNode(id: number, position: Position): ChatNode {
   return {
     id,

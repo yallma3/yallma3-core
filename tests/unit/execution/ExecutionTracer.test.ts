@@ -108,6 +108,57 @@ describe("ExecutionTracer — sanitizeWorkflowGraph", () => {
       toSocketTitle: "Input Data",
     });
   });
+
+  it("redacts sensitive config parameters and RuntimeVault values", () => {
+    const rawWorkflow: Workflow = {
+      id: "wf-secret",
+      name: "Secret Flow",
+      nodes: [
+        {
+          id: 1,
+          title: "Chat Node",
+          nodeType: "Chat",
+          configParameters: [
+            {
+              parameterName: "API Key",
+              paramValue: "sk-proj-supersecretkey12345",
+              valueSource: "UserInput",
+            },
+            {
+              parameterName: "Database Password",
+              paramValue: "hunter2",
+              valueSource: "UserInput",
+            },
+            {
+              parameterName: "Auth_Token",
+              paramValue: "bearer xyz",
+              valueSource: "UserInput",
+            },
+            {
+              parameterName: "Custom Header",
+              paramValue: "vault-secret-val",
+              valueSource: "RuntimeVault",
+            },
+            {
+              parameterName: "Public Param",
+              paramValue: "hello world",
+              valueSource: "UserInput",
+            },
+          ],
+        },
+      ],
+      connections: [],
+    };
+
+    const clean = sanitizeWorkflowGraph(rawWorkflow);
+    expect(clean.nodes[0].config).toEqual({
+      "API Key": "[REDACTED]",
+      "Database Password": "[REDACTED]",
+      Auth_Token: "[REDACTED]",
+      "Custom Header": "[REDACTED]",
+      "Public Param": "hello world",
+    });
+  });
 });
 
 describe("ExecutionTracer — Core Capabilities", () => {

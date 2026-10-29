@@ -85,11 +85,17 @@ export class OutputTokenManager {
   private defaultTtlMs: number = DEFAULT_OUTPUT_TOKEN_TTL_MS;
   private defaultMaxUses: number = DEFAULT_OUTPUT_TOKEN_MAX_USES;
 
+  /**
+   * Initializes the OutputTokenManager with the target output directory and loads env defaults.
+   */
   constructor(outputDir?: string) {
     this.outputDir = outputDir || path.resolve(process.cwd(), "Output");
     this.loadEnvDefaults();
   }
 
+  /**
+   * Returns the singleton instance of OutputTokenManager.
+   */
   public static getInstance(): OutputTokenManager {
     if (!OutputTokenManager.instance) {
       OutputTokenManager.instance = new OutputTokenManager();
@@ -123,20 +129,32 @@ export class OutputTokenManager {
     }
   }
 
+  /**
+   * Sets the default TTL duration for newly generated output capability tokens.
+   */
   public setDefaultTtl(ttl: string | number): void {
     this.defaultTtlMs = parseDurationToMs(ttl, this.defaultTtlMs);
   }
 
+  /**
+   * Returns the current default token TTL in milliseconds.
+   */
   public getDefaultTtl(): number {
     return this.defaultTtlMs;
   }
 
+  /**
+   * Sets the default maximum uses for newly generated output capability tokens.
+   */
   public setDefaultMaxUses(maxUses: number): void {
     if (maxUses > 0) {
       this.defaultMaxUses = maxUses;
     }
   }
 
+  /**
+   * Returns the current default maximum use count.
+   */
   public getDefaultMaxUses(): number {
     return this.defaultMaxUses;
   }

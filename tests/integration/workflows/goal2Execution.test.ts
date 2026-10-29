@@ -30,6 +30,7 @@ describe("Goal 2 Workflow Execution Integration", () => {
       expect(result.layers).toBeDefined();
       expect(result.layers.length).toBeGreaterThan(0);
       expect(result.results).toBeDefined();
+      expect(result.results[2]).toBeDefined();
     }
   });
 });

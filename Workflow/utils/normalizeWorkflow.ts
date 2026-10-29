@@ -25,6 +25,11 @@ export function normalizeWorkflowPayload(rawWorkflow: Workflow): Workflow {
         let sockets: Socket[] = Array.isArray(nodeData.sockets) ? nodeData.sockets : [];
         if (sockets.length === 0 && factory) {
           const freshNode = factory(nodeData.id, { x: nodeData.x ?? 0, y: nodeData.y ?? 0 });
+          for (const param of nodeData.configParameters ?? []) {
+            if (param.paramValue !== undefined && freshNode.setConfigParameter) {
+              freshNode.setConfigParameter(param.parameterName, param.paramValue);
+            }
+          }
           sockets = freshNode.sockets;
         }
 

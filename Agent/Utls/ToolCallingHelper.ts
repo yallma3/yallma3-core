@@ -1,4 +1,5 @@
 import { executeFlowRuntime } from "../../Workflow/runtime";
+import { FatalMainLLMError } from "../../LLM/LLMRunner";
 import type { LLMSpecTool, Tool } from "../../Models/Tool";
 import type { Workflow } from "../../Models/Workflow";
 import type { ExecutionTracer } from "../../Execution/ExecutionTracer";
@@ -46,6 +47,10 @@ async function triggeredPath(
   return result;
 }
 
+/**
+ * Executes a target workflow within an execution context, returning execution results
+ * or re-throwing fatal Main LLM errors for task-graph fatal stop handling.
+ */
 export async function workflowExecutor(
   ctx: ExecutionContext,
   workflowId: string,
@@ -59,6 +64,7 @@ export async function workflowExecutor(
     const result = await triggeredPath(ctx, workflowId, input, triggerData, b, tracer);
     return { status: "completed", result };
   } catch (err) {
+    if (err instanceof FatalMainLLMError) throw err;
     return {
       status: "failed",
       reason:

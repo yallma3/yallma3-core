@@ -55,6 +55,9 @@ export class ExecutionOrchestrator {
     await agent.run();
   }
 
+  /**
+   * Normalizes and executes a workflow within the execution context, broadcasting results.
+   */
   async runWorkflow(workflow: Workflow, ctx: ExecutionContext, triggerData?: unknown): Promise<WorkflowResult | Error> {
     const normalizedWorkflow = normalizeWorkflowPayload(workflow);
     const result = await executeFlowRuntime(

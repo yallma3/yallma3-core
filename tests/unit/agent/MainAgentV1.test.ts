@@ -138,3 +138,83 @@ describe('MainAgentV1 — Startup Gate 1 (Main LLM health check)', () => {
     );
   });
 });
+
+describe('MainAgentV1 — Blocked Task Handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('skips agent tasks that are marked as blocked by buildTaskContext without running them', async () => {
+    vi.mocked(testLLMHealth).mockResolvedValue({ ok: true });
+    const { ctx, send } = makeContext();
+
+    const wsWithTasks: WorkspaceData = {
+      ...mockWorkspaceData,
+      workflows: [
+        {
+          id: 'wf-fail',
+          name: 'Failing WF',
+          description: '',
+          nodes: [],
+          connections: [],
+        },
+      ],
+      tasks: [
+        {
+          id: 'task-wf',
+          title: 'Workflow Task',
+          type: 'workflow',
+          description: 'Failing workflow',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'wf-fail',
+          role: 'test',
+          expectedOutput: 'output',
+        },
+        {
+          id: 'task-agent',
+          title: 'Agent Task',
+          type: 'agentic',
+          description: 'Agent task dependent on workflow',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: null,
+          role: 'test',
+          expectedOutput: 'output',
+        },
+      ],
+      connections: [{ fromTask: 'task-wf', toTask: 'task-agent' }],
+    };
+
+    vi.mocked(getTaskExecutionOrderWithContext).mockReturnValue([
+      { taskId: 'task-wf', context: [] },
+      { taskId: 'task-agent', context: ['task-wf'] },
+    ]);
+
+    const { workflowExecutor } = await import('../../../Agent/Utls/ToolCallingHelper');
+    vi.mocked(workflowExecutor).mockResolvedValue({
+      status: 'failed',
+      reason: 'Workflow execution failed',
+    });
+
+    const { assignBestFit } = await import('../../../Agent/Utls/MainAgentHelper');
+
+    const agent = new MainAgentV1(wsWithTasks, ctx);
+    const result = await agent.run();
+
+    // Workflow failed, so dependent agent task should be marked blocked and skipped
+    expect(result).toBeDefined();
+    // assignBestFit should NEVER have been called for task-agent because it was skipped
+    expect(assignBestFit).not.toHaveBeenCalled();
+    // Verify info event was sent indicating task was skipped
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'message',
+        data: expect.objectContaining({
+          type: 'info',
+          message: expect.stringContaining("Task 'Agent Task' skipped"),
+        }),
+      })
+    );
+  });
+});

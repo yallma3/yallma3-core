@@ -97,6 +97,22 @@ export class MainAgentV1 implements MainAgent {
 
       const taskContext = this.buildTaskContext(layer, results, taskStatuses);
 
+      if (taskStatuses[task.id]?.status === "blocked") {
+        this.tracer.recordStep({
+          type: "task",
+          name: task.title,
+          status: "blocked",
+          taskId: task.id,
+          durationMs: Date.now() - taskStart,
+          details: taskStatuses[task.id]?.reason ?? "Blocked by upstream dependency",
+        });
+        this.emitInfo(
+          `Task '${task.title}' skipped: ${taskStatuses[task.id]?.reason ?? "Blocked by upstream dependency"}`
+        );
+        step++;
+        continue;
+      }
+
       const bestFit = await this.assignIfNeeded(task, MainLLM);
 
       if (!bestFit) {
@@ -235,6 +251,10 @@ export class MainAgentV1 implements MainAgent {
     return this.workspaceData.tasks.find((t) => t.id === id);
   }
 
+  /**
+   * Builds execution context for a task layer from upstream task results,
+   * marking the task as blocked if any upstream dependency did not complete successfully.
+   */
   private buildTaskContext(
     layer: { taskId: string; context: string[] },
     results: Record<string, string>,
@@ -358,6 +378,9 @@ export class MainAgentV1 implements MainAgent {
 
   // STAGE 4: WORKFLOW EXECUTION
 
+  /**
+   * Executes a workflow task by delegating to workflowExecutor and recording results/steps.
+   */
   private async executeWorkflowTask({
     task,
     layerIndex,
@@ -606,6 +629,10 @@ export class MainAgentV1 implements MainAgent {
     await this.saveResults(layers, results, taskStatuses);
   }
 
+  /**
+   * Persists workspace execution outputs to text and optional JSON sidecar files,
+   * generates capability tokens, and emits a workspace_artifacts event.
+   */
   private async saveResults(
     layers: { taskId: string }[],
     results: Record<string, string>,
