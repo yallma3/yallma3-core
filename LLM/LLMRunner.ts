@@ -1,4 +1,5 @@
 import type { LLMMessage, LLMOption, LLMProvider, LLMResponse } from "../Models/LLM";
+import type { ExecutionTracer, LLMCallerContext } from "../Execution/ExecutionTracer";
 import {
   ClaudeProvider,
   GeminiProvider,
@@ -140,12 +141,24 @@ export class FatalMainLLMError extends Error {
   }
 }
 
+/**
+ * Invokes an LLM provider for a given option and key, wrapping it in execution tracing if provided.
+ */
 async function callLLMWithOption(
   option: LLMOption,
   apiKey: string,
-  messages: LLMMessage[]
+  messages: LLMMessage[],
+  tracer?: ExecutionTracer,
+  caller?: LLMCallerContext
 ): Promise<LLMResponse> {
-  const provider = getLLMProvider(option, apiKey);
+  let provider = getLLMProvider(option, apiKey);
+  if (tracer) {
+    provider = tracer.wrapLLM(
+      provider,
+      caller ?? { source: "workflow_node", action: "execute_with_fallback" },
+      { providerName: option.provider, modelName: option.model.name }
+    );
+  }
   if (!provider.callLLM) throw new Error(`Provider ${option.provider} does not support callLLM`);
   return provider.callLLM(messages);
 }
@@ -161,15 +174,25 @@ export async function executeWithFallback({
   mainLLM,
   messages,
   workflowId,
+  tracer,
+  caller,
 }: {
   nodeLLM?: { option: LLMOption; apiKey: string };
   mainLLM: { option: LLMOption; apiKey: string };
   messages: LLMMessage[];
   workflowId?: string;
+  tracer?: ExecutionTracer;
+  caller?: LLMCallerContext;
 }): Promise<LLMResponse> {
   if (nodeLLM) {
     try {
-      return await callLLMWithOption(nodeLLM.option, nodeLLM.apiKey, messages);
+      return await callLLMWithOption(
+        nodeLLM.option,
+        nodeLLM.apiKey,
+        messages,
+        tracer,
+        caller ?? { source: "workflow_node", workflowId, action: "node_llm" }
+      );
     } catch (err) {
       console.warn(
         `[executeWithFallback] Node LLM failed (workflow ${workflowId}), falling back to Main LLM:`,
@@ -178,7 +201,13 @@ export async function executeWithFallback({
     }
   }
   try {
-    return await callLLMWithOption(mainLLM.option, mainLLM.apiKey, messages);
+    return await callLLMWithOption(
+      mainLLM.option,
+      mainLLM.apiKey,
+      messages,
+      tracer,
+      caller ?? { source: "workflow_node", workflowId, action: "main_llm_fallback" }
+    );
   } catch (err) {
     throw new FatalMainLLMError(
       `Main LLM failed during execution (workflow ${workflowId}): ${(err as Error).message}`

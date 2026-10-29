@@ -133,6 +133,9 @@ const metadata: NodeMetadata = {
   },
 };
 
+/**
+ * Factory that creates an LLM Chat node configured with prompt inputs and response outputs.
+ */
 export function createLLMChatNode(id: number, position: Position): ChatNode {
   return {
     id,
@@ -240,9 +243,30 @@ export function createLLMChatNode(id: number, position: Position): ChatNode {
             mainLLM: context.mainLLM,
             messages,
             workflowId: context.workflowId,
+            tracer: context.tracer,
+            caller: {
+              source: "workflow_node",
+              workflowId: context.workflowId,
+              nodeId: n.id,
+              name: n.title,
+              action: "chat_completion",
+            },
           });
         } else if (nodeLLM) {
-          const provider = getLLMProvider(nodeLLM.option, nodeLLM.apiKey);
+          let provider = getLLMProvider(nodeLLM.option, nodeLLM.apiKey);
+          if (context.tracer) {
+            provider = context.tracer.wrapLLM(
+              provider,
+              {
+                source: "workflow_node",
+                workflowId: context.workflowId,
+                nodeId: n.id,
+                name: n.title,
+                action: "node_llm",
+              },
+              { providerName: nodeLLM.option.provider, modelName: nodeLLM.option.model.name }
+            );
+          }
           if (!provider.callLLM) throw new Error(`Provider ${nodeLLM.option.provider} does not support callLLM`);
           response = await provider.callLLM(messages);
         } else {

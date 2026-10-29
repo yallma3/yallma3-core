@@ -13,6 +13,7 @@ import { Helper } from "../Utils/Helper";
 import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
 import { WebSocketContext } from "../Execution/ExecutionContext";
 import { ExecutionOrchestrator } from "../Execution/Orchestrator";
+import { normalizeWorkflowPayload, normalizeWorkspacePayload } from "../Workflow/utils/normalizeWorkflow";
 
 export type CommandErrorCode =
   | 'VALIDATION_ERROR'
@@ -164,8 +165,10 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
             }
 
             const payload = Helper.JsonParser.parse(data.data);
-            const { workspaceId, trigger, workspaceData, baseWorkflowsPath } =
-              payload;
+            const { workspaceId, trigger, baseWorkflowsPath } = payload;
+            const workspaceData = payload.workspaceData
+              ? normalizeWorkspacePayload(payload.workspaceData)
+              : undefined;
 
             if (!workspaceId || !trigger) {
               sendCommandError(ws, data.type, 'VALIDATION_ERROR', 'Missing workspaceId or trigger', data.requestId)
@@ -400,13 +403,13 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
 
             const wsCtx = new WebSocketContext(ws, broadcast);
             wsCtx.requestId = data.requestId;
-            currentWorkspaceAgent = createMainAgent(data.data, wsCtx);
             try {
+              currentWorkspaceAgent = createMainAgent(data.data, wsCtx);
               await currentWorkspaceAgent.run();
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
               console.error("Workspace execution error:", errorMessage);
-              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workspace execution failed: ${errorMessage}`, data.requestId)
+              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workspace execution failed: ${errorMessage}`, data.requestId);
             }
             break;
           }
@@ -445,24 +448,31 @@ export function setupWebSocketServer(wss: WebSocketServer, _instanceId?: string)
               })
             );
 
-            const workflow = Helper.JsonParser.parse(data.data);
-            const ctx = new WebSocketContext(ws, broadcast);
-            ctx.requestId = data.requestId;
-            const result = await orchestrator.runWorkflow(workflow, ctx);
+            try {
+              const rawWorkflow = Helper.JsonParser.parse(data.data);
+              const workflow = normalizeWorkflowPayload(rawWorkflow);
+              const ctx = new WebSocketContext(ws, broadcast);
+              ctx.requestId = data.requestId;
+              const result = await orchestrator.runWorkflow(workflow, ctx);
 
-            if (result instanceof Error) {
-              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workflow execution failed: ${result.message}`, data.requestId)
-            } else {
-              ws.send(
-                JSON.stringify({
-                  id: workflow.id,
-                  type: "workflow_result",
-                  data: result,
-                  // run requestId echoed for client correlation; `id` remains workflow.id
-                  requestId: data.requestId,
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              if (result instanceof Error) {
+                sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workflow execution failed: ${result.message}`, data.requestId)
+              } else {
+                ws.send(
+                  JSON.stringify({
+                    id: workflow.id,
+                    type: "workflow_result",
+                    data: result,
+                    // run requestId echoed for client correlation; `id` remains workflow.id
+                    requestId: data.requestId,
+                    timestamp: new Date().toISOString(),
+                  })
+                );
+              }
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : String(err);
+              console.error("Workflow execution error:", errorMessage);
+              sendCommandError(ws, data.type, 'EXECUTION_ERROR', `Workflow execution failed: ${errorMessage}`, data.requestId);
             }
             break;
           }

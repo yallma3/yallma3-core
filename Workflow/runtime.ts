@@ -5,13 +5,21 @@ import type { ExecutionContext } from "../Execution/ExecutionContext";
 import { WorkspaceRepository } from "../Execution/WorkspaceRepository";
 import { FatalMainLLMError } from "../LLM/LLMRunner";
 import { buildLayeredTopoSort } from "../Execution/toposort";
+import { logVerboseWorkflowGraph } from "../Execution/ExecutionTracer";
+import type { ExecutionTracer } from "../Execution/ExecutionTracer";
 
 const stopRegistry = new Map<string, boolean>();
 
+/**
+ * Requests premature cancellation and termination of an active workflow execution.
+ */
 export function requestStop(workflowId: string): void {
   stopRegistry.set(workflowId, true);
 }
 
+/**
+ * Returns true if execution cancellation has been requested for the workflow.
+ */
 function isStopped(workflowId: string): boolean {
   return stopRegistry.get(workflowId) === true;
 }
@@ -24,15 +32,26 @@ const CHAT_LOOP_NODE_TYPES = new Set([
   "OpenRouterChat",
 ]);
 
+/**
+ * Executes a full workflow graph runtime, resolving layers, executing nodes,
+ * supporting chat loops, and recording granular execution tracing.
+ */
 export const executeFlowRuntime = async (
   workflow: Workflow,
   ctx: ExecutionContext,
   context?: string,
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
+  tracer?: ExecutionTracer,
 ) => {
   const workflowId = String(workflow.id ?? "default");
   stopRegistry.set(workflowId, false);
+
+  logVerboseWorkflowGraph(workflow);
+
+  if (tracer) {
+    tracer.recordWorkflow(workflow);
+  }
 
   // Thread the current workspace's Main LLM credentials into node contexts so
   // nodes never need to query ambient singletons themselves.
@@ -46,8 +65,15 @@ export const executeFlowRuntime = async (
     const connections = workflow.connections;
     const savedSocketToNode: Record<number, number> = {};
     for (const nodeData of workflow.nodes) {
-      for (const s of nodeData.sockets) {
+      for (const s of nodeData.sockets ?? []) {
         savedSocketToNode[s.id] = nodeData.id;
+      }
+    }
+    for (const node of nodes) {
+      for (const s of node.sockets ?? []) {
+        if (savedSocketToNode[s.id] === undefined) {
+          savedSocketToNode[s.id] = node.id;
+        }
       }
     }
 
@@ -64,10 +90,15 @@ export const executeFlowRuntime = async (
       const toNodeId   = savedSocketToNode[conn.toSocket];
       if (fromNodeId === undefined || toNodeId === undefined) continue;
 
-      const fromNodeData = workflow.nodes.find(n => n.id === fromNodeId);
-      const toNodeData   = workflow.nodes.find(n => n.id === toNodeId);
-      const fromSocket   = fromNodeData?.sockets.find(s => s.id === conn.fromSocket);
-      const toSocket     = toNodeData?.sockets.find(s => s.id === conn.toSocket);
+      const fromNode = nodes.find(n => n.id === fromNodeId);
+      const toNode   = nodes.find(n => n.id === toNodeId);
+      const fromWireNode = workflow.nodes.find(n => n.id === fromNodeId);
+      const toWireNode   = workflow.nodes.find(n => n.id === toNodeId);
+
+      const fromSocket = fromNode?.sockets?.find(s => s.id === conn.fromSocket) ??
+                         fromWireNode?.sockets?.find(s => s.id === conn.fromSocket);
+      const toSocket   = toNode?.sockets?.find(s => s.id === conn.toSocket) ??
+                         toWireNode?.sockets?.find(s => s.id === conn.toSocket);
 
       edges.push({
         fromNodeId,
@@ -128,6 +159,9 @@ export const executeFlowRuntime = async (
       chatLoopNodeIds.add(pair.userInputId);
       chatLoopNodeIds.add(pair.chatNodeId);
     }
+    /**
+     * Traverses downstream edges to find all node IDs belonging to a loop body.
+     */
     function getLoopBodyIds(startId: number): Set<number> {
       const visited = new Set<number>();
       const queue = [startId];
@@ -145,6 +179,9 @@ export const executeFlowRuntime = async (
       return visited;
     }
 
+    /**
+     * Checks if a target node is positioned inside any active loop body.
+     */
     function isInsideLoopBody(nodeId: number): boolean {
       for (const loopId of loopNodeIds) {
         if (getLoopBodyIds(loopId).has(nodeId)) return true;
@@ -152,6 +189,10 @@ export const executeFlowRuntime = async (
       return false;
     }
 
+    /**
+     * Executes a single workflow node by resolving input values from upstream results
+     * and recording execution step outcomes in the tracer.
+     */
     async function executeNode(nodeId: number): Promise<void> {
       if (isStopped(workflowId)) return;
 
@@ -186,6 +227,7 @@ export const executeFlowRuntime = async (
         if (destSock) inputs[destSock.id] = value;
       }
 
+      const nodeStart = Date.now();
       if (myUpstream.length > 0) {
         const fedBySkipped = myUpstream.some(e => skippedNodes.has(e.fromNodeId));
         const allUndefined = myUpstream.every(e => {
@@ -205,6 +247,14 @@ export const executeFlowRuntime = async (
           skippedNodes.add(nodeId);
           console.log(`Node ${nodeId} (${node.title}) skipped — branch not taken.`);
           broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} skipped (branch not taken).`, details: null } });
+          tracer?.recordStep({
+            type: "workflow_node",
+            name: node.title || String(nodeId),
+            status: "skipped",
+            workflowId,
+            nodeId,
+            details: "Branch not taken",
+          });
           return;
         }
       }
@@ -213,24 +263,52 @@ export const executeFlowRuntime = async (
       if (node.process) {
         const execContext: NodeExecutionContext = {
           node, inputs, ctx, triggerData,
-          mainLLM, workflowId,
+          mainLLM, workflowId, tracer,
           ...(node.nodeType === "Loop" ? { workflow, allNodes: nodes } : {}),
         } as NodeExecutionContext;
-        output = await node.process(execContext);
+        try {
+          output = await node.process(execContext);
+        } catch (err) {
+          tracer?.recordStep({
+            type: "workflow_node",
+            name: node.title || String(nodeId),
+            status: "failed",
+            workflowId,
+            nodeId,
+            inputs,
+            durationMs: Date.now() - nodeStart,
+            details: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        }
       } else {
         output = node.nodeValue ?? null;
       }
 
       results.set(nodeId, output);
-      console.log(`Node ${nodeId} executed. Output:`, String(output).substring(0, 60));
+      console.log(`[workflow ${workflowId} (${(workflow as {name?: string})?.name || "unnamed"})] Node ${nodeId} (${node.title || node.nodeType}) executed. Output:`, typeof output === "object" ? JSON.stringify(output).substring(0, 120) : String(output).substring(0, 120));
       broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
+      tracer?.recordStep({
+        type: "workflow_node",
+        name: node.title || String(nodeId),
+        status: "success",
+        workflowId,
+        nodeId,
+        inputs,
+        output,
+        durationMs: Date.now() - nodeStart,
+      });
     }
+    /**
+     * Executes a node with explicitly provided input values, such as in chat loop iterations.
+     */
     async function executeNodeWithInputs(nodeId: number, extraInputs: Record<number, unknown>): Promise<void> {
       if (isStopped(workflowId)) return;
 
       const node = nodes.find(n => n.id === nodeId);
       if (!node) return;
 
+      const nodeStart = Date.now();
       const inputs: Record<number, unknown> = { ...extraInputs };
       const myUpstream = upstreamEdges[nodeId] ?? [];
       for (const edge of myUpstream) {
@@ -254,23 +332,53 @@ export const executeFlowRuntime = async (
 
       let output: unknown;
       if (node.process) {
-        const execContext: NodeExecutionContext = { node, inputs, ctx, triggerData, mainLLM, workflowId } as NodeExecutionContext;
-        output = await node.process(execContext);
+        const execContext: NodeExecutionContext = { node, inputs, ctx, triggerData, mainLLM, workflowId, tracer } as NodeExecutionContext;
+        try {
+          output = await node.process(execContext);
+        } catch (err) {
+          tracer?.recordStep({
+            type: "workflow_node",
+            name: node.title || String(nodeId),
+            status: "failed",
+            workflowId,
+            nodeId,
+            inputs,
+            durationMs: Date.now() - nodeStart,
+            details: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        }
       } else {
         output = node.nodeValue ?? null;
       }
 
       results.set(nodeId, output);
-      console.log(`Node ${nodeId} (chat) executed. Output:`, String(output).substring(0, 60));
+      console.log(`[workflow ${workflowId} (${(workflow as {name?: string})?.name || "unnamed"})] Node ${nodeId} (${node.title || node.nodeType}) (chat) executed. Output:`, typeof output === "object" ? JSON.stringify(output).substring(0, 120) : String(output).substring(0, 120));
       broadcast?.({ type: "workflow_output", data: { id: Date.now().toString(), timestamp: Date.now(), type: "info", message: `Node ${node.title || nodeId} executed.`, details: JSON.stringify(output, null, 2) } });
+      tracer?.recordStep({
+        type: "workflow_node",
+        name: node.title || String(nodeId),
+        status: "success",
+        workflowId,
+        nodeId,
+        inputs,
+        output,
+        durationMs: Date.now() - nodeStart,
+      });
     }
 
+    /**
+     * Broadcasts current workflow results for a specific loop iteration.
+     */
     function broadcastIterationResults(iterationIndex: number): void {
       const iterResults: Record<string, unknown> = {};
       for (const [nodeId, result] of results.entries()) iterResults[String(nodeId)] = result;
       broadcast?.({ type: "workflow_iteration", data: { workflowId, iterationIndex, results: iterResults } });
     }
 
+    /**
+     * Executes interactive conversational turn loop between a UserPrompt node and ChatNode.
+     */
     async function runChatLoop(pair: ChatLoopPair): Promise<void> {
       const { userInputId, chatNodeId } = pair;
 

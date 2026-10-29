@@ -10,6 +10,7 @@ import { Helper } from "../Utils/Helper";
 import { scheduledTriggerManager } from "../Trigger/ScheduledTriggerManager";
 import type { WorkspaceData } from "../Models/Workspace";
 import type { Workflow } from "../Models/Workflow";
+import { normalizeWorkflowPayload } from "../Workflow/utils/normalizeWorkflow";
 
 function safeName(name: string): string {
   if (!name) return '_';
@@ -54,9 +55,13 @@ export class ExecutionOrchestrator {
     await agent.run();
   }
 
+  /**
+   * Normalizes and executes a workflow within the execution context, broadcasting results.
+   */
   async runWorkflow(workflow: Workflow, ctx: ExecutionContext, triggerData?: unknown): Promise<WorkflowResult | Error> {
+    const normalizedWorkflow = normalizeWorkflowPayload(workflow);
     const result = await executeFlowRuntime(
-      workflow,
+      normalizedWorkflow,
       ctx,
       undefined,
       triggerData,

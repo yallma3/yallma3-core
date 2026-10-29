@@ -3,6 +3,9 @@ import { nodeRegistry } from "../NodeRegistry";
 import type { BaseNode } from "../types/types";
 import { buildLayeredTopoSort } from "../../Execution/toposort";
 
+/**
+ * Computes execution layers for a workflow using topological sorting of node edges.
+ */
 export function buildExecutionLayers(workflow: Workflow): number[][] {
   const { nodes, connections } = workflow;
   if (nodes.length === 0) {
@@ -32,6 +35,10 @@ export function buildExecutionLayers(workflow: Workflow): number[][] {
   return buildLayeredTopoSort(nodes, edges);
 }
 
+/**
+ * Re-instantiates workflow nodes using their registered factory definitions,
+ * applying saved configuration parameters to rebuild dynamic sockets.
+ */
 export function hydrateWorkflowNodes(workflow: Workflow): BaseNode[] {
   return workflow.nodes.map((nodeData) => {
     const factory = nodeRegistry.getFactory(nodeData.nodeType);
@@ -52,11 +59,15 @@ export function hydrateWorkflowNodes(workflow: Workflow): BaseNode[] {
     return {
       ...freshNode,
       ...nodeData,
+      category: nodeData.category ?? freshNode.category,
       sockets: freshNode.sockets, 
     };
   });
 }
 
+/**
+ * Remaps connection socket IDs from stored wire representations to hydrated fresh node sockets.
+ */
 export function remapConnections(
   workflow: Workflow
 ): Array<{ fromSocket: number; toSocket: number; label?: string }> {

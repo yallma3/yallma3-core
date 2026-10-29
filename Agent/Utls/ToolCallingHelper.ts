@@ -1,6 +1,8 @@
 import { executeFlowRuntime } from "../../Workflow/runtime";
+import { FatalMainLLMError } from "../../LLM/LLMRunner";
 import type { LLMSpecTool, Tool } from "../../Models/Tool";
 import type { Workflow } from "../../Models/Workflow";
+import type { ExecutionTracer } from "../../Execution/ExecutionTracer";
 import {
   connectToMultipleMcpServers,
   executeMcpTool,
@@ -16,6 +18,7 @@ async function triggeredPath(
   input?: string,
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
+  tracer?: ExecutionTracer,
 ): Promise<unknown> {
   const repo = WorkspaceRepository.getInstance();
   const currentId = repo.getCurrent();
@@ -30,7 +33,7 @@ async function triggeredPath(
     throw new Error(`Workflow not found: ${workflowId}`);
   }
 
-  const result = await executeFlowRuntime(workflow, ctx, input, triggerData, broadcast);
+  const result = await executeFlowRuntime(workflow, ctx, input, triggerData, broadcast, tracer);
 
   if (result instanceof Error) {
     console.error(`[ToolCalling] Workflow execution failed for ${workflowId}:`, result);
@@ -44,15 +47,30 @@ async function triggeredPath(
   return result;
 }
 
+/**
+ * Executes a target workflow within an execution context, returning execution results
+ * or re-throwing fatal Main LLM errors for task-graph fatal stop handling.
+ */
 export async function workflowExecutor(
   ctx: ExecutionContext,
   workflowId: string,
   input?: string,
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
-): Promise<unknown> {
+  tracer?: ExecutionTracer,
+): Promise<{ status: "completed" | "failed"; reason?: string; result?: unknown }> {
   const b = broadcast ?? ctx?.broadcast?.bind(ctx);
-  return triggeredPath(ctx, workflowId, input, triggerData, b);
+  try {
+    const result = await triggeredPath(ctx, workflowId, input, triggerData, b, tracer);
+    return { status: "completed", result };
+  } catch (err) {
+    if (err instanceof FatalMainLLMError) throw err;
+    return {
+      status: "failed",
+      reason:
+        err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export const toolExecutorAttacher = async (ctx: ExecutionContext, tools: Tool[]): Promise<LLMSpecTool[]> => {
@@ -122,7 +140,7 @@ export const toolExecutorAttacher = async (ctx: ExecutionContext, tools: Tool[])
         executor: async (args: Record<string, unknown>) => {
           const workflowInput = args.workflowInput as string;
           const result = await workflowExecutor(ctx, workflowID, workflowInput);
-          return result;
+          return result.result ?? result;
         },
       };
 

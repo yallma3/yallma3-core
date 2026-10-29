@@ -23,12 +23,15 @@ import { FatalMainLLMError, getLLMProvider, testLLMHealth } from "../../../LLM/L
 import type { LLMProvider } from "../../../Models/LLM";
 import type { ExecutionContext } from "../../../Execution/ExecutionContext";
 import { validateWorkspace } from "../../Validation/WorkspaceValidator";
+import { ExecutionTracer, logVerboseWorkspaceGraph } from "../../../Execution/ExecutionTracer";
+import { OutputTokenManager } from "../../../Execution/OutputTokenManager";
 
 export class MainAgentV1 implements MainAgent {
   version = "1.0.0";
   private aborted = false;
   private currentWorkflowId: string | null = null;
   private workspaceId: string;
+  private tracer = new ExecutionTracer();
 
   constructor(
     workspaceData: WorkspaceData,
@@ -39,6 +42,10 @@ export class MainAgentV1 implements MainAgent {
     repo.set(workspaceData.id, workspaceData);
     repo.setCurrent(workspaceData.id);
     this.workspaceId = workspaceData.id;
+
+    for (const wf of workspaceData.workflows ?? []) {
+      this.tracer.recordWorkflow(wf);
+    }
   }
 
   private get workspaceData(): WorkspaceData {
@@ -46,18 +53,29 @@ export class MainAgentV1 implements MainAgent {
   }
 
   async run(): Promise<Record<string, string>> {
-    if (!this.workspaceData) return {};
+    if (!this.workspaceData) {
+      console.warn("[MainAgentV1] No workspace data available for execution.");
+      return {};
+    }
+
+    // Verbose stdio printing immediately once received for execution
+    logVerboseWorkspaceGraph(this.workspaceData, this.tracer.getWorkflows());
 
     const validation = validateWorkspace(this.workspaceData);
     if (!validation.valid) {
+      console.error(`[Workspace Validation Failed] ${validation.error.message}`);
       this.emitErrorRaw(validation.error.message, null, false);
       return {};
     }
 
     await this.initialize();
-    if (this.aborted) return {};
+    if (this.aborted) {
+      console.warn(`[Workspace Aborted] Initialization failed or LLM unreachable.`);
+      return {};
+    }
 
     const results: Record<string, string> = {};
+    const taskStatuses: Record<string, { status: string; reason?: string }> = {};
     const layers = this.createTaskLayers();
     const MainLLM = this.createLLM();
 
@@ -69,7 +87,31 @@ export class MainAgentV1 implements MainAgent {
       const task = this.getTask(layer.taskId);
       if (!task) continue;
 
-      const taskContext = this.buildTaskContext(layer, results);
+      const taskStart = Date.now();
+      this.tracer.recordStep({
+        type: "task",
+        name: task.title,
+        status: "started",
+        taskId: task.id,
+      });
+
+      const taskContext = this.buildTaskContext(layer, results, taskStatuses);
+
+      if (taskStatuses[task.id]?.status === "blocked") {
+        this.tracer.recordStep({
+          type: "task",
+          name: task.title,
+          status: "blocked",
+          taskId: task.id,
+          durationMs: Date.now() - taskStart,
+          details: taskStatuses[task.id]?.reason ?? "Blocked by upstream dependency",
+        });
+        this.emitInfo(
+          `Task '${task.title}' skipped: ${taskStatuses[task.id]?.reason ?? "Blocked by upstream dependency"}`
+        );
+        step++;
+        continue;
+      }
 
       const bestFit = await this.assignIfNeeded(task, MainLLM);
 
@@ -79,6 +121,14 @@ export class MainAgentV1 implements MainAgent {
           null,
           false
         );
+        this.tracer.recordStep({
+          type: "task",
+          name: task.title,
+          status: "failed",
+          taskId: task.id,
+          durationMs: Date.now() - taskStart,
+          details: "Could not be assigned to any executor",
+        });
         break;
       }
 
@@ -90,6 +140,8 @@ export class MainAgentV1 implements MainAgent {
           bestFit,
           taskContext,
           results,
+          taskStatuses,
+          taskStart,
         });
         step++;
         continue;
@@ -122,18 +174,36 @@ export class MainAgentV1 implements MainAgent {
       );
 
       if (agentResult) {
+        taskStatuses[task.id] = { status: 'success' };
         results[task.id] = agentResult;
+        this.tracer.recordStep({
+          type: "task",
+          name: task.title,
+          status: "success",
+          taskId: task.id,
+          durationMs: Date.now() - taskStart,
+          output: agentResult,
+        });
         this.emitSuccess(step, layers.length, task.title, {
           result: agentResult,
         });
       } else {
+        taskStatuses[task.id] = { status: 'failed', reason: 'Agent execution failed' };
+        this.tracer.recordStep({
+          type: "task",
+          name: task.title,
+          status: "failed",
+          taskId: task.id,
+          durationMs: Date.now() - taskStart,
+          details: "Agent execution failed",
+        });
         this.emitError(step, layers.length, task.title);
       }
 
       step++;
     }
 
-    await this.finalize(layers, results);
+    await this.finalize(layers, results, taskStatuses);
     return results;
   }
 
@@ -181,10 +251,26 @@ export class MainAgentV1 implements MainAgent {
     return this.workspaceData.tasks.find((t) => t.id === id);
   }
 
+  /**
+   * Builds execution context for a task layer from upstream task results,
+   * marking the task as blocked if any upstream dependency did not complete successfully.
+   */
   private buildTaskContext(
-    layer: { context: string[] },
-    results: Record<string, string>
+    layer: { taskId: string; context: string[] },
+    results: Record<string, string>,
+    statuses: Record<string, { status: string; reason?: string }>
   ) {
+    // If a dependency failed or was blocked, mark this task blocked
+    for (const dep of layer.context) {
+      const st = statuses[dep];
+      if (st?.status !== 'success') {
+        statuses[layer.taskId] = {
+          status: 'blocked',
+          reason: `Upstream task dependency '${dep}' not completed successfully`,
+        };
+        return "";
+      }
+    }
     return layer.context.map((c) => results[c]).join(" , ");
   }
 
@@ -256,8 +342,21 @@ export class MainAgentV1 implements MainAgent {
     } else if (task.type === "agentic") {
       this.emitSystem(`Assigning task '${task.title}' via LLM...`);
 
-      bestFit = await assignBestFit(
+      const wrappedLLM = this.tracer.wrapLLM(
         llm,
+        {
+          source: "main_agent",
+          action: "assign_best_fit",
+          taskId: task.id,
+        },
+        {
+          providerName: this.workspaceData.mainLLM.provider,
+          modelName: this.workspaceData.mainLLM.model.name,
+        }
+      );
+
+      bestFit = await assignBestFit(
+        wrappedLLM,
         task,
         this.workspaceData.workflows,
         this.workspaceData.agents
@@ -279,6 +378,9 @@ export class MainAgentV1 implements MainAgent {
 
   // STAGE 4: WORKFLOW EXECUTION
 
+  /**
+   * Executes a workflow task by delegating to workflowExecutor and recording results/steps.
+   */
   private async executeWorkflowTask({
     task,
     layerIndex,
@@ -286,6 +388,8 @@ export class MainAgentV1 implements MainAgent {
     bestFit,
     taskContext,
     results,
+    taskStatuses,
+    taskStart,
   }: {
     task: Task;
     layerIndex: number;
@@ -293,12 +397,23 @@ export class MainAgentV1 implements MainAgent {
     bestFit: BestFitAssignment | null;
     taskContext: string;
     results: Record<string, string>;
+    taskStatuses: Record<string, { status: string; reason?: string }>;
+    taskStart?: number;
   }) {
     if (this.aborted) return;
 
+    const start = taskStart ?? Date.now();
     // if bestFit is not null then we have decided already, bestFit could be the same task.executorId
     const workflowId = bestFit ? bestFit.id : task.executorId;
     if (!workflowId) {
+      this.tracer.recordStep({
+        type: "task",
+        name: task.title,
+        status: "failed",
+        taskId: task.id,
+        durationMs: Date.now() - start,
+        details: "No workflowId found",
+      });
       this.emitError(layerIndex, totalLayers, task.title);
       return;
     }
@@ -308,28 +423,65 @@ export class MainAgentV1 implements MainAgent {
         bestFit ? bestFit.name : workflowId
       })`
     );
+    if (taskStatuses[task.id]?.status === "blocked") {
+      // Upstream dependency already recorded as blocked by buildTaskContext
+      this.tracer.recordStep({
+        type: "task",
+        name: task.title,
+        status: "blocked",
+        taskId: task.id,
+        durationMs: Date.now() - start,
+        details: taskStatuses[task.id]?.reason ?? "Blocked by upstream dependency",
+      });
+      return;
+    }
 
     this.currentWorkflowId = workflowId;
     try {
-      const finalResult = await workflowExecutor(
+      const execution = await workflowExecutor(
         this.ctx,
         workflowId,
         taskContext,
-        this.triggerData
+        this.triggerData,
+        undefined,
+        this.tracer
       );
       this.currentWorkflowId = null;
 
       if (this.aborted) return;
-      if (finalResult) {
+      if (execution.status === "completed" && execution.result) {
+        taskStatuses[task.id] = { status: 'success' };
+        const value = execution.result;
         results[task.id] =
-          typeof finalResult === "string"
-            ? finalResult
-            : JSON.stringify(finalResult);
+          typeof value === "string" ? value : JSON.stringify(value);
+
+        this.tracer.recordStep({
+          type: "task",
+          name: task.title,
+          status: "success",
+          taskId: task.id,
+          workflowId,
+          durationMs: Date.now() - start,
+          output: results[task.id],
+        });
 
         this.emitSuccess(layerIndex, totalLayers, task.title, {
-          task: JSON.stringify(finalResult, null, 2),
+          task: JSON.stringify(value, null, 2),
         });
       } else {
+        taskStatuses[task.id] = {
+          status: 'failed',
+          reason: execution.reason ?? 'No result returned',
+        };
+        this.tracer.recordStep({
+          type: "task",
+          name: task.title,
+          status: "failed",
+          taskId: task.id,
+          workflowId,
+          durationMs: Date.now() - start,
+          details: execution.reason ?? 'No result returned',
+        });
         this.emitError(layerIndex, totalLayers, task.title);
       }
     } catch (err) {
@@ -342,6 +494,16 @@ export class MainAgentV1 implements MainAgent {
         this.aborted = true;
         return;
       }
+      taskStatuses[task.id] = { status: 'failed', reason: (err as Error).message };
+      this.tracer.recordStep({
+        type: "task",
+        name: task.title,
+        status: "failed",
+        taskId: task.id,
+        workflowId,
+        durationMs: Date.now() - start,
+        details: (err as Error).message,
+      });
       throw err;
     }
   }
@@ -350,7 +512,19 @@ export class MainAgentV1 implements MainAgent {
 
   private async analyzeTaskCore(llm: LLMProvider, task: Task, context: string) {
     this.emitSystem(`Analysing task '${task.title}'...`);
-    return analyzeTaskCore(llm, task, context);
+    const wrappedLLM = this.tracer.wrapLLM(
+      llm,
+      {
+        source: "main_agent",
+        action: "analyze_task_core",
+        taskId: task.id,
+      },
+      {
+        providerName: this.workspaceData.mainLLM.provider,
+        modelName: this.workspaceData.mainLLM.model.name,
+      }
+    );
+    return analyzeTaskCore(wrappedLLM, task, context);
   }
 
   private async createAgentPlan(
@@ -360,9 +534,21 @@ export class MainAgentV1 implements MainAgent {
     context: string
   ) {
     this.emitInfo(`Creating agent plan...`);
+    const wrappedLLM = this.tracer.wrapLLM(
+      llm,
+      {
+        source: "main_agent",
+        action: "create_agent_plan",
+        taskId: task.id,
+      },
+      {
+        providerName: this.workspaceData.mainLLM.provider,
+        modelName: this.workspaceData.mainLLM.model.name,
+      }
+    );
 
     try {
-      const plan = await planAgenticTask(llm, coreAnalysis, task, context);
+      const plan = await planAgenticTask(wrappedLLM, coreAnalysis, task, context);
 
       this.emitSuccessRaw(
         "Agent plan created successfully",
@@ -404,7 +590,9 @@ export class MainAgentV1 implements MainAgent {
       plan,
       this.ctx,
       this.workspaceData.apiKey,
-      this.workspaceData.mainLLM
+      this.workspaceData.mainLLM,
+      "",
+      this.tracer
     );
     runtime.setAbortChecker(() => this.aborted);
     try {
@@ -421,7 +609,8 @@ export class MainAgentV1 implements MainAgent {
 
   private async finalize(
     layers: { taskId: string }[],
-    results: Record<string, string>
+    results: Record<string, string>,
+    taskStatuses: Record<string, { status: string; reason?: string }> = {}
   ) {
     if (this.aborted) return;
     const finalTaskId = layers[layers.length - 1]?.taskId ?? "";
@@ -432,15 +621,22 @@ export class MainAgentV1 implements MainAgent {
       version: this.version,
       timestamp: Date.now(),
     });
+    results["__final__"] = finalResult;
 
+    console.log(`✅ Workspace '${this.workspaceData.name}' completed successfully.`);
     this.emitSuccessRaw("Workspace completed successfully.", finalResult);
     this.emitWorkspaceStopped();
-    await this.saveResults(layers, results);
+    await this.saveResults(layers, results, taskStatuses);
   }
 
+  /**
+   * Persists workspace execution outputs to text and optional JSON sidecar files,
+   * generates capability tokens, and emits a workspace_artifacts event.
+   */
   private async saveResults(
     layers: { taskId: string }[],
-    results: Record<string, string>
+    results: Record<string, string>,
+    taskStatuses: Record<string, { status: string; reason?: string }> = {}
   ) {
     try {
       const outputDir = "Output";
@@ -467,7 +663,86 @@ __meta__: ${results["__meta__"]}
 
       await writeFile(filepath, output, "utf8");
 
+      const tokenManager = OutputTokenManager.getInstance();
+      const txtToken = tokenManager.generateToken(filename);
+      const artifacts: Array<{
+        filename: string;
+        format: "text" | "json";
+        downloadUrl: string;
+        viewUrl: string;
+      }> = [
+        {
+          filename,
+          format: "text",
+          downloadUrl: `/output/download/${encodeURIComponent(filename)}?token=${txtToken}`,
+          viewUrl: `/output/view/${encodeURIComponent(filename)}?token=${txtToken}`,
+        },
+      ];
+
+      // Optional structured sidecar file (same process) controlled by env var
+      if (process.env.YALLMA3_OUTPUT_JSON === "1" || process.env.YALLMA3_OUTPUT_JSON === "true") {
+        const jsonFilename = `${workspaceName}_${timestamp}.json`;
+        const jsonPath = join(outputDir, jsonFilename);
+        const jsonPayload = {
+          workspace: this.workspaceData.name,
+          workflows: this.tracer.getWorkflows(),
+          generatedAt: new Date().toISOString(),
+          mainLLM: {
+            provider: this.workspaceData.mainLLM.provider,
+            model: this.workspaceData.mainLLM.model.name,
+            modelId: this.workspaceData.mainLLM.model.id,
+          },
+          agents: this.workspaceData.agents.map((a) => ({
+            id: a.id,
+            name: a.name,
+            role: a.role,
+            provider: a.llm.provider,
+            model: a.llm.model.name,
+            modelId: a.llm.model.id,
+          })),
+          tasks: layers.map((l) => {
+            const t = this.workspaceData.tasks.find((x: { id: string }) => x.id === l.taskId);
+            return {
+              taskId: l.taskId,
+              title: t?.title,
+              executorId: t?.executorId,
+              status: taskStatuses[l.taskId]?.status ?? "unknown",
+              result: results[l.taskId],
+            };
+          }),
+          steps: this.tracer.getSteps(),
+          llmInteractions: this.tracer.getLLMInteractions(),
+          logs: this.tracer.getLogs(),
+          finalResult: results["__final__"],
+          aborted: this.aborted,
+          version: this.version,
+          layerCount: layers.length,
+          meta: results["__meta__"],
+        };
+        await writeFile(jsonPath, JSON.stringify(jsonPayload, null, 2), "utf8");
+        const jsonToken = tokenManager.generateToken(jsonFilename);
+        artifacts.push({
+          filename: jsonFilename,
+          format: "json",
+          downloadUrl: `/output/download/${encodeURIComponent(jsonFilename)}?token=${jsonToken}`,
+          viewUrl: `/output/view/${encodeURIComponent(jsonFilename)}?token=${jsonToken}`,
+        });
+        this.emitSuccessRaw(`Results saved to ${jsonPath}`);
+      }
+
       this.emitSuccessRaw(`Results saved to ${filepath}`);
+
+      // Emit structured workspace_artifacts event to WebSocket client
+      this.ctx.send({
+        type: "workspace_artifacts",
+        requestId: this.ctx.requestId,
+        data: {
+          workspace: this.workspaceData.name,
+          workspaceId: this.workspaceId,
+          artifacts,
+        },
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       this.emitErrorRaw("Failed to save results", error);
     }
@@ -476,6 +751,14 @@ __meta__: ${results["__meta__"]}
   // HELPERS — WebSocket Emitters
 
   private emit(type: string, message: string, results?: string) {
+    this.tracer.recordLog({
+      level:
+        type === "system" || type === "info" || type === "success" || type === "error"
+          ? type
+          : "info",
+      message,
+      details: results,
+    });
     if (this.aborted && type != "error") return;
     this.ctx.send({
       type: "message",
@@ -515,12 +798,14 @@ __meta__: ${results["__meta__"]}
   }
 
   private emitError(step: number, total: number, title: string) {
+    const errorMsg = `[${step}/${total}] Task '${title}' failed.`;
+    console.error(`[Workspace Error] ${errorMsg}`);
     this.ctx.send({
       type: "error",
       requestId: this.ctx.requestId,
       commandType: "run_workspace" as const,
       code: "EXECUTION_ERROR" as const,
-      message: `[${step}/${total}] Task '${title}' failed.`,
+      message: errorMsg,
       timestamp: new Date().toISOString(),
     });
   }
@@ -530,14 +815,16 @@ __meta__: ${results["__meta__"]}
     err: unknown = null,
     showError: boolean = true
   ) {
+    const fullMsg = `${message} ${
+      showError ? (err ? String(err) : ": Unknown error") : ""
+    }`.trim();
+    console.error(`[Workspace Error] ${fullMsg}`);
     this.ctx.send({
       type: "error",
       requestId: this.ctx.requestId,
       commandType: "run_workspace" as const,
       code: "EXECUTION_ERROR" as const,
-      message: `${message} ${
-        showError ? (err ? String(err) : ": Unknown error") : ""
-      }`,
+      message: fullMsg,
       timestamp: new Date().toISOString(),
     });
   }
