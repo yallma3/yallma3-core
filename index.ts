@@ -28,12 +28,16 @@ function parseArgs() {
       parsed["--port"] = arg.split("=")[1]!;
     } else if (arg.startsWith("--bind-file=")) {
       parsed["--bind-file"] = arg.split("=")[1]!;
+    } else if (arg.startsWith("--output-token-ttl=")) {
+      parsed["--output-token-ttl"] = arg.split("=")[1]!;
     } else if (arg === "--instance-id" && args[i + 1] !== undefined && !args[i + 1]!.startsWith("--")) {
       parsed["--instance-id"] = args[++i]!;
     } else if (arg === "--port" && args[i + 1] !== undefined && !args[i + 1]!.startsWith("--")) {
       parsed["--port"] = args[++i]!;
     } else if (arg === "--bind-file" && args[i + 1] !== undefined && !args[i + 1]!.startsWith("--")) {
       parsed["--bind-file"] = args[++i]!;
+    } else if (arg === "--output-token-ttl" && args[i + 1] !== undefined && !args[i + 1]!.startsWith("--")) {
+      parsed["--output-token-ttl"] = args[++i]!;
     } else {
       unknown.push(arg);
     }
@@ -56,18 +60,23 @@ if (parsedArgs["--help"] || parsedArgs["-h"]) {
 Usage: yallma3 [options]
 
 Options:
-  -h, --help       Show this help message
-  -v, --version    Show version number
-  --instance-id    Unique identifier for this instance (creates binding file, also serves as API key)
-  --port           Server port (default: 3001, auto-increment if busy)
-  --bind-file      Path where the binding file should be written (default: cwd/yallma3-bind.<instance-id>, or cwd/yallma3-bind if only --bind-file is specified)
+  -h, --help           Show this help message
+  -v, --version        Show version number
+  --instance-id        Unique identifier for this instance (creates binding file, also serves as API key)
+  --port               Server port (default: 3001, auto-increment if busy)
+  --bind-file          Path where the binding file should be written (default: cwd/yallma3-bind.<instance-id>, or cwd/yallma3-bind if only --bind-file is specified)
+  --output-token-ttl   Default expiration time for output artifact tokens (e.g., 30m, 3600)
 
 Environment Variables:
-  YALLMA3_AGENT_HOST    Server host (default: localhost)
-  YALLMA3_AGENT_PORT    Server port (default: 3001, auto-increment if busy)
-  OLLAMA_URL            Comma-separated Ollama URLs to discover models (e.g., http://localhost:11434,http://192.168.1.100:11434)
+  YALLMA3_AGENT_HOST            Server host (default: localhost)
+  YALLMA3_AGENT_PORT            Server port (default: 3001, auto-increment if busy)
+  OLLAMA_URL                    Comma-separated Ollama URLs to discover models (e.g., http://localhost:11434,http://192.168.1.100:11434)
+  MAIN_AGENT_VERSION            Default main agent version when not specified (default: 1.0.0)
+  YALLMA3_OUTPUT_JSON           When 1 or true, write a structured JSON sidecar file
+  YALLMA3_OUTPUT_TOKEN_TTL      Default expiration time for output download tokens (default: 10m)
+  YALLMA3_OUTPUT_TOKEN_MAX_USES Max download uses per capability token (default: 5)
 
-Note: --port command line option takes precedence over YALLMA3_AGENT_PORT
+Note: --port command line option takes precedence over YALLMA3_AGENT_PORT. --output-token-ttl takes precedence over YALLMA3_OUTPUT_TOKEN_TTL.
 `);
   process.exit(0);
 }
@@ -90,7 +99,13 @@ import { initFlowSystem } from "./Workflow/initFlowSystem";
 import mcpRoutes from "./Routes/Mcp.route";
 import llmRoutes from "./Routes/LLM.route";
 import outputRoute from "./Routes/output.route";
+import { OutputTokenManager } from "./Execution/OutputTokenManager";
 import { initializeOllamaModels } from "./LLM/config";
+
+const cliOutputTokenTtl = parsedArgs["--output-token-ttl"] as string | undefined;
+if (cliOutputTokenTtl) {
+  OutputTokenManager.getInstance().setDefaultTtl(cliOutputTokenTtl);
+}
 import { webhookTriggerManager } from "./Trigger/WebhookTriggerManager";
 import { webhookQueue } from "./Trigger/WebhookQueue";
 import { telegramTriggerManager } from "./Trigger/TelegramTriggerManager";

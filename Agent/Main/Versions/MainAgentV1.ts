@@ -637,7 +637,22 @@ __meta__: ${results["__meta__"]}
       await writeFile(filepath, output, "utf8");
 
       const tokenManager = OutputTokenManager.getInstance();
-      const txtToken = tokenManager.generateToken(filename);
+      const workspaceTtl =
+        this.workspaceData.settings?.outputTokenTtl ??
+        (this.workspaceData as { outputTokenTtl?: string | number }).outputTokenTtl;
+      const workspaceMaxUses =
+        this.workspaceData.settings?.outputTokenMaxUses ??
+        (this.workspaceData as { outputTokenMaxUses?: number }).outputTokenMaxUses;
+
+      const tokenOptions =
+        workspaceTtl !== undefined || workspaceMaxUses !== undefined
+          ? {
+              ttlMs: workspaceTtl,
+              maxUses: workspaceMaxUses,
+            }
+          : undefined;
+
+      const txtToken = tokenManager.generateToken(filename, tokenOptions);
       const artifacts: Array<{
         filename: string;
         format: "text" | "json";
@@ -693,7 +708,7 @@ __meta__: ${results["__meta__"]}
           meta: results["__meta__"],
         };
         await writeFile(jsonPath, JSON.stringify(jsonPayload, null, 2), "utf8");
-        const jsonToken = tokenManager.generateToken(jsonFilename);
+        const jsonToken = tokenManager.generateToken(jsonFilename, tokenOptions);
         artifacts.push({
           filename: jsonFilename,
           format: "json",

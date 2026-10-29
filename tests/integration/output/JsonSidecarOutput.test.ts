@@ -428,4 +428,83 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(allLogs).not.toContain("[Workspace Graph Received]");
     expect(allLogs).not.toContain("[Workflow Graph Received]");
   });
+
+  it("applies custom outputTokenTtl and maxUses from workspace settings", async () => {
+    const workspace: WorkspaceData = {
+      id: "ws-custom-ttl",
+      name: "Custom TTL Workspace",
+      description: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      settings: {
+        outputTokenTtl: "15m",
+        outputTokenMaxUses: 3,
+      },
+      mainLLM: {
+        provider: "OpenAI",
+        model: { id: "gpt-4o", name: "GPT-4o", contextWindow: { input: 128000, output: 4096 } },
+      },
+      apiKey: "sk-test",
+      useSavedCredentials: false,
+      workflows: [],
+      agents: [
+        {
+          id: "agent-1",
+          name: "Agent 1",
+          role: "Worker",
+          background: "Worker agent",
+          description: "Worker agent",
+          systemPrompt: "Worker prompt",
+          tools: [],
+          llm: {
+            provider: "OpenAI",
+            model: { id: "gpt-4o", name: "GPT-4o", contextWindow: { input: 128000, output: 4096 } },
+          },
+        },
+      ],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Simple Task",
+          description: "Test task",
+          expectedOutput: "output",
+          type: "specific-agent",
+          executorId: "agent-1",
+          position: "0",
+          selected: false,
+          sockets: [],
+        },
+      ],
+      connections: [],
+    };
+
+    const { ctx, sentMessages } = createMockContext();
+    const agent = new MainAgentV1(workspace, ctx);
+    await agent.run();
+
+    const artifactsMsg = (
+      sentMessages as Array<{
+        type: string;
+        data: {
+          artifacts: Array<{ filename: string; format: string; downloadUrl: string }>;
+        };
+      }>
+    ).find((m) => m.type === "workspace_artifacts");
+
+    expect(artifactsMsg).toBeDefined();
+    const artifact = artifactsMsg!.data.artifacts[0];
+    const urlMatch = artifact.downloadUrl.match(/token=([a-f0-9-]+)/);
+    expect(urlMatch).toBeDefined();
+
+    const token = urlMatch![1];
+    const { OutputTokenManager } = await import("../../../Execution/OutputTokenManager");
+    const manager = OutputTokenManager.getInstance();
+
+    // Verify token can be consumed exactly 3 times (custom maxUses)
+    expect(manager.validateAndConsumeToken(token, artifact.filename).valid).toBe(true);
+    expect(manager.validateAndConsumeToken(token, artifact.filename).valid).toBe(true);
+    expect(manager.validateAndConsumeToken(token, artifact.filename).valid).toBe(true);
+    // 4th time fails
+    expect(manager.validateAndConsumeToken(token, artifact.filename).valid).toBe(false);
+  });
 });

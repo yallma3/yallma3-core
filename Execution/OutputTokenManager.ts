@@ -2,8 +2,61 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
+export const MIN_OUTPUT_TOKEN_TTL_MS = 5 * 1000; // 5 seconds
+export const MAX_OUTPUT_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+export const DEFAULT_OUTPUT_TOKEN_TTL_MS = 10 * 60 * 1000; // 10 minutes
+export const DEFAULT_OUTPUT_TOKEN_MAX_USES = 5;
+
+/**
+ * Parses a duration string (e.g. '10m', '300s', '1h', '1d', '500ms') or number into milliseconds.
+ * Clamps result between MIN_OUTPUT_TOKEN_TTL_MS and MAX_OUTPUT_TOKEN_TTL_MS.
+ */
+export function parseDurationToMs(
+  val: string | number | undefined | null,
+  fallbackMs: number = DEFAULT_OUTPUT_TOKEN_TTL_MS
+): number {
+  if (val === undefined || val === null || val === "") {
+    return fallbackMs;
+  }
+
+  const str = String(val).trim().toLowerCase();
+  if (!str) return fallbackMs;
+
+  const match = str.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?$/);
+  if (!match) return fallbackMs;
+
+  const num = parseFloat(match[1]);
+  if (isNaN(num) || num <= 0) return fallbackMs;
+
+  const unit = match[2];
+  let ms: number;
+  switch (unit) {
+    case "ms":
+      ms = num;
+      break;
+    case "s":
+      ms = num * 1000;
+      break;
+    case "m":
+      ms = num * 60 * 1000;
+      break;
+    case "h":
+      ms = num * 60 * 60 * 1000;
+      break;
+    case "d":
+      ms = num * 24 * 60 * 60 * 1000;
+      break;
+    default:
+      // Unitless (e.g. "600" or 3600): numbers <= 86400 treated as seconds; > 86400 treated as ms
+      ms = num <= 86400 ? num * 1000 : num;
+      break;
+  }
+
+  return Math.min(Math.max(ms, MIN_OUTPUT_TOKEN_TTL_MS), MAX_OUTPUT_TOKEN_TTL_MS);
+}
+
 export interface TokenOptions {
-  ttlMs?: number;
+  ttlMs?: number | string;
   maxUses?: number;
 }
 
@@ -29,9 +82,12 @@ export class OutputTokenManager {
   private static instance: OutputTokenManager;
   private tokens: Map<string, TokenMetadata> = new Map();
   private outputDir: string;
+  private defaultTtlMs: number = DEFAULT_OUTPUT_TOKEN_TTL_MS;
+  private defaultMaxUses: number = DEFAULT_OUTPUT_TOKEN_MAX_USES;
 
   constructor(outputDir?: string) {
     this.outputDir = outputDir || path.resolve(process.cwd(), "Output");
+    this.loadEnvDefaults();
   }
 
   public static getInstance(): OutputTokenManager {
@@ -39,6 +95,50 @@ export class OutputTokenManager {
       OutputTokenManager.instance = new OutputTokenManager();
     }
     return OutputTokenManager.instance;
+  }
+
+  /**
+   * Loads default TTL and MaxUses from environment variables:
+   * YALLMA3_OUTPUT_TOKEN_TTL (e.g. "10m", "1h", "600")
+   * YALLMA3_OUTPUT_TOKEN_MAX_USES (e.g. "5", "10")
+   */
+  public loadEnvDefaults(): void {
+    if (process.env.YALLMA3_OUTPUT_TOKEN_TTL) {
+      this.defaultTtlMs = parseDurationToMs(process.env.YALLMA3_OUTPUT_TOKEN_TTL, DEFAULT_OUTPUT_TOKEN_TTL_MS);
+    } else if (process.env.YALLMA3_OUTPUT_TOKEN_TTL_MS) {
+      this.defaultTtlMs = parseDurationToMs(process.env.YALLMA3_OUTPUT_TOKEN_TTL_MS, DEFAULT_OUTPUT_TOKEN_TTL_MS);
+    } else if (process.env.YALLMA3_OUTPUT_TOKEN_TTL_SECONDS) {
+      this.defaultTtlMs = parseDurationToMs(`${process.env.YALLMA3_OUTPUT_TOKEN_TTL_SECONDS}s`, DEFAULT_OUTPUT_TOKEN_TTL_MS);
+    } else {
+      this.defaultTtlMs = DEFAULT_OUTPUT_TOKEN_TTL_MS;
+    }
+
+    if (process.env.YALLMA3_OUTPUT_TOKEN_MAX_USES) {
+      const uses = parseInt(process.env.YALLMA3_OUTPUT_TOKEN_MAX_USES, 10);
+      if (!isNaN(uses) && uses > 0) {
+        this.defaultMaxUses = uses;
+      }
+    } else {
+      this.defaultMaxUses = DEFAULT_OUTPUT_TOKEN_MAX_USES;
+    }
+  }
+
+  public setDefaultTtl(ttl: string | number): void {
+    this.defaultTtlMs = parseDurationToMs(ttl, this.defaultTtlMs);
+  }
+
+  public getDefaultTtl(): number {
+    return this.defaultTtlMs;
+  }
+
+  public setDefaultMaxUses(maxUses: number): void {
+    if (maxUses > 0) {
+      this.defaultMaxUses = maxUses;
+    }
+  }
+
+  public getDefaultMaxUses(): number {
+    return this.defaultMaxUses;
   }
 
   /**
@@ -83,8 +183,15 @@ export class OutputTokenManager {
 
     const base = path.basename(filename);
     const token = crypto.randomUUID();
-    const ttlMs = options?.ttlMs ?? 10 * 60 * 1000; // default 10 minutes
-    const maxUses = options?.maxUses ?? 5; // default 5 downloads
+    let ttlMs = this.defaultTtlMs;
+    if (options?.ttlMs !== undefined) {
+      if (typeof options.ttlMs === "number") {
+        ttlMs = options.ttlMs;
+      } else {
+        ttlMs = parseDurationToMs(options.ttlMs, this.defaultTtlMs);
+      }
+    }
+    const maxUses = options?.maxUses ?? this.defaultMaxUses;
 
     const metadata: TokenMetadata = {
       token,
@@ -151,9 +258,10 @@ export class OutputTokenManager {
   }
 
   /**
-   * Clears all stored tokens.
+   * Clears all stored tokens and resets defaults from environment.
    */
   public clear(): void {
     this.tokens.clear();
+    this.loadEnvDefaults();
   }
 }

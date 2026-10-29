@@ -70,15 +70,20 @@
 - **Criticality**: Important
 
 ### UC-05: Secure Client Output Artifact Retrieval & Download
-- **Description**: Web clients, AI agents, and Studio frontends download or inspect generated execution artifacts (`.json` and `.txt`) securely via HTTP streaming.
+- **Description**: Web clients, AI agents, and Studio frontends download or inspect generated execution artifacts (`.json` and `.txt`) securely via HTTP streaming with configurable token expiration.
 - **Trigger**: Workspace execution finishes and saves artifacts in `./Output/`.
 - **Preconditions**: Client is connected to WebSocket and receives `workspace_artifacts` event with ephemeral capability tokens.
 - **Postconditions**: Client can trigger native browser file download via `GET /output/download/:filename?token=<uuid>` or inline viewing via `GET /output/view/:filename?token=<uuid>`.
+- **Configuration Hierarchy**:
+  1. Per-workspace override (`workspaceData.settings.outputTokenTtl`, e.g. `"30m"`, `"1h"`, `1800`)
+  2. CLI startup flag (`--output-token-ttl=<duration>`)
+  3. Environment variable (`YALLMA3_OUTPUT_TOKEN_TTL`, default `10m`)
+  4. Default fallback: 10 minutes (clamped between 5 seconds and 7 days).
 - **Frequency**: On demand per completed workspace run.
 - **Complexity**: Low
 - **Criticality**: Critical
 - **Main flow**:
-  1. `MainAgentV1.saveResults()` saves files and issues ephemeral capability tokens via `OutputTokenManager`.
+  1. `MainAgentV1.saveResults()` saves files and issues ephemeral capability tokens via `OutputTokenManager` using configured TTL.
   2. Server emits `workspace_artifacts` WebSocket event containing token-gated download and view URLs.
   3. Client fetches file using capability token.
   4. Server validates token, enforces path confinement within `./Output/`, and streams file with appropriate headers (`Content-Disposition: attachment` or inline MIME types).

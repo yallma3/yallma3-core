@@ -26,6 +26,8 @@ Bun is used as the runtime, package manager, and TypeScript executor.
 | `OLLAMA_URL` | (unset) | Comma-separated Ollama base URLs for model discovery at startup. |
 | `MAIN_AGENT_VERSION` | `1.0.0` | Default main agent version when not specified. |
 | `YALLMA3_OUTPUT_JSON` | (unset) | When `1` or `true`, write a structured JSON sidecar file alongside the text Output file. |
+| `YALLMA3_OUTPUT_TOKEN_TTL` | `10m` | Expiration time for output download/preview capability tokens. Accepts duration strings (`10m`, `1h`, `300s`, `1d`) or raw seconds/milliseconds. Min 5s, max 7d. Can be overridden by `--output-token-ttl` or workspace settings. |
+| `YALLMA3_OUTPUT_TOKEN_MAX_USES` | `5` | Maximum number of download/preview requests allowed per capability token before it is invalidated. |
 
 ### Command Line Options
 
@@ -36,6 +38,7 @@ Bun is used as the runtime, package manager, and TypeScript executor.
 | `--port <port>` | Server port (default: 3001, auto-increment if busy). Takes precedence over `YALLMA3_AGENT_PORT`. |
 | `--instance-id <id>` | Unique identifier for this instance (creates binding file). Also serves as API key for authentication. |
 | `--bind-file <path>` | Path where the binding file should be written. Default: `yallma3-bind.<instance-id>` in cwd (or `yallma3-bind` if only --bind-file is specified). |
+| `--output-token-ttl <duration>` | Default expiration time for output artifact capability tokens (e.g., `30m`, `3600`). Takes precedence over `YALLMA3_OUTPUT_TOKEN_TTL`. |
 
 ### Authentication
 

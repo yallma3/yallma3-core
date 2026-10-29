@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import path from "path";
-import { OutputTokenManager } from "../../../Execution/OutputTokenManager";
+import {
+  OutputTokenManager,
+  parseDurationToMs,
+  DEFAULT_OUTPUT_TOKEN_TTL_MS,
+  MIN_OUTPUT_TOKEN_TTL_MS,
+  MAX_OUTPUT_TOKEN_TTL_MS,
+} from "../../../Execution/OutputTokenManager";
 
 describe("OutputTokenManager", () => {
   let manager: OutputTokenManager;
@@ -111,6 +117,66 @@ describe("OutputTokenManager", () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
       manager.cleanupExpired();
       expect(manager.getActiveTokenCount()).toBe(0);
+    });
+  });
+
+  describe("Duration Parsing and Configuration", () => {
+    it("should parse duration strings with units correctly", () => {
+      expect(parseDurationToMs("10m")).toBe(10 * 60 * 1000);
+      expect(parseDurationToMs("300s")).toBe(300 * 1000);
+      expect(parseDurationToMs("1h")).toBe(60 * 60 * 1000);
+      expect(parseDurationToMs("1d")).toBe(24 * 60 * 60 * 1000);
+    });
+
+    it("should parse unitless numbers/strings as seconds if <= 86400", () => {
+      expect(parseDurationToMs("600")).toBe(600 * 1000);
+      expect(parseDurationToMs(3600)).toBe(3600 * 1000);
+    });
+
+    it("should clamp values between MIN and MAX allowable TTL", () => {
+      expect(parseDurationToMs("100ms")).toBe(MIN_OUTPUT_TOKEN_TTL_MS);
+      expect(parseDurationToMs("30d")).toBe(MAX_OUTPUT_TOKEN_TTL_MS);
+    });
+
+    it("should return fallback for invalid or empty values", () => {
+      expect(parseDurationToMs(undefined)).toBe(DEFAULT_OUTPUT_TOKEN_TTL_MS);
+      expect(parseDurationToMs("")).toBe(DEFAULT_OUTPUT_TOKEN_TTL_MS);
+      expect(parseDurationToMs("not-a-number")).toBe(DEFAULT_OUTPUT_TOKEN_TTL_MS);
+    });
+
+    it("should load defaults from environment variables", () => {
+      const origTtl = process.env.YALLMA3_OUTPUT_TOKEN_TTL;
+      const origUses = process.env.YALLMA3_OUTPUT_TOKEN_MAX_USES;
+
+      try {
+        process.env.YALLMA3_OUTPUT_TOKEN_TTL = "45m";
+        process.env.YALLMA3_OUTPUT_TOKEN_MAX_USES = "12";
+
+        const testManager = new OutputTokenManager();
+        expect(testManager.getDefaultTtl()).toBe(45 * 60 * 1000);
+        expect(testManager.getDefaultMaxUses()).toBe(12);
+      } finally {
+        if (origTtl !== undefined) process.env.YALLMA3_OUTPUT_TOKEN_TTL = origTtl;
+        else delete process.env.YALLMA3_OUTPUT_TOKEN_TTL;
+
+        if (origUses !== undefined) process.env.YALLMA3_OUTPUT_TOKEN_MAX_USES = origUses;
+        else delete process.env.YALLMA3_OUTPUT_TOKEN_MAX_USES;
+      }
+    });
+
+    it("should allow programmatic override via setDefaultTtl and setDefaultMaxUses", () => {
+      manager.setDefaultTtl("20m");
+      expect(manager.getDefaultTtl()).toBe(20 * 60 * 1000);
+
+      manager.setDefaultMaxUses(8);
+      expect(manager.getDefaultMaxUses()).toBe(8);
+
+      // Token generated without explicit options inherits the configured defaults
+      const token = manager.generateToken(testFile);
+      for (let i = 0; i < 8; i++) {
+        expect(manager.validateAndConsumeToken(token, testFile).valid).toBe(true);
+      }
+      expect(manager.validateAndConsumeToken(token, testFile).valid).toBe(false);
     });
   });
 });
