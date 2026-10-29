@@ -76,7 +76,7 @@ export interface ExecutionStep {
 
 export interface ExecutionLog {
   timestamp: string;
-  level: "info" | "system" | "success" | "error";
+  level: "info" | "system" | "success" | "error" | "warn";
   message: string;
   details?: unknown;
 }

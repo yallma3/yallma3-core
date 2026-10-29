@@ -302,10 +302,62 @@ describe('MainAgentV1 — Blocked Task Handling', () => {
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'message',
+        code: 'WORKSPACE_PARTIAL_SUCCESS',
         data: expect.objectContaining({
-          type: 'warning',
+          type: 'warn',
           message: expect.stringContaining('Workspace execution finished with partial failures: 1 succeeded, 1 failed, 0 blocked.'),
         }),
+      })
+    );
+  });
+
+  it('marks unassignable task as failed and remaining tasks as blocked, emitting WORKSPACE_FAILED', async () => {
+    vi.mocked(testLLMHealth).mockResolvedValue({ ok: true });
+    const { ctx, send } = makeContext();
+
+    vi.mocked(getTaskExecutionOrderWithContext).mockReturnValue([
+      { taskId: 'task-orphan', context: [] },
+      { taskId: 'task-subsequent', context: [] },
+    ]);
+
+    const { assignBestFit } = await import('../../../Agent/Utls/MainAgentHelper');
+    vi.mocked(assignBestFit).mockResolvedValueOnce(null);
+
+    const wsWithUnassignableTask: WorkspaceData = {
+      ...mockWorkspaceData,
+      tasks: [
+        {
+          id: 'task-orphan',
+          title: 'Orphan Task',
+          type: 'agentic',
+          description: 'Cannot be assigned',
+          systemPrompt: '',
+          assignedAgent: null,
+          role: 'test',
+          expectedOutput: 'output',
+        },
+        {
+          id: 'task-subsequent',
+          title: 'Subsequent Task',
+          type: 'agentic',
+          description: 'Follow-up task',
+          systemPrompt: '',
+          assignedAgent: null,
+          role: 'test',
+          expectedOutput: 'output',
+        },
+      ],
+    };
+
+    const agent = new MainAgentV1(wsWithUnassignableTask, ctx);
+    const result = await agent.run();
+
+    expect(result).toBeDefined();
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        code: 'WORKSPACE_FAILED',
+        message: expect.stringContaining('Workspace execution failed: 1 task failed, 1 blocked.'),
       })
     );
   });

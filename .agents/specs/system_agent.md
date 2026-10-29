@@ -112,7 +112,9 @@ surfaces as a returned `Error` from the workflow runtime and is re-thrown by
 2. **Upstream Dependency Guard (`buildTaskContext`)**:
    - When building context for task layers, `MainAgentV1` iterates through each dependency `dep` in `layer.context`.
    - If `taskStatuses[dep]?.status !== "success"`, the dependent task is marked as:
-     `taskStatuses[layer.taskId] = { status: "blocked", reason: `Upstream task dependency '${dep}' not completed successfully` }`.
+     ```typescript
+     taskStatuses[layer.taskId] = { status: "blocked", reason: `Upstream task dependency '${dep}' not completed successfully` };
+     ```
 3. **Blocked Task Short-Circuiting**:
    - In `MainAgentV1.run()`, before any agent assignment (`assignBestFit`) or LLM execution is performed, the loop checks `taskStatuses[task.id]?.status === "blocked"`.
    - If blocked, `run()` records a `task` step in `ExecutionTracer` with `status: "blocked"`, emits an `info` skip event (`Task '<title>' skipped: <reason>`), and immediately advances to the next task.

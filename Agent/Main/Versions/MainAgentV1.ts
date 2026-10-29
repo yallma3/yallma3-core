@@ -104,7 +104,8 @@ export class MainAgentV1 implements MainAgent {
 
     let step = 1;
 
-    for (const layer of layers) {
+    for (let layerIdx = 0; layerIdx < layers.length; layerIdx++) {
+      const layer = layers[layerIdx];
       if (this.aborted) break;
 
       const task = this.getTask(layer.taskId);
@@ -152,6 +153,19 @@ export class MainAgentV1 implements MainAgent {
           durationMs: Date.now() - taskStart,
           details: "Could not be assigned to any executor",
         });
+        taskStatuses[task.id] = {
+          status: "failed",
+          reason: "Could not be assigned to any executor",
+        };
+        for (let i = layerIdx + 1; i < layers.length; i++) {
+          const remId = layers[i].taskId;
+          if (!taskStatuses[remId]) {
+            taskStatuses[remId] = {
+              status: "blocked",
+              reason: `Blocked because task '${task.title}' failed assignment`,
+            };
+          }
+        }
         break;
       }
 
@@ -385,11 +399,13 @@ export class MainAgentV1 implements MainAgent {
         this.workspaceData.agents
       );
 
-      this.emitSystem(
-        `Assigned task '${task.title}' to ${bestFit.type} '${
-          bestFit.name
-        }' (confidence ${bestFit.confidence.toFixed(2)}).`
-      );
+      if (bestFit) {
+        this.emitSystem(
+          `Assigned task '${task.title}' to ${bestFit.type} '${
+            bestFit.name
+          }' (confidence ${bestFit.confidence.toFixed(2)}).`
+        );
+      }
     }
 
     return bestFit;
@@ -467,7 +483,8 @@ export class MainAgentV1 implements MainAgent {
         taskContext,
         this.triggerData,
         undefined,
-        this.tracer
+        this.tracer,
+        task.id
       );
       this.currentWorkflowId = null;
 
@@ -635,12 +652,12 @@ export class MainAgentV1 implements MainAgent {
     results: Record<string, string>,
     taskStatuses: Record<string, { status: string; reason?: string }> = {}
   ) {
-    if (this.aborted) return;
-
     const total = layers.length;
     const succeeded = layers.filter((l) => taskStatuses[l.taskId]?.status === "success").length;
-    const failed = layers.filter((l) => taskStatuses[l.taskId]?.status === "failed").length;
     const blocked = layers.filter((l) => taskStatuses[l.taskId]?.status === "blocked").length;
+    const failed = layers.filter(
+      (l) => taskStatuses[l.taskId]?.status === "failed" || !taskStatuses[l.taskId]
+    ).length;
 
     let workspaceStatus: "completed" | "failed" | "partial_success" | "aborted" = "completed";
     let statusReason = "Workspace completed successfully.";
@@ -688,17 +705,7 @@ export class MainAgentV1 implements MainAgent {
       });
     } else if (workspaceStatus === "partial_success") {
       console.warn(`⚠️ Workspace '${this.workspaceData.name}' completed with partial failures: ${statusReason}`);
-      this.emit("warn", statusReason);
-      this.ctx.send({
-        type: "message",
-        requestId: this.ctx.requestId,
-        commandType: "run_workspace" as const,
-        data: {
-          type: "warning",
-          message: statusReason,
-        },
-        timestamp: new Date().toISOString(),
-      });
+      this.emit("warn", statusReason, undefined, "WORKSPACE_PARTIAL_SUCCESS");
     } else {
       console.log(`✅ Workspace '${this.workspaceData.name}' completed successfully.`);
       this.emitSuccessRaw("Workspace completed successfully.", finalResult ?? undefined);
@@ -792,13 +799,18 @@ export class MainAgentV1 implements MainAgent {
         suggestedRemediation = "Check LLM API quota, rate limits, and model configuration.";
       }
 
-      const parentTask = Object.entries(taskStatuses).find(
-        ([_taskId, st]) => st.status === "failed"
-      );
+      const parentTask = ns.taskId
+        ? [ns.taskId, taskStatuses[ns.taskId]]
+        : Object.entries(taskStatuses).find(
+            ([taskId, st]) => {
+              const t = this.workspaceData.tasks?.find((x: { id: string }) => x.id === taskId);
+              return (t?.executorId === ns.workflowId || t?.id === ns.taskId) && st.status === "failed";
+            }
+          ) ?? Object.entries(taskStatuses).find(([_taskId, st]) => st.status === "failed");
 
       rootCauses.push({
         source: "workflow_node",
-        taskId: parentTask ? parentTask[0] : undefined,
+        taskId: ns.taskId ?? (parentTask ? parentTask[0] : undefined),
         workflowId: ns.workflowId,
         nodeId: ns.nodeId,
         nodeTitle: ns.name,
@@ -1023,11 +1035,11 @@ __meta__: ${results["__meta__"]}
 
   // HELPERS — WebSocket Emitters
 
-  private emit(type: string, message: string, results?: string) {
+  private emit(type: string, message: string, results?: string, code?: string) {
     this.tracer.recordLog({
       level:
-        type === "system" || type === "info" || type === "success" || type === "error"
-          ? type
+        type === "system" || type === "info" || type === "success" || type === "error" || type === "warn"
+          ? (type as "system" | "info" | "success" | "error" | "warn")
           : "info",
       message,
       details: results,
@@ -1035,6 +1047,9 @@ __meta__: ${results["__meta__"]}
     if (this.aborted && type != "error") return;
     this.ctx.send({
       type: "message",
+      requestId: this.ctx.requestId,
+      commandType: "run_workspace" as const,
+      code,
       data: {
         id: crypto.randomUUID(),
         timestamp: Date.now(),

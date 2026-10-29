@@ -43,6 +43,7 @@ export const executeFlowRuntime = async (
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
   tracer?: ExecutionTracer,
+  taskId?: string,
 ) => {
   const workflowId = String(workflow.id ?? "default");
   stopRegistry.set(workflowId, false);
@@ -252,6 +253,7 @@ export const executeFlowRuntime = async (
             name: node.title || String(nodeId),
             status: "skipped",
             workflowId,
+            taskId,
             nodeId,
             details: "Branch not taken",
           });
@@ -274,6 +276,7 @@ export const executeFlowRuntime = async (
             name: node.title || String(nodeId),
             status: "failed",
             workflowId,
+            taskId,
             nodeId,
             inputs,
             durationMs: Date.now() - nodeStart,
@@ -293,6 +296,7 @@ export const executeFlowRuntime = async (
         name: node.title || String(nodeId),
         status: "success",
         workflowId,
+        taskId,
         nodeId,
         inputs,
         output,
@@ -341,6 +345,7 @@ export const executeFlowRuntime = async (
             name: node.title || String(nodeId),
             status: "failed",
             workflowId,
+            taskId,
             nodeId,
             inputs,
             durationMs: Date.now() - nodeStart,
@@ -360,6 +365,7 @@ export const executeFlowRuntime = async (
         name: node.title || String(nodeId),
         status: "success",
         workflowId,
+        taskId,
         nodeId,
         inputs,
         output,

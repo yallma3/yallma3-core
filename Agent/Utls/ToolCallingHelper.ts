@@ -19,6 +19,7 @@ async function triggeredPath(
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
   tracer?: ExecutionTracer,
+  taskId?: string,
 ): Promise<unknown> {
   const repo = WorkspaceRepository.getInstance();
   const currentId = repo.getCurrent();
@@ -33,7 +34,7 @@ async function triggeredPath(
     throw new Error(`Workflow not found: ${workflowId}`);
   }
 
-  const result = await executeFlowRuntime(workflow, ctx, input, triggerData, broadcast, tracer);
+  const result = await executeFlowRuntime(workflow, ctx, input, triggerData, broadcast, tracer, taskId);
 
   if (result instanceof Error) {
     console.error(`[ToolCalling] Workflow execution failed for ${workflowId}:`, result);
@@ -58,10 +59,11 @@ export async function workflowExecutor(
   triggerData?: unknown,
   broadcast?: (data: unknown) => void,
   tracer?: ExecutionTracer,
+  taskId?: string,
 ): Promise<{ status: "completed" | "failed"; reason?: string; result?: unknown }> {
   const b = broadcast ?? ctx?.broadcast?.bind(ctx);
   try {
-    const result = await triggeredPath(ctx, workflowId, input, triggerData, b, tracer);
+    const result = await triggeredPath(ctx, workflowId, input, triggerData, b, tracer, taskId);
     return { status: "completed", result };
   } catch (err) {
     if (err instanceof FatalMainLLMError) throw err;

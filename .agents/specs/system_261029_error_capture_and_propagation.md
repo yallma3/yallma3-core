@@ -232,7 +232,7 @@ interface WorkspaceSummaryMetrics {
 | Dependency | Usage | Location |
 |---|---|---|
 | `ExecutionTracer` | Records granular step outcomes (`workflow_node`, `task`, `agent_iteration`) with `status: "failed"` and `"blocked"` | `Execution/ExecutionTracer.ts` |
-| `ToolCallingHelper` | Standardized wrapper returning `{ status: "completed" | "failed" }` | `Agent/Utls/ToolCallingHelper.ts` |
+| `ToolCallingHelper` | Standardized wrapper returning `{ status: "completed" \| "failed" }` | `Agent/Utls/ToolCallingHelper.ts` |
 | `WorkspaceValidator` | Pre-execution schema validation preventing invalid graphs | `Agent/Validation/WorkspaceValidator.ts` |
 
 ---
