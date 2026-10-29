@@ -87,6 +87,47 @@
   3. Client fetches file using capability token.
   4. Server validates token, enforces path confinement within `./Output/`, and streams file with appropriate headers (`Content-Disposition: attachment` or inline MIME types).
 
+### UC-06: Truthful Workspace Execution Status & Diagnostic Summary in Structured Output
+- **Description**: The generated JSON sidecar and accompanying text output must truthfully represent the overall workspace execution status, task failure reasons, and execution summary metrics. The engine must never emit a false "Workspace completed successfully" event when tasks fail or are blocked.
+- **Trigger**: `MainAgentV1.finalize()` and `saveResults()` are invoked upon completion of task execution.
+- **Preconditions**: Task execution loop completes or is aborted.
+- **Postconditions**:
+  1. Root `status` is set to one of `"completed"`, `"failed"`, `"partial_success"`, or `"aborted"`.
+  2. Trailing `exitStatus` categorizes the execution termination state: `"success"`, `"aborted"`, `"blocked"`, or `"validation_error"` (repurposing the legacy `aborted: boolean`).
+  3. Root `statusReason` provides a concise human-readable summary (e.g. `"Workspace execution failed: 1 task failed, 1 blocked"`).
+  4. Root `summary` object contains counts: `totalTasks`, `succeededTasks`, `failedTasks`, `blockedTasks`.
+  5. Each record in `tasks[]` includes `status` (`success` | `failed` | `blocked`), `reason` (diagnostic string or null), and `durationMs`.
+  6. `finalResult` is `null` if the final task failed or was blocked (never masked as `"{}"`).
+  7. The terminal log in `logs[]` and the terminal WebSocket event match the actual status:
+     - `failed` emits `level: "error"` with `code: "WORKSPACE_FAILED"`
+     - `partial_success` emits `level: "warn"` with `code: "WORKSPACE_PARTIAL_SUCCESS"`
+     - `completed` emits `level: "success"` with `"Workspace completed successfully."`
+  8. The `.txt` report displays `[FAILED] <reason>` and `[BLOCKED] <reason>` instead of `undefined` for non-successful tasks.
+- **Frequency**: Every executed workspace run where output is generated.
+- **Complexity**: Low
+- **Criticality**: Critical
+
+### UC-07: Autonomous Agent Problem Detection & Workspace Optimization
+- **Description**: The JSON output serves as an end-to-end specimen for downstream autonomous optimization agents to detect problems, critique prompts, and suggest concrete workspace enhancements. To achieve this, the JSON must bundle the full declarative workspace blueprint (task graph, agent definitions with prompts/background, workflow graphs) alongside runtime telemetry and first-class root-cause diagnostics.
+- **Trigger**: An autonomous agent, developer, or evaluation pipeline ingests the generated JSON output file.
+- **Preconditions**: Workspace completes execution and saves the JSON sidecar.
+- **Postconditions**:
+  1. **Full Task Blueprint**: Every task entry includes its declarative definition (`title`, `type`, `role`, `description`, `systemPrompt`, `expectedOutput`, `executorId`) alongside execution results (`status`, `reason`, `durationMs`, `result`).
+  2. **Task Graph Topology**: Root `taskConnections` preserves the dependency DAG (`fromTask`, `toTask`), enabling optimization agents to analyze and suggest graph rewirings.
+  3. **Complete Agent Blueprint**: Agent entries include `name`, `role`, `background`, `systemPrompt`, `llm`, and `tools`, enabling prompt engineering agents to critique and optimize agent prompts.
+  4. **First-Class Diagnostics Block (`diagnostics`)**:
+     - `hasFailures`: boolean indicating whether any task or node failed.
+     - `rootCauses[]`: array attributing failures to specific components (`source`, `taskId`, `workflowId`, `nodeId`, `errorCategory`, `message`, `input`).
+     - `impactedTasks[]`: list of tasks blocked or skipped due to cascading dependencies.
+- **Frequency**: Every executed workspace run where output is generated.
+- **Complexity**: Medium
+- **Criticality**: Critical
+- **Main flow**:
+  1. Engine aggregates declarative workspace data (tasks, connections, agents, workflows) and execution telemetry (steps, llm interactions, logs).
+  2. Engine inspects `taskStatuses` and `ExecutionTracer` steps to synthesize the `diagnostics` block.
+  3. Engine serializes the unified specimen to `Output/<workspaceName>_<timestamp>.json`.
+  4. Optimization agent ingests the file, evaluates diagnostics and blueprint, and outputs workspace enhancement suggestions.
+
 ## Volumetrics
 - **Expected users**: Internal developers, autonomous AI agents, CI evaluation pipelines.
 - **Transactions per day**: 500–5,000 runs/day.
@@ -102,4 +143,10 @@
 - [ ] The JSON output includes a clean, machine-readable `workflows` graph with `nodes` and `connections` (without UI clutter like `x, y, width, height, selected, processing`, or i18n strings).
 - [ ] The JSON output includes an `llmInteractions` array capturing caller identity, provider, model, prompt/messages, response, and duration.
 - [ ] The JSON output includes a `steps` array capturing task and workflow node execution steps with statuses, inputs, outputs, and timings.
+- [ ] The JSON output includes top-level `status` (`completed`, `failed`, `partial_success`, `aborted`), `statusReason`, and `summary` metrics (`totalTasks`, `succeededTasks`, `failedTasks`, `blockedTasks`).
+- [ ] The JSON output includes trailing `exitStatus` (`success`, `aborted`, `blocked`, `validation_error`), accurately capturing runner exit state and replacing legacy boolean `aborted`.
+- [ ] Each task entry in `tasks[]` records its execution `status`, `reason`, and `durationMs`.
+- [ ] The JSON output includes the complete declarative workspace blueprint: task definitions (descriptions, prompts, expected outputs), task dependency topology (`taskConnections`), and agent definitions (background, system prompt, tools).
+- [ ] The JSON output includes a structured `diagnostics` section attributing failures to root causes (component, node, error category, message, inputs) and listing impacted tasks, enabling autonomous agents to diagnose issues and recommend workspace improvements.
+- [ ] The runtime never emits a false "Workspace completed successfully" success event when tasks have failed or been blocked.
 - [ ] The JSON schema is concise, well-structured, and contains no duplicate or redundant payload data.

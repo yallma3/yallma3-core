@@ -62,6 +62,16 @@ describe("ToolCallingHelper — workflowExecutor", () => {
     });
   });
 
+  it("returns failed status when executeFlowRuntime resolves with an Error object", async () => {
+    vi.mocked(executeFlowRuntime).mockResolvedValueOnce(new Error("Node execution failed"));
+
+    const res = await workflowExecutor(mockCtx, "wf-123");
+    expect(res).toEqual({
+      status: "failed",
+      reason: "Node execution failed",
+    });
+  });
+
   it("re-throws FatalMainLLMError so caller fatal-stop handler triggers", async () => {
     const fatalErr = new FatalMainLLMError("Main LLM fatal breakdown");
     vi.mocked(executeFlowRuntime).mockRejectedValueOnce(fatalErr);

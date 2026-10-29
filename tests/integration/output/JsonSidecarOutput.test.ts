@@ -231,9 +231,20 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
 
     const payload = JSON.parse(String(jsonCall![1]));
 
-    // 1. Workspace metadata
+    // 1. Workspace metadata and truthful status
     expect(payload.workspace).toBe("Demo Analytics Workspace");
-    expect(payload.aborted).toBe(false);
+    expect(payload.exitStatus).toBe("success");
+    expect(payload.status).toBe("completed");
+    expect(payload.statusReason).toBe("Workspace completed successfully.");
+    expect(payload.summary).toEqual({
+      totalTasks: 2,
+      succeededTasks: 2,
+      failedTasks: 0,
+      blockedTasks: 0,
+    });
+    expect(payload.taskConnections).toEqual([
+      { fromTask: "task-wf-1", toTask: "task-agent-2" },
+    ]);
 
     // 2. Clean Workflow Graph verification
     expect(payload.workflows).toBeInstanceOf(Array);
@@ -310,14 +321,43 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(executedNode2.status).toBe("success");
     expect(executedNode2.output).toBe("Transformed: Source data payload");
 
-    // 5. Tasks verification
-    expect(payload.tasks).toHaveLength(2);
-    expect(payload.tasks[0].taskId).toBe("task-wf-1");
-    expect(payload.tasks[0].status).toBe("success");
-    expect(payload.tasks[1].taskId).toBe("task-agent-2");
-    expect(payload.tasks[1].status).toBe("success");
+    // 5. Autonomous Agent Optimization Specimen: Agents and Tasks Blueprint
+    expect(payload.agents).toHaveLength(1);
+    expect(payload.agents[0]).toMatchObject({
+      id: "agent-eval-1",
+      name: "SummarizerAgent",
+      role: "Executive Analyst",
+      background: "Experienced in executive summaries and data synthesis",
+      systemPrompt: "You are an executive analyst.",
+      tools: [],
+      provider: "OpenAI",
+      model: "GPT-4o Mini",
+    });
 
-    // 6. Verify workspace_artifacts WebSocket event
+    expect(payload.tasks).toHaveLength(2);
+    expect(payload.tasks[0]).toMatchObject({
+      taskId: "task-wf-1",
+      title: "Run Ingestion Workflow",
+      description: "Ingest and transform source data",
+      expectedOutput: "transformed string",
+      status: "success",
+    });
+    expect(payload.tasks[1]).toMatchObject({
+      taskId: "task-agent-2",
+      title: "Generate Summary",
+      description: "Analyze ingested data",
+      expectedOutput: "summary report",
+      status: "success",
+    });
+
+    // 6. Diagnostics verification
+    expect(payload.diagnostics).toEqual({
+      hasFailures: false,
+      rootCauses: [],
+      impactedTasks: [],
+    });
+
+    // 7. Verify workspace_artifacts WebSocket event
     const artifactsMsg = (
       sentMessages as Array<{
         type: string;
@@ -505,5 +545,319 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(manager.validateAndConsumeToken(token, artifact.filename).valid).toBe(true);
     // 4th time fails
     expect(manager.validateAndConsumeToken(token, artifact.filename).valid).toBe(false);
+  });
+
+  it("writes sidecar with truthful 'failed' status, diagnostic root-cause, and impacted tasks on workflow failure", async () => {
+    process.env.YALLMA3_OUTPUT_JSON = "true";
+
+    const workspace: WorkspaceData = {
+      id: "ws-sidecar-failure",
+      name: "Failing Pipeline Workspace",
+      description: "Demonstration of truthful failure recording",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      mainLLM: {
+        provider: "OpenAI",
+        model: {
+          id: "gpt-4o",
+          name: "GPT-4o",
+          contextWindow: { input: 128000, output: 4096 },
+        },
+      },
+      apiKey: "sk-test",
+      useSavedCredentials: false,
+      workflows: [
+        {
+          id: "wf-fail-1",
+          name: "Broken MCP Flow",
+          description: "Workflow with failing MCP client node",
+          nodes: [
+            {
+              id: 1,
+              title: "MCP Client Node",
+              nodeType: "WorkflowInput",
+              category: "Input",
+              x: 100,
+              y: 100,
+              width: 200,
+              height: 100,
+              selected: false,
+              processing: false,
+              sockets: [
+                { id: 101, title: "Client", type: "output", nodeId: 1, dataType: "object" },
+              ],
+              process: async () => {
+                throw new Error("SSE error: Unable to connect. Is the computer able to access the url?");
+              },
+            },
+          ],
+          connections: [],
+        },
+      ],
+      agents: [
+        {
+          id: "agent-downstream",
+          name: "DependentAgent",
+          role: "Consumer",
+          background: "Consumer agent waiting for workflow results",
+          description: "Consumer agent",
+          systemPrompt: "You consume upstream output.",
+          tools: [],
+          llm: {
+            provider: "OpenAI",
+            model: {
+              id: "gpt-4o-mini",
+              name: "GPT-4o Mini",
+              contextWindow: { input: 128000, output: 4096 },
+            },
+          },
+        },
+      ],
+      tasks: [
+        {
+          id: "task-failing-wf",
+          title: "Connect to MCP Server",
+          description: "Attempt connection to remote MCP server",
+          expectedOutput: "MCP client instance",
+          type: "workflow",
+          executorId: "wf-fail-1",
+          position: "0",
+          selected: false,
+          sockets: [
+            { id: 901, title: "Out", type: "output" },
+          ],
+        },
+        {
+          id: "task-blocked-agent",
+          title: "Process MCP Tools",
+          description: "Downstream task dependent on task-failing-wf",
+          expectedOutput: "Tool execution report",
+          type: "specific-agent",
+          executorId: "agent-downstream",
+          position: "1",
+          selected: false,
+          sockets: [
+            { id: 902, title: "In", type: "input" },
+          ],
+        },
+      ],
+      connections: [
+        {
+          fromSocket: 901,
+          toSocket: 902,
+        },
+      ],
+    };
+
+    const { ctx, sentMessages } = createMockContext();
+    const agent = new MainAgentV1(workspace, ctx);
+    const results = await agent.run();
+
+    // Final result should be omitted/undefined on failure in results map
+    expect(results["__final__"]).toBeUndefined();
+
+    // Verify .json and .txt files were written
+    const calls = vi.mocked(writeFile).mock.calls;
+    const jsonCall = calls.find((call) => String(call[0]).endsWith(".json"));
+    const txtCall = calls.find((call) => String(call[0]).endsWith(".txt"));
+
+    expect(jsonCall).toBeDefined();
+    expect(txtCall).toBeDefined();
+
+    // Verify JSON sidecar content
+    const payload = JSON.parse(String(jsonCall![1]));
+    expect(payload.workspace).toBe("Failing Pipeline Workspace");
+    expect(payload.status).toBe("failed");
+    expect(payload.exitStatus).toBe("blocked");
+    expect(payload.statusReason).toBe("Workspace execution failed: 1 task failed, 1 blocked.");
+    expect(payload.finalResult).toBeNull();
+    expect(payload.summary).toEqual({
+      totalTasks: 2,
+      succeededTasks: 0,
+      failedTasks: 1,
+      blockedTasks: 1,
+    });
+
+    expect(payload.taskConnections).toEqual([
+      { fromTask: "task-failing-wf", toTask: "task-blocked-agent" },
+    ]);
+
+    // Tasks status
+    expect(payload.tasks).toHaveLength(2);
+    expect(payload.tasks[0].taskId).toBe("task-failing-wf");
+    expect(payload.tasks[0].status).toBe("failed");
+    expect(payload.tasks[0].reason).toContain("SSE error: Unable to connect");
+
+    expect(payload.tasks[1].taskId).toBe("task-blocked-agent");
+    expect(payload.tasks[1].status).toBe("blocked");
+
+    // Diagnostics schema for autonomous optimizer agents
+    expect(payload.diagnostics.hasFailures).toBe(true);
+    expect(payload.diagnostics.rootCauses).toHaveLength(1);
+    expect(payload.diagnostics.rootCauses[0]).toMatchObject({
+      source: "workflow_node",
+      taskId: "task-failing-wf",
+      workflowId: "wf-fail-1",
+      nodeId: 1,
+      nodeTitle: "MCP Client Node",
+      errorCategory: "TRANSPORT_ERROR",
+      suggestedRemediation: "Verify that the external server endpoint is running and reachable from the host network.",
+    });
+    expect(payload.diagnostics.rootCauses[0].message).toContain("SSE error");
+
+    expect(payload.diagnostics.impactedTasks).toHaveLength(1);
+    expect(payload.diagnostics.impactedTasks[0]).toMatchObject({
+      taskId: "task-blocked-agent",
+      title: "Process MCP Tools",
+      impact: "BLOCKED",
+    });
+
+    // Verify TXT file contains failure and blocked annotations
+    const txtContent = String(txtCall![1]);
+    expect(txtContent).toContain("[FAILED]");
+    expect(txtContent).toContain("SSE error: Unable to connect");
+    expect(txtContent).toContain("[BLOCKED]");
+
+    // Verify WebSocket messages: WORKSPACE_FAILED emitted, NO false success
+    const failedMsg = (
+      sentMessages as Array<{
+        type: string;
+        code?: string;
+        message?: string;
+      }>
+    ).find((m) => m.type === "error" && m.code === "WORKSPACE_FAILED");
+    expect(failedMsg).toBeDefined();
+
+    const falseSuccessMsg = (
+      sentMessages as Array<{
+        type: string;
+        data?: { type?: string; message?: string };
+      }>
+    ).find(
+      (m) =>
+        m.type === "message" &&
+        m.data?.type === "success" &&
+        m.data?.message?.includes("Workspace completed successfully")
+    );
+    expect(falseSuccessMsg).toBeUndefined();
+  });
+
+  it("writes sidecar with 'validation_error' exitStatus and diagnostics when workspace validation fails", async () => {
+    process.env.YALLMA3_OUTPUT_JSON = "true";
+
+    // Invalid workspace missing tasks / having empty tasks
+    const invalidWorkspace: WorkspaceData = {
+      id: "ws-invalid-schema",
+      name: "Invalid Workspace",
+      description: "Invalid workspace for validation failure test",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      mainLLM: {
+        provider: "OpenAI",
+        model: { id: "gpt-4o", name: "GPT-4o", contextWindow: { input: 128000, output: 4096 } },
+      },
+      apiKey: "sk-test",
+      useSavedCredentials: false,
+      workflows: [],
+      agents: [],
+      tasks: [], // empty tasks triggers validation error
+      connections: [],
+    };
+
+    const { ctx, sentMessages } = createMockContext();
+    const agent = new MainAgentV1(invalidWorkspace, ctx);
+    const results = await agent.run();
+
+    expect(results).toEqual({});
+
+    // Verify .json sidecar was written with validation_error exitStatus
+    const calls = vi.mocked(writeFile).mock.calls;
+    const jsonCall = calls.find((call) => String(call[0]).endsWith(".json"));
+    expect(jsonCall).toBeDefined();
+
+    const payload = JSON.parse(String(jsonCall![1]));
+    expect(payload.workspace).toBe("Invalid Workspace");
+    expect(payload.exitStatus).toBe("validation_error");
+    expect(payload.status).toBe("failed");
+    expect(payload.statusReason).toContain("Workspace Validation Failed");
+    expect(payload.diagnostics.hasFailures).toBe(true);
+    expect(payload.diagnostics.rootCauses[0]).toMatchObject({
+      source: "task",
+      errorCategory: "CONFIGURATION_ERROR",
+    });
+    expect(payload.diagnostics.rootCauses[0].message).toContain("Workspace must have at least one task");
+
+    // Verify error event was sent
+    const errorMsg = (
+      sentMessages as Array<{
+        type: string;
+        message?: string;
+      }>
+    ).find((m) => m.type === "error");
+    expect(errorMsg).toBeDefined();
+    expect(errorMsg!.message).toContain("Workspace must have at least one task");
+  });
+
+  it("writes sidecar with 'aborted' exitStatus when workspace execution is aborted", async () => {
+    process.env.YALLMA3_OUTPUT_JSON = "true";
+
+    const workspace: WorkspaceData = {
+      id: "ws-abort-test",
+      name: "Aborted Workspace",
+      description: "Testing aborted exitStatus",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      mainLLM: {
+        provider: "OpenAI",
+        model: { id: "gpt-4o", name: "GPT-4o", contextWindow: { input: 128000, output: 4096 } },
+      },
+      apiKey: "sk-test",
+      useSavedCredentials: false,
+      workflows: [],
+      agents: [
+        {
+          id: "agent-1",
+          name: "Agent 1",
+          role: "Worker",
+          background: "Worker agent",
+          description: "Worker agent",
+          systemPrompt: "Worker prompt",
+          tools: [],
+          llm: {
+            provider: "OpenAI",
+            model: { id: "gpt-4o", name: "GPT-4o", contextWindow: { input: 128000, output: 4096 } },
+          },
+        },
+      ],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task 1",
+          description: "Task to be aborted",
+          expectedOutput: "output",
+          type: "specific-agent",
+          executorId: "agent-1",
+          position: "0",
+          selected: false,
+          sockets: [],
+        },
+      ],
+      connections: [],
+    };
+
+    const { ctx } = createMockContext();
+    const agent = new MainAgentV1(workspace, ctx);
+    // Abort before run
+    await agent.abort();
+    await agent.run();
+
+    const calls = vi.mocked(writeFile).mock.calls;
+    const jsonCall = calls.find((call) => String(call[0]).endsWith(".json"));
+    expect(jsonCall).toBeDefined();
+
+    const payload = JSON.parse(String(jsonCall![1]));
+    expect(payload.workspace).toBe("Aborted Workspace");
+    expect(payload.exitStatus).toBe("aborted");
+    expect(payload.status).toBe("aborted");
   });
 });

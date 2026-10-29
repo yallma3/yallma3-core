@@ -46,6 +46,7 @@ vi.mock('../../../Execution/WorkspaceRepository', () => ({
 }));
 
 import { executeFlowRuntime } from '../../../Workflow/runtime';
+import { hydrateWorkflowNodes } from '../../../Workflow/utils/runtime';
 import { FatalMainLLMError } from '../../../LLM/LLMRunner';
 
 const mockCtx = {
@@ -205,5 +206,62 @@ describe('executeFlowRuntime — FatalMainLLMError propagation', () => {
         details: 'processing explosion',
       })
     );
+  });
+
+  it('halts DAG execution and skips downstream nodes when an upstream node throws', async () => {
+    const node2ProcessSpy = vi.fn().mockResolvedValue('should not run');
+    vi.mocked(hydrateWorkflowNodes).mockReturnValueOnce([
+      {
+        id: 1,
+        nodeType: 'TestNode1',
+        title: 'Failing Node',
+        sockets: [{ id: 1, title: 'output', type: 'output', nodeId: 1, dataType: 'string' }],
+        process: vi.fn().mockRejectedValue(new Error('upstream failure')),
+      },
+      {
+        id: 2,
+        nodeType: 'TestNode2',
+        title: 'Downstream Node',
+        sockets: [{ id: 2, title: 'input', type: 'input', nodeId: 2, dataType: 'string' }],
+        process: node2ProcessSpy,
+      },
+    ]);
+
+    const wf: Workflow = {
+      id: 'wf-dag-halt',
+      name: 'DAG Halt Workflow',
+      description: 'Test DAG halting',
+      nodes: [
+        { id: 1, category: 'Test', title: 'Failing Node', nodeType: 'TestNode1', sockets: [{ id: 1, title: 'output', type: 'output', nodeId: 1, dataType: 'string' }] },
+        { id: 2, category: 'Test', title: 'Downstream Node', nodeType: 'TestNode2', sockets: [{ id: 2, title: 'input', type: 'input', nodeId: 2, dataType: 'string' }] },
+      ],
+      connections: [
+        {
+          fromNodeId: 1,
+          fromSocket: 1,
+          fromSocketTitle: 'output',
+          toNodeId: 2,
+          toSocket: 2,
+          toSocketTitle: 'input',
+        },
+      ],
+    };
+
+    const result = await executeFlowRuntime(wf, mockCtx);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toBe('upstream failure');
+    expect(node2ProcessSpy).not.toHaveBeenCalled();
+  });
+
+  it('normalizes non-Error thrown exceptions to an Error instance', async () => {
+    processSpy.mockImplementationOnce(async () => {
+      throw 'string exception';
+    });
+
+    const result = await executeFlowRuntime(makeWorkflow('wf-string-err'), mockCtx);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toBe('string exception');
   });
 });

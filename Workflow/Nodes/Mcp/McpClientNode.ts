@@ -446,7 +446,7 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
           if (!toolName) {
             const errMsg = "Tool Name is not configured. Open the node panel, click \"Choose...\" to connect and pick a tool.";
             console.error("[McpClient]", errMsg);
-            return { [n.id * 100 + 2]: `Error: ${errMsg}` };
+            throw new Error(errMsg);
           }
 
           let inputRecord: Record<string, unknown> = {};
@@ -463,7 +463,7 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
             if (parsedInputRecord.success) {
               inputRecord = parsedInputRecord.data as Record<string, unknown>;
             } else {
-              return { [n.id * 100 + 2]: `Error: Input JSON is invalid. Got: ${inputJSON}` };
+              throw new Error(`Input JSON is invalid. Got: ${inputJSON}`);
             }
           }
 
@@ -489,7 +489,7 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
 
           if (!resourceUri) {
             const errMsg = "Resource URI is not configured. Open the node panel and choose a resource.";
-            return { [n.id * 100 + 2]: `Error: ${errMsg}` };
+            throw new Error(errMsg);
           }
 
           const stdioClient = client as McpSTDIOClient;
@@ -517,7 +517,7 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
 
           if (!promptName) {
             const errMsg = "Prompt Name is not configured. Open the node panel and choose a prompt.";
-            return { [n.id * 100 + 2]: `Error: ${errMsg}` };
+            throw new Error(errMsg);
           }
 
           const stdioClient = client as McpSTDIOClient;
@@ -535,9 +535,7 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
         if (client) {
           try { await client.close(); } catch { /* ignore */ }
         }
-        return {
-          [n.id * 100 + 2]: `Error: ${error instanceof Error ? error.message : String(error)}`,
-        };
+        throw error instanceof Error ? error : new Error(String(error));
       }
     },
 

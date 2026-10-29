@@ -16,6 +16,40 @@
     ],
     "description": "Secure Token-Gated HTTP Download & Inspection API for workspace output artifacts with structured WebSocket notification events."
   },
+  "exit-status-repurposing": {
+    "plan": ".agents/plans/plan_261029_exit_status.md",
+    "designOptions": ".agents/design-options/design-options_261029_exit_status.md",
+    "research": ".agents/research/adr_261029_exit_status.md",
+    "specs": [
+      ".agents/specs/product_output_json.md",
+      ".agents/specs/system_261029_error_capture_and_propagation.md",
+      ".agents/specs/system_agent.md"
+    ],
+    "sourceFiles": [
+      "Agent/Main/Versions/MainAgentV1.ts"
+    ],
+    "testFiles": [
+      "tests/integration/output/JsonSidecarOutput.test.ts"
+    ],
+    "description": "Repurposed trailing aborted boolean attribute to exitStatus enum (success, aborted, blocked, validation_error) with validation error sidecar artifact persistence."
+  },
+  "agent-optimization-specimen-and-truthful-status": {
+    "plan": ".agents/plans/plan_261029_agent_optimization_specimen_and_truthful_status.md",
+    "specs": [
+      ".agents/specs/product_output_json.md",
+      ".agents/specs/system_261029_error_capture_and_propagation.md",
+      ".agents/specs/system_agent.md"
+    ],
+    "sourceFiles": [
+      "Agent/Main/Versions/MainAgentV1.ts",
+      "Execution/ExecutionTracer.ts"
+    ],
+    "testFiles": [
+      "tests/unit/agent/MainAgentV1.test.ts",
+      "tests/integration/output/JsonSidecarOutput.test.ts"
+    ],
+    "description": "Truthful terminal execution status calculation, complete declarative workspace blueprint serialization, and first-class root-cause diagnostics in JSON output for autonomous agent optimization."
+  },
   "json-output-workflow-graph-llm-logging": {
     "plan": ".agents/plans/plan_261027_json_output_workflow_graph_llm_logging.md",
     "designOptions": ".agents/design-options/design-options_261027_json_output_workflow_graph_llm_logging.md",
@@ -34,7 +68,7 @@
       "tests/unit/execution/ExecutionTracer.test.ts",
       "tests/integration/output/JsonSidecarOutput.test.ts"
     ],
-    "description": "Structured machine-readable JSON sidecar file generation when YALLMA3_OUTPUT_JSON=true, including clean workflow graph serialization, verbatim LLM interaction logs, and granular execution steps."
+    "description": "Structured machine-readable JSON sidecar file generation for autonomous agent problem detection and workspace enhancement, including complete workspace blueprint, root-cause diagnostics, clean workflow graph serialization, verbatim LLM interaction logs, and truthful execution status."
   },
   "websocket-graph-serialization-ingestion": {
     "plan": ".agents/plans/plan_261027_websocket_graph_serialization_ingestion.md",
@@ -136,6 +170,30 @@
     "path": ".agents/specs/system_models.md",
     "topic": "Data Models",
     "date": ""
+  },
+  "analysis-error-capture-and-propagation": {
+    "type": "analysis",
+    "path": ".agents/specs/system_261029_error_capture_and_propagation.md",
+    "plan": ".agents/plans/plan_261029_error_capture_and_propagation.md",
+    "topic": "Error Capture and Status Propagation",
+    "date": "261029",
+    "sourceFiles": [
+      "Workflow/Nodes/Mcp/McpClientNode.ts",
+      "Workflow/Nodes/Mcp/McpToolCallNode.ts",
+      "Workflow/Nodes/Mcp/McpGetResourceNode.ts",
+      "Workflow/Nodes/Mcp/McpGetPromptNode.ts",
+      "Workflow/Nodes/Mcp/McpDiscoveryNode.ts",
+      "Workflow/runtime.ts",
+      "Agent/Utls/ToolCallingHelper.ts",
+      "Agent/Main/Versions/MainAgentV1.ts"
+    ],
+    "testFiles": [
+      "tests/unit/nodes/McpClientNode.test.ts",
+      "tests/integration/workflows/runtime.test.ts",
+      "tests/unit/agent/MainAgentV1.test.ts",
+      "tests/unit/agent/ToolCallingHelper.test.ts"
+    ],
+    "description": "Analysis of current failure masking vs ideal contracts for error capture, DAG halting, and task status dependency cascading across nodes and orchestrator."
   },
   "unified-llm-fallback": {
     "plan": ".agents/plans/plan_261017_unified-llm-fallback-healthcheck.md",

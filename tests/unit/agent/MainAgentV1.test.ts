@@ -204,6 +204,14 @@ describe('MainAgentV1 — Blocked Task Handling', () => {
 
     // Workflow failed, so dependent agent task should be marked blocked and skipped
     expect(result).toBeDefined();
+    // Verify error was sent with detailed failure reason
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        code: 'EXECUTION_ERROR',
+        message: expect.stringContaining("Task 'Workflow Task' failed: Workflow execution failed"),
+      })
+    );
     // assignBestFit should NEVER have been called for task-agent because it was skipped
     expect(assignBestFit).not.toHaveBeenCalled();
     // Verify info event was sent indicating task was skipped
@@ -214,6 +222,142 @@ describe('MainAgentV1 — Blocked Task Handling', () => {
           type: 'info',
           message: expect.stringContaining("Task 'Agent Task' skipped"),
         }),
+      })
+    );
+    // Verify terminal failure event was sent (never a false success)
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        code: 'WORKSPACE_FAILED',
+        message: expect.stringContaining('Workspace execution failed: 1 task failed, 1 blocked.'),
+      })
+    );
+    expect(send).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'success',
+          message: 'Workspace completed successfully.',
+        }),
+      })
+    );
+  });
+
+  it('emits a warning event when workspace completes with partial failures', async () => {
+    vi.mocked(testLLMHealth).mockResolvedValue({ ok: true });
+    const { ctx, send } = makeContext();
+
+    const wsWithTasks: WorkspaceData = {
+      ...mockWorkspaceData,
+      workflows: [
+        { id: 'wf-1', name: 'WF 1', description: '', nodes: [], connections: [] },
+        { id: 'wf-2', name: 'WF 2', description: '', nodes: [], connections: [] },
+      ],
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Task 1',
+          type: 'workflow',
+          description: '',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'wf-1',
+          role: 'test',
+          expectedOutput: 'output',
+        },
+        {
+          id: 'task-2',
+          title: 'Task 2',
+          type: 'workflow',
+          description: '',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'wf-2',
+          role: 'test',
+          expectedOutput: 'output',
+        },
+      ],
+      connections: [],
+    };
+
+    vi.mocked(getTaskExecutionOrderWithContext).mockReturnValue([
+      { taskId: 'task-1', context: [] },
+      { taskId: 'task-2', context: [] },
+    ]);
+
+    const { workflowExecutor } = await import('../../../Agent/Utls/ToolCallingHelper');
+    vi.mocked(workflowExecutor)
+      .mockResolvedValueOnce({
+        status: 'completed',
+        result: 'Success Result',
+      })
+      .mockResolvedValueOnce({
+        status: 'failed',
+        reason: 'Second WF failed',
+      });
+
+    const agent = new MainAgentV1(wsWithTasks, ctx);
+    const result = await agent.run();
+
+    expect(result).toBeDefined();
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'message',
+        code: 'WORKSPACE_PARTIAL_SUCCESS',
+        data: expect.objectContaining({
+          type: 'warn',
+          message: expect.stringContaining('Workspace execution finished with partial failures: 1 succeeded, 1 failed, 0 blocked.'),
+        }),
+      })
+    );
+  });
+
+  it('marks unassignable task as failed and remaining tasks as blocked, emitting WORKSPACE_FAILED', async () => {
+    vi.mocked(testLLMHealth).mockResolvedValue({ ok: true });
+    const { ctx, send } = makeContext();
+
+    vi.mocked(getTaskExecutionOrderWithContext).mockReturnValue([
+      { taskId: 'task-orphan', context: [] },
+      { taskId: 'task-subsequent', context: [] },
+    ]);
+
+    const { assignBestFit } = await import('../../../Agent/Utls/MainAgentHelper');
+    vi.mocked(assignBestFit).mockResolvedValueOnce(null);
+
+    const wsWithUnassignableTask: WorkspaceData = {
+      ...mockWorkspaceData,
+      tasks: [
+        {
+          id: 'task-orphan',
+          title: 'Orphan Task',
+          type: 'agentic',
+          description: 'Cannot be assigned',
+          systemPrompt: '',
+          assignedAgent: null,
+          role: 'test',
+          expectedOutput: 'output',
+        },
+        {
+          id: 'task-subsequent',
+          title: 'Subsequent Task',
+          type: 'agentic',
+          description: 'Follow-up task',
+          systemPrompt: '',
+          assignedAgent: null,
+          role: 'test',
+          expectedOutput: 'output',
+        },
+      ],
+    };
+
+    const agent = new MainAgentV1(wsWithUnassignableTask, ctx);
+    const result = await agent.run();
+
+    expect(result).toBeDefined();
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        code: 'WORKSPACE_FAILED',
+        message: expect.stringContaining('Workspace execution failed: 1 task failed, 1 blocked.'),
       })
     );
   });
