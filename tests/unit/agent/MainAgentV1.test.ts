@@ -52,6 +52,7 @@ vi.mock('fs/promises', () => ({
 import { MainAgentV1 } from '../../../Agent/Main/Versions/MainAgentV1';
 import { testLLMHealth } from '../../../LLM/LLMRunner';
 import { getTaskExecutionOrderWithContext } from '../../../Task/TaskGraph';
+import { Yallma3GenOneAgentRuntime } from '../../../Agent/Agent';
 
 const mockWorkspaceData: WorkspaceData = {
   id: 'test-workspace',
@@ -353,6 +354,369 @@ describe('MainAgentV1 — Blocked Task Handling', () => {
     const result = await agent.run();
 
     expect(result).toBeDefined();
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        code: 'WORKSPACE_FAILED',
+        message: expect.stringContaining('Workspace execution failed: 1 task failed, 1 blocked.'),
+      })
+    );
+  });
+});
+
+describe('MainAgentV1 — Push-Back and Retries Protocol', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(testLLMHealth).mockResolvedValue({ ok: true });
+  });
+
+  it('Branch A: re-runs upstream task when push-back specifies relatedTaskId and then completes dependent agent task', async () => {
+    const { ctx, send } = makeContext();
+
+    const wsWithUpstreamRetry: WorkspaceData = {
+      ...mockWorkspaceData,
+      maxIterations: 2,
+      agents: [
+        {
+          id: 'agent-evaluator',
+          name: 'Evaluator Agent',
+          role: 'Evaluator',
+          background: 'Code reviewer',
+          systemPrompt: '',
+          maxIterations: 2,
+          tools: [],
+        },
+      ],
+      workflows: [
+        {
+          id: 'wf-fetch',
+          name: 'Fetch Workflow',
+          description: '',
+          nodes: [],
+          connections: [],
+        },
+      ],
+      tasks: [
+        {
+          id: 'task-wf',
+          title: 'Workflow Fetch Task',
+          type: 'workflow',
+          description: 'Fetch external payload',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'wf-fetch',
+          role: 'fetcher',
+          expectedOutput: 'raw json',
+        },
+        {
+          id: 'task-agent',
+          title: 'Agent Review Task',
+          type: 'specific-agent',
+          description: 'Review fetched payload',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'agent-evaluator',
+          role: 'evaluator',
+          expectedOutput: 'reviewed output',
+        },
+      ],
+      connections: [{ fromTask: 'task-wf', toTask: 'task-agent' }],
+    };
+
+    vi.mocked(getTaskExecutionOrderWithContext).mockReturnValue([
+      { taskId: 'task-wf', context: [] },
+      { taskId: 'task-agent', context: ['task-wf'] },
+    ]);
+
+    const { workflowExecutor } = await import('../../../Agent/Utls/ToolCallingHelper');
+    // First run of workflow returns malformed data; second run returns valid data
+    vi.mocked(workflowExecutor)
+      .mockResolvedValueOnce({
+        status: 'completed',
+        result: 'Malformed incomplete response',
+      })
+      .mockResolvedValueOnce({
+        status: 'completed',
+        result: 'Valid complete response',
+      });
+
+    // Mock Yallma3GenOneAgentRuntime:
+    // First run pushes back to upstream task-wf; second run accepts
+    let runtimeRunCount = 0;
+    const mockSetRetryContext = vi.fn();
+    const mockSetAbortChecker = vi.fn();
+
+    vi.mocked(Yallma3GenOneAgentRuntime).mockImplementation((() => {
+      return {
+        setRetryContext: mockSetRetryContext,
+        setAbortChecker: mockSetAbortChecker,
+        run: vi.fn(async () => {
+          runtimeRunCount++;
+          if (runtimeRunCount === 1) {
+            return {
+              output: 'Rejected malformed data',
+              status: 'pushed_back',
+              accepted: false,
+              pushBack: {
+                type: 'push_back',
+                reason: 'Data was malformed and missing key fields',
+                relatedTaskId: 'task-wf',
+                relatedTaskTitle: 'Workflow Fetch Task',
+              },
+            };
+          } else {
+            return {
+              output: 'Successfully evaluated valid response',
+              status: 'completed',
+              accepted: true,
+            };
+          }
+        }),
+      } as unknown as InstanceType<typeof Yallma3GenOneAgentRuntime>;
+    }) as unknown as typeof Yallma3GenOneAgentRuntime);
+
+    const agent = new MainAgentV1(wsWithUpstreamRetry, ctx);
+    const results = await agent.run();
+
+    // Both tasks ran twice
+    expect(workflowExecutor).toHaveBeenCalledTimes(2);
+    expect(runtimeRunCount).toBe(2);
+
+    // Emitted retry info message
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'message',
+        data: expect.objectContaining({
+          type: 'info',
+          message: expect.stringContaining("Push-back received from task 'Agent Review Task': Re-running upstream task 'Workflow Fetch Task'"),
+        }),
+      })
+    );
+
+    // Final result contains agent output
+    expect(results['task-agent']).toBe('Successfully evaluated valid response');
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'message',
+        data: expect.objectContaining({
+          type: 'success',
+          message: 'Workspace completed successfully.',
+        }),
+      })
+    );
+  });
+
+  it('Branch B: re-runs agent task with injected retryIteration and corrective suggestions when relatedTaskId is absent', async () => {
+    const { ctx, send } = makeContext();
+
+    const wsWithSelfRetry: WorkspaceData = {
+      ...mockWorkspaceData,
+      maxIterations: 2,
+      agents: [
+        {
+          id: 'agent-writer',
+          name: 'Writer Agent',
+          role: 'Writer',
+          background: 'Technical writer',
+          systemPrompt: '',
+          maxIterations: 2,
+          tools: [],
+        },
+      ],
+      tasks: [
+        {
+          id: 'task-draft',
+          title: 'Drafting Task',
+          type: 'specific-agent',
+          description: 'Draft technical spec',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'agent-writer',
+          role: 'writer',
+          expectedOutput: 'full specification document',
+        },
+      ],
+      connections: [],
+    };
+
+    vi.mocked(getTaskExecutionOrderWithContext).mockReturnValue([
+      { taskId: 'task-draft', context: [] },
+    ]);
+
+    let runtimeRunCount = 0;
+    const mockSetRetryContext = vi.fn();
+    const mockSetAbortChecker = vi.fn();
+
+    vi.mocked(Yallma3GenOneAgentRuntime).mockImplementation((() => {
+      return {
+        setRetryContext: mockSetRetryContext,
+        setAbortChecker: mockSetAbortChecker,
+        run: vi.fn(async () => {
+          runtimeRunCount++;
+          if (runtimeRunCount === 1) {
+            return {
+              output: 'Draft version 1 (incomplete)',
+              status: 'pushed_back',
+              accepted: false,
+              pushBack: {
+                type: 'push_back',
+                reason: 'Document lacks architecture diagrams and security section',
+                correctiveSuggestions: 'Include Mermaid architecture diagram and security considerations section.',
+              },
+            };
+          } else {
+            return {
+              output: 'Draft version 2 (complete with architecture diagrams and security)',
+              status: 'completed',
+              accepted: true,
+            };
+          }
+        }),
+      } as unknown as InstanceType<typeof Yallma3GenOneAgentRuntime>;
+    }) as unknown as typeof Yallma3GenOneAgentRuntime);
+
+    const agent = new MainAgentV1(wsWithSelfRetry, ctx);
+    const results = await agent.run();
+
+    expect(runtimeRunCount).toBe(2);
+
+    // On second attempt, setRetryContext was called with iteration 2 and the corrective suggestions
+    expect(mockSetRetryContext).toHaveBeenCalledWith(
+      2,
+      'Include Mermaid architecture diagram and security considerations section.'
+    );
+
+    // Emitted info event about retrying with corrective guidance
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'message',
+        data: expect.objectContaining({
+          type: 'info',
+          message: expect.stringContaining("Push-back received for task 'Drafting Task': Retrying agent 'Writer Agent' with corrective guidance"),
+        }),
+      })
+    );
+
+    expect(results['task-draft']).toBe('Draft version 2 (complete with architecture diagrams and security)');
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'message',
+        data: expect.objectContaining({
+          type: 'success',
+          message: 'Workspace completed successfully.',
+        }),
+      })
+    );
+  });
+
+  it('Branch C: halts retries when budget is exhausted, marks task failed, cascades blocked status, and emits WORKSPACE_FAILED', async () => {
+    const { ctx, send } = makeContext();
+
+    const wsWithExhaustedBudget: WorkspaceData = {
+      ...mockWorkspaceData,
+      maxIterations: 1, // Only 1 retry allowed
+      agents: [
+        {
+          id: 'agent-1',
+          name: 'Agent 1',
+          role: 'Analyst',
+          background: '',
+          systemPrompt: '',
+          maxIterations: 1,
+          tools: [],
+        },
+        {
+          id: 'agent-2',
+          name: 'Agent 2',
+          role: 'Publisher',
+          background: '',
+          systemPrompt: '',
+          maxIterations: 1,
+          tools: [],
+        },
+      ],
+      tasks: [
+        {
+          id: 'task-1',
+          title: 'Initial Analysis',
+          type: 'specific-agent',
+          description: '',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'agent-1',
+          role: 'analyst',
+          expectedOutput: 'analysis',
+        },
+        {
+          id: 'task-2',
+          title: 'Downstream Publishing',
+          type: 'specific-agent',
+          description: '',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'agent-2',
+          role: 'publisher',
+          expectedOutput: 'published',
+        },
+      ],
+      connections: [{ fromTask: 'task-1', toTask: 'task-2' }],
+    };
+
+    vi.mocked(getTaskExecutionOrderWithContext).mockReturnValue([
+      { taskId: 'task-1', context: [] },
+      { taskId: 'task-2', context: ['task-1'] },
+    ]);
+
+    let runCount = 0;
+    vi.mocked(Yallma3GenOneAgentRuntime).mockImplementation((() => {
+      return {
+        setRetryContext: vi.fn(),
+        setAbortChecker: vi.fn(),
+        run: vi.fn(async () => {
+          runCount++;
+          // Always push back with internal defect
+          return {
+            output: `Persistent failure attempt ${runCount}`,
+            status: 'pushed_back',
+            accepted: false,
+            pushBack: {
+              type: 'push_back',
+              reason: 'Persistent validation failure',
+              correctiveSuggestions: 'Fix issue',
+            },
+          };
+        }),
+      } as unknown as InstanceType<typeof Yallma3GenOneAgentRuntime>;
+    }) as unknown as typeof Yallma3GenOneAgentRuntime);
+
+    const agent = new MainAgentV1(wsWithExhaustedBudget, ctx);
+    const results = await agent.run();
+    expect(results).toBeDefined();
+
+    // Initial attempt + 1 retry = 2 attempts total
+    expect(runCount).toBe(2);
+
+    // Emits task failure due to retry limit exceeded
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        code: 'EXECUTION_ERROR',
+        message: expect.stringContaining("Task 'Initial Analysis' failed: Push-back retry limit exceeded: Persistent validation failure"),
+      })
+    );
+
+    // Downstream task 2 was skipped because task 1 failed
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'message',
+        data: expect.objectContaining({
+          type: 'info',
+          message: expect.stringContaining("Task 'Downstream Publishing' skipped"),
+        }),
+      })
+    );
+
+    // Terminal workspace failure emitted
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'error',

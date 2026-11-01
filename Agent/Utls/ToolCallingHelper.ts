@@ -79,8 +79,8 @@ export const toolExecutorAttacher = async (ctx: ExecutionContext, tools: Tool[])
   let attachedTools: LLMSpecTool[] = [];
 
   // Handle MCP tools separately
-  const mcpTools = tools.filter((tool) => tool.type === "mcp");
-  const otherTools = tools.filter((tool) => tool.type !== "mcp");
+  const mcpTools = tools.filter((tool) => tool.type === "mcp" || tool.type === "McpClient");
+  const otherTools = tools.filter((tool) => tool.type !== "mcp" && tool.type !== "McpClient");
 
   // Connect to MCP servers and get their tools
   if (mcpTools.length > 0) {

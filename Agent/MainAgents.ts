@@ -561,15 +561,16 @@ export const yallma3GenSeqential = async (
         workspaceData.mainLLM
       );
 
-      const result = await agentRuntime.run();
-      if (result) {
-        results[task.id] = result;
+      const agentResult = await agentRuntime.run();
+      const outputText = typeof agentResult === "string" ? agentResult : agentResult.output;
+      if (agentResult && (typeof agentResult === "string" ? Boolean(agentResult) : agentResult.accepted)) {
+        results[task.id] = outputText;
         consoleMessage = {
           id: crypto.randomUUID(),
           timestamp: Date.now(),
           type: "success",
           message: `[${step}/${layers.length}] Task '${task.title}' completed successfully.`,
-          results: result,
+          results: outputText,
         };
 
         ws.send(

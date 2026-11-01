@@ -237,6 +237,29 @@ export function validateWorkflow(workflow: unknown, index: number): ValidationRe
     if (typeof node.id !== "number") {
       return error(`workflows[${index}].nodes[${ni}].id`, "Node id must be a number", "MISSING_FIELD");
     }
+    const nodeType = String(node.type || node.nodeType || "");
+    if (nodeType === "McpClient") {
+      let selectionMode = "manual";
+      let toolName: unknown;
+      if (node.config && typeof node.config === "object") {
+        const cfg = node.config as Record<string, unknown>;
+        if (typeof cfg["Selection Mode"] === "string") selectionMode = cfg["Selection Mode"].toLowerCase();
+        toolName = cfg["Tool Name"];
+      } else if (Array.isArray(node.configParameters)) {
+        const cpList = node.configParameters as Array<{ parameterName?: string; paramValue?: unknown }>;
+        const smParam = cpList.find((p) => p?.parameterName === "Selection Mode");
+        if (typeof smParam?.paramValue === "string") selectionMode = smParam.paramValue.toLowerCase();
+        const tnParam = cpList.find((p) => p?.parameterName === "Tool Name");
+        toolName = tnParam?.paramValue;
+      }
+      if (selectionMode === "manual" && (!toolName || typeof toolName !== "string" || !toolName.trim())) {
+        return error(
+          `workflows[${index}].nodes[${ni}].config.Tool Name`,
+          `McpClient node '${String(node.title || node.id)}' in workflow '${String(w.name || w.id)}' is set to manual selection mode but has no 'Tool Name' configured.`,
+          "MISSING_FIELD",
+        );
+      }
+    }
     const sockets = node.sockets as Array<Record<string, unknown>> | undefined;
     const sidSet = new Set<number>();
     if (Array.isArray(sockets)) {

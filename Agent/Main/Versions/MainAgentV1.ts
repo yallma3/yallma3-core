@@ -18,7 +18,7 @@ import { workflowExecutor } from "../../Utls/ToolCallingHelper";
 import { requestStop } from "../../../Workflow/runtime";
 import type { WorkspaceData } from "../../../Models/Workspace";
 import { WorkspaceRepository } from "../../../Execution/WorkspaceRepository";
-import { Yallma3GenOneAgentRuntime } from "../../Agent";
+import { Yallma3GenOneAgentRuntime, type AgentExecutionResult } from "../../Agent";
 import { FatalMainLLMError, getLLMProvider, testLLMHealth } from "../../../LLM/LLMRunner";
 import type { LLMProvider } from "../../../Models/LLM";
 import type { ExecutionContext } from "../../../Execution/ExecutionContext";
@@ -32,6 +32,9 @@ export class MainAgentV1 implements MainAgent {
   private currentWorkflowId: string | null = null;
   private workspaceId: string;
   private tracer = new ExecutionTracer();
+  private taskRetries: Record<string, number> = {};
+  private pendingRetryContext: Record<string, { retryIteration: number; correctiveSuggestions?: string }> = {};
+  private taskPlans: Record<string, AgentStep[]> = {};
 
   constructor(
     workspaceData: WorkspaceData,
@@ -101,6 +104,9 @@ export class MainAgentV1 implements MainAgent {
     const taskStatuses: Record<string, { status: string; reason?: string }> = {};
     const layers = this.createTaskLayers();
     const MainLLM = this.createLLM();
+    this.taskRetries = {};
+    this.pendingRetryContext = {};
+    this.taskPlans = {};
 
     let step = 1;
 
@@ -186,55 +192,168 @@ export class MainAgentV1 implements MainAgent {
 
       if (this.aborted) break;
 
-      const coreAnalysis = await this.analyzeTaskCore(
-        MainLLM,
-        task,
-        taskContext
-      );
+      let agentPlan = this.taskPlans[task.id];
+      if (!agentPlan) {
+        const coreAnalysis = await this.analyzeTaskCore(
+          MainLLM,
+          task,
+          taskContext
+        );
 
-      if (this.aborted) break;
+        if (this.aborted) break;
 
-      const agentPlan = await this.createAgentPlan(
-        MainLLM,
-        task,
-        coreAnalysis,
-        taskContext
-      );
+        agentPlan = await this.createAgentPlan(
+          MainLLM,
+          task,
+          coreAnalysis,
+          taskContext
+        );
 
-      if (this.aborted) break;
+        if (this.aborted) break;
+        this.taskPlans[task.id] = agentPlan;
+      }
+
+      const retryContext = this.pendingRetryContext[task.id];
+      if (retryContext) {
+        delete this.pendingRetryContext[task.id];
+      }
 
       const agentResult = await this.runAgent(
         task,
         agentPlan,
         taskContext,
-        bestFit
+        bestFit,
+        layer.context,
+        retryContext?.retryIteration,
+        retryContext?.correctiveSuggestions
       );
 
-      if (agentResult) {
+      if (agentResult && agentResult.accepted) {
         taskStatuses[task.id] = { status: 'success' };
-        results[task.id] = agentResult;
+        results[task.id] = agentResult.output;
         this.tracer.recordStep({
           type: "task",
           name: task.title,
           status: "success",
           taskId: task.id,
           durationMs: Date.now() - taskStart,
-          output: agentResult,
+          output: agentResult.output,
         });
         this.emitSuccess(step, layers.length, task.title, {
-          result: agentResult,
+          result: agentResult.output,
         });
+      } else if (agentResult?.pushBack) {
+        const pushBack = agentResult.pushBack;
+        const agentId =
+          task.type === "specific-agent"
+            ? task.executorId
+            : bestFit?.type === "agent"
+            ? bestFit.id
+            : null;
+        const agent = this.workspaceData.agents.find((a) => a.id === agentId);
+        const maxBudget =
+          agent?.maxIterations && agent.maxIterations > 1
+            ? agent.maxIterations
+            : this.workspaceData.maxIterations ?? 3;
+
+        if (pushBack.relatedTaskId) {
+          // Branch A: Push-back specifies related upstream task
+          const relatedTaskId = pushBack.relatedTaskId;
+          const relatedTask = this.getTask(relatedTaskId);
+          const relatedLayerIdx = layers.findIndex((l) => l.taskId === relatedTaskId);
+          const currentRetries = this.taskRetries[relatedTaskId] ?? 0;
+
+          if (relatedTask && relatedLayerIdx !== -1 && currentRetries < maxBudget) {
+            this.taskRetries[relatedTaskId] = currentRetries + 1;
+            this.emitInfo(
+              `Push-back received from task '${task.title}': Re-running upstream task '${relatedTask.title}' (attempt ${this.taskRetries[relatedTaskId]} of ${maxBudget})...`
+            );
+            this.tracer.recordStep({
+              type: "task",
+              name: task.title,
+              status: "pushed_back",
+              taskId: task.id,
+              details: `Pushed back to upstream task '${relatedTask.title}': ${pushBack.reason}`,
+            });
+
+            for (let i = relatedLayerIdx; i <= layerIdx; i++) {
+              const tid = layers[i].taskId;
+              delete taskStatuses[tid];
+              delete results[tid];
+              delete this.taskPlans[tid];
+            }
+
+            layerIdx = relatedLayerIdx - 1;
+            step++;
+            continue;
+          } else {
+            const failReason = relatedTask
+              ? `Push-back retry limit exceeded for upstream task '${relatedTask.title}': ${pushBack.reason}`
+              : `Push-back specified unknown related task '${relatedTaskId}': ${pushBack.reason}`;
+            taskStatuses[task.id] = { status: 'failed', reason: failReason };
+            this.tracer.recordStep({
+              type: "task",
+              name: task.title,
+              status: "failed",
+              taskId: task.id,
+              durationMs: Date.now() - taskStart,
+              details: failReason,
+            });
+            this.emitError(step, layers.length, task.title, failReason);
+          }
+        } else {
+          // Branch B: Push-back has NO relatedTaskId (Agent internal defect / revision)
+          const currentRetries = this.taskRetries[task.id] ?? 0;
+          if (currentRetries < maxBudget) {
+            this.taskRetries[task.id] = currentRetries + 1;
+            const nextAttempt = this.taskRetries[task.id] + 1;
+            this.pendingRetryContext[task.id] = {
+              retryIteration: nextAttempt,
+              correctiveSuggestions: pushBack.correctiveSuggestions,
+            };
+            this.emitInfo(
+              `Push-back received for task '${task.title}': Retrying agent '${agent?.name ?? task.title}' with corrective guidance (attempt ${nextAttempt} of ${maxBudget})...`
+            );
+            this.tracer.recordStep({
+              type: "task",
+              name: task.title,
+              status: "pushed_back",
+              taskId: task.id,
+              details: `Agent self-retry: ${pushBack.reason}`,
+            });
+
+            delete taskStatuses[task.id];
+            delete results[task.id];
+
+            layerIdx--;
+            step++;
+            continue;
+          } else {
+            const failReason = `Push-back retry limit exceeded: ${pushBack.reason}`;
+            taskStatuses[task.id] = { status: 'failed', reason: failReason };
+            this.tracer.recordStep({
+              type: "task",
+              name: task.title,
+              status: "failed",
+              taskId: task.id,
+              durationMs: Date.now() - taskStart,
+              details: failReason,
+            });
+            this.emitError(step, layers.length, task.title, failReason);
+          }
+        }
       } else {
-        taskStatuses[task.id] = { status: 'failed', reason: 'Agent execution failed' };
+        const failReason = (agentResult as { reason?: string } | null)?.reason ?? 'Agent execution failed';
+        taskStatuses[task.id] = { status: 'failed', reason: failReason };
         this.tracer.recordStep({
           type: "task",
           name: task.title,
           status: "failed",
           taskId: task.id,
           durationMs: Date.now() - taskStart,
-          details: "Agent execution failed",
+          details: failReason,
         });
-        this.emitError(step, layers.length, task.title);
+        this.emitError(step, layers.length, task.title, failReason);
       }
 
       step++;
@@ -605,9 +724,12 @@ export class MainAgentV1 implements MainAgent {
     task: Task,
     plan: AgentStep[],
     context: string,
-    bestFit: { type: string; id: string } | null
-  ) {
-    let result;
+    bestFit: { type: string; id: string } | null,
+    upstreamTaskIds: string[] = [],
+    retryIteration?: number,
+    correctiveSuggestions?: string
+  ): Promise<AgentExecutionResult | null> {
+    let result: AgentExecutionResult | null = null;
     const agentId =
       task.type === "specific-agent"
         ? task.executorId
@@ -632,8 +754,12 @@ export class MainAgentV1 implements MainAgent {
       this.workspaceData.apiKey,
       this.workspaceData.mainLLM,
       "",
-      this.tracer
+      this.tracer,
+      upstreamTaskIds
     );
+    if (retryIteration !== undefined || correctiveSuggestions !== undefined) {
+      runtime.setRetryContext(retryIteration, correctiveSuggestions);
+    }
     runtime.setAbortChecker(() => this.aborted);
     try {
       result = await runtime.run();

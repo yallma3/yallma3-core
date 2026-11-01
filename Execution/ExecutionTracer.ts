@@ -64,7 +64,7 @@ export interface ExecutionStep {
   timestamp: string;
   type: "task" | "agent_iteration" | "workflow_node" | "system";
   name: string;
-  status: "started" | "success" | "failed" | "skipped" | "blocked";
+  status: "started" | "success" | "failed" | "skipped" | "blocked" | "pushed_back";
   taskId?: string;
   workflowId?: string;
   nodeId?: number;

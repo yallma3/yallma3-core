@@ -231,5 +231,29 @@
       "R3": "pending",
       "R4": "pending"
     }
+  },
+  "enhance-agentic-loop": {
+    "plan": ".agents/plans/plan_261030_enhance_agentic_loop.md",
+    "specs": [
+      ".agents/specs/system_agent.md",
+      ".agents/specs/system_workflow.md",
+      ".agents/specs/system_261029_error_capture_and_propagation.md",
+      ".agents/specs/system_models.md"
+    ],
+    "sourceFiles": [
+      "Agent/Agent.ts",
+      "Agent/Main/Versions/MainAgentV1.ts",
+      "Workflow/Nodes/Mcp/McpClientNode.ts",
+      "Workflow/Nodes/Mcp/McpToolCallNode.ts",
+      "Models/Agent.ts",
+      "Models/Workspace.ts",
+      "Models/Task.ts"
+    ],
+    "testFiles": [
+      "tests/unit/nodes/McpClientNode.test.ts",
+      "tests/unit/agent/AgentRuntime.test.ts",
+      "tests/unit/agent/MainAgentV1.test.ts"
+    ],
+    "description": "Agent push-back signaling, Agent-level and Workspace-level maxIterations multi-tier retry orchestration, and MCP protocol error interception."
   }
 }

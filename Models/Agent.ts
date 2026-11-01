@@ -13,6 +13,7 @@ export interface Agent {
   llm: LLMOption; // ID of the LLM to use for this agent
   apiKey: string;
   variables?: Record<string, string>; // Variables for templating in background and other fields
+  maxIterations?: number; // Agent-level maximum iterations / review loops (default 1)
 }
 
 export interface ReviewResult {

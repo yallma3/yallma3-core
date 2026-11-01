@@ -345,6 +345,20 @@ export function createNMcpToolCallNode(
           let result = await client.callTool(toolCall);
           await client.close();
 
+          if (result && typeof result === "object" && (result as { isError?: boolean }).isError === true) {
+            const resObj = result as { content?: unknown };
+            let errMsg = `Tool '${tool}' returned an error`;
+            if (Array.isArray(resObj.content)) {
+              const texts = resObj.content
+                .map((c: unknown) =>
+                  c && typeof c === "object" && "text" in c ? String((c as { text: unknown }).text) : ""
+                )
+                .filter(Boolean);
+              if (texts.length > 0) errMsg = texts.join("\n");
+            }
+            throw new Error(`MCP tool '${tool}' failed: ${errMsg}`);
+          }
+
           return {
             [n.id * 100 + 2]: JSON.stringify(result, null, 2),
           };

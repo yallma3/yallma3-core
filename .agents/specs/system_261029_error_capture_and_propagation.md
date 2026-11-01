@@ -80,6 +80,47 @@ sequenceDiagram
   Agent->>WS: emitInfo("Task 'T2' skipped: Upstream dependency failed")
 ```
 
+### Agent Push-Back, Upstream Retries & Self-Retries Sequence
+When an agent determines that an upstream task's output is inadequate or its own deliverable requires revision:
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Agent as Agent A2 (T2)
+  participant Main as MainAgentV1
+  participant Upstream as Task T1 (Workflow / Agent)
+  participant Tracer as ExecutionTracer
+  participant WS as WebSocket Client
+
+  Note over Agent: Evaluates deliverable or upstream context<br/>Signals pushBack({ relatedTaskId?, reason, correctiveSuggestions? })
+  
+  alt Structure has relatedTaskId (Upstream Failure)
+    Note over Main: Branch A: Related task identified<br/>Retry upstream Task T1
+    alt Agent maxIterations > 1 OR retries < globalMaxIterations
+      Main->>Tracer: log("Push-back from A2: Re-running T1")
+      Main->>WS: emitInfo("Re-running T1 due to push-back from A2")
+      Main->>Upstream: execute(T1) [Retry attempt]
+      Upstream-->>Main: results[T1] updated
+      Main->>Agent: execute(T2) with refreshed T1 context
+    else Retries exhausted
+      Main->>Tracer: recordStep(T2, status: "failed", details: "Retry budget exhausted")
+      Main->>WS: emitError("Task T2 failed: Upstream retry budget exhausted")
+      Main->>Main: taskStatuses[T2] = { status: "failed", reason: "Upstream retry budget exhausted" }
+    end
+  else Structure has NO relatedTaskId (Agent Internal Defect)
+    Note over Main: Branch B: No related task<br/>Retry Agent A2 itself with injected prompt
+    alt retries < applicableMaxIterations
+      Main->>Tracer: log("Retrying Agent A2: Attempt X with corrective suggestions")
+      Main->>WS: emitInfo("Retrying Agent A2 with corrective action guidance")
+      Main->>Agent: execute(T2) with [Retry Iteration X + Corrective Suggestions] injected in prompt
+      Agent-->>Main: Revised deliverable evaluated
+    else Retries exhausted
+      Main->>Tracer: recordStep(T2, status: "failed", details: "Agent retry budget exhausted")
+      Main->>WS: emitError("Task T2 failed: Agent retry budget exhausted")
+      Main->>Main: taskStatuses[T2] = { status: "failed", reason: "Agent retry budget exhausted" }
+    end
+  end
+```
+
 ---
 
 ## Components & Responsibilities

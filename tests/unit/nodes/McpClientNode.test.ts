@@ -175,4 +175,29 @@ describe("McpClientNode", () => {
     await expect(node.process(execContext)).rejects.toThrow("Unknown Capability Type: unsupported");
     expect(mockClose).toHaveBeenCalledTimes(1);
   });
+
+  it("throws Error when tool call returns isError: true", async () => {
+    const factory = registry.getFactory("McpClient")!;
+    const node = factory(6, { x: 0, y: 0 }) as McpClientNode;
+
+    node.setConfigParameter("Selection Mode", "manual");
+    node.setConfigParameter("Capability Type", "tool");
+    node.setConfigParameter("Transport Type", "http");
+    node.setConfigParameter("MCP Server URL", "http://localhost:3000/sse");
+    node.setConfigParameter("Tool Name", "calculate");
+
+    mockInit.mockResolvedValue(undefined);
+    mockClose.mockResolvedValue(undefined);
+    mockCallTool.mockResolvedValueOnce({
+      content: [{ type: "text", text: "MCP error -32602: Invalid arguments for tool calculate" }],
+      isError: true,
+    });
+
+    const execContext = createMockExecutionContext(node);
+
+    await expect(node.process(execContext)).rejects.toThrow(
+      "MCP tool 'calculate' failed: MCP error -32602: Invalid arguments for tool calculate"
+    );
+    expect(mockClose).toHaveBeenCalledTimes(1);
+  });
 });
