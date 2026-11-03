@@ -137,7 +137,8 @@ The `McpClient` capability can be assigned inside a **Workflow** (as a workflow 
 
 ### Workflow Pre-Execution Validation
 - In `WorkspaceValidator`, for every `McpClient` node in `workflows`:
-  - If `Selection Mode` is `"manual"` (or omitted, defaulting to manual), `Tool Name` MUST be a non-empty string. If missing, validation fails with an explicit error identifying the node and workflow.
+  - If `Selection Mode` is `"manual"` (or omitted, defaulting to manual) and `Capability Type` is `"tool"` (or omitted, defaulting to tool), `Tool Name` MUST be a non-empty string UNLESS an incoming connection supplies the input socket. If neither is present, validation fails with an explicit error identifying the node and workflow.
+  - Manual `resource` and `prompt` capabilities do not require a `Tool Name`. Dynamic mode nodes resolve capabilities at runtime and do not require a pre-configured `Tool Name`.
 
 ### Workflow Re-Execution via Downstream Push-Back
 - Workflows can be re-executed when a downstream agent signals a push-back against the workflow task (e.g. invalid or incomplete output).

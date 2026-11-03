@@ -136,13 +136,16 @@ surfaces as a returned `Error` from the workflow runtime and is re-thrown by
        - **Branch A (Related Task Identified — `relatedTaskId` present)**:
          - The failure is caused by defective or missing output from an upstream task (e.g. an unhandled MCP error or empty response).
          - If Agent `maxIterations > 1` (agent has local iteration autonomy) OR if Agent `maxIterations === 1` and global `workspaceData.maxIterations ?? 3` allows, `MainAgentV1` re-runs `relatedTaskId`.
-         - When `relatedTaskId` finishes, its new output updates `results[relatedTaskId]`, and the dependent agent task is executed again with refreshed context.
+         - **Selective Subgraph Invalidation**: `MainAgentV1` invalidates only `relatedTaskId` and the downstream tasks that transitively depend on it (based on `layer.context`). Independent tasks that already completed successfully are preserved and skipped (`status === 'success'`), preventing redundant LLM calls and duplicate workflow side effects.
+         - When `relatedTaskId` finishes, its new output updates `results[relatedTaskId]`, and the dependent downstream tasks are executed with refreshed context.
        - **Branch B (No Related Task — `relatedTaskId` absent)**:
          - The failure is internal to the agent deliverable (e.g. quality review rejection, score < threshold, missing elements in deliverable).
-         - The **agent itself** is retried by `MainAgentV1` (up to the applicable iteration budget).
+         - The **agent itself** is retried by `MainAgentV1` (up to `maxBudget` retries, allowing `maxBudget + 1` total attempts).
          - **Prompt Injection on Agent Retry**: The agent prompt for subsequent attempts is explicitly injected with:
-           1. The current retry iteration count (e.g., `Retry Iteration: 2 of 3`).
+           1. The current retry iteration count (e.g., `Retry Iteration: 2 of 4`).
            2. Corrective action suggestions (`correctiveSuggestions`), detailing specific flaws to address from previous feedback.
+   - **Review Loop Push-Back Safety**:
+     - If the agent review loop terminates without acceptance and without a push-back signal already set (e.g. unrecognized reviewer status), a fallback `push_back` signal is created with diagnostic details, preventing silent failures and enabling MainAgent retry or diagnostic capture.
    - **Retry Exhaustion**:
      - If the retry budget is exhausted without a successful completion, `MainAgentV1` halts retries, marks the task as `status: "failed"` with reason `"Push-back retry limit exceeded: <reason>"`, cascades `status: "blocked"` to downstream tasks, and records the failure in `diagnostics.rootCauses`.
    - **Agent Memory Truthfulness**:

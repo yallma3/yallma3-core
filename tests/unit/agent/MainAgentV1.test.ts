@@ -506,6 +506,125 @@ describe('MainAgentV1 — Push-Back and Retries Protocol', () => {
     );
   });
 
+  it('Branch A: preserves and skips independent successful tasks during upstream push-back retry', async () => {
+    const { ctx } = makeContext();
+
+    const wsWithIndependentTask: WorkspaceData = {
+      ...mockWorkspaceData,
+      maxIterations: 3,
+      workflows: [
+        { id: 'wf-upstream', name: 'Upstream Workflow', nodes: [], connections: [] },
+        { id: 'wf-independent', name: 'Independent Workflow', nodes: [], connections: [] },
+      ],
+      agents: [
+        {
+          id: 'agent-reviewer',
+          name: 'Reviewer Agent',
+          role: 'Reviewer',
+          background: '',
+          systemPrompt: '',
+          maxIterations: 3,
+          tools: [],
+        },
+      ],
+      tasks: [
+        {
+          id: 'task-upstream',
+          title: 'Upstream Task',
+          type: 'workflow',
+          description: '',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'wf-upstream',
+          role: 'fetch',
+          expectedOutput: 'data',
+        },
+        {
+          id: 'task-independent',
+          title: 'Independent Task',
+          type: 'workflow',
+          description: '',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'wf-independent',
+          role: 'independent',
+          expectedOutput: 'data',
+        },
+        {
+          id: 'task-agent',
+          title: 'Agent Review Task',
+          type: 'specific-agent',
+          description: '',
+          systemPrompt: '',
+          assignedAgent: null,
+          executorId: 'agent-reviewer',
+          role: 'review',
+          expectedOutput: 'review',
+        },
+      ],
+      connections: [
+        { fromTask: 'task-upstream', toTask: 'task-agent' },
+      ],
+    };
+
+    vi.mocked(getTaskExecutionOrderWithContext).mockReturnValue([
+      { taskId: 'task-upstream', context: [] },
+      { taskId: 'task-independent', context: [] },
+      { taskId: 'task-agent', context: ['task-upstream'] },
+    ]);
+
+    const { workflowExecutor } = await import('../../../Agent/Utls/ToolCallingHelper');
+    const wfCalls: string[] = [];
+    vi.mocked(workflowExecutor).mockImplementation(async (_ctx, wfId) => {
+      wfCalls.push(wfId);
+      return {
+        status: 'completed',
+        result: `Result from ${wfId}`,
+      };
+    });
+
+    let agentRunCount = 0;
+    vi.mocked(Yallma3GenOneAgentRuntime).mockImplementation((() => {
+      return {
+        setRetryContext: vi.fn(),
+        setAbortChecker: vi.fn(),
+        run: vi.fn(async () => {
+          agentRunCount++;
+          if (agentRunCount === 1) {
+            return {
+              output: 'Need retry from upstream',
+              status: 'pushed_back',
+              accepted: false,
+              pushBack: {
+                type: 'push_back',
+                reason: 'Need fresh data',
+                relatedTaskId: 'task-upstream',
+              },
+            };
+          } else {
+            return {
+              output: 'Done',
+              status: 'completed',
+              accepted: true,
+            };
+          }
+        }),
+      } as unknown as InstanceType<typeof Yallma3GenOneAgentRuntime>;
+    }) as unknown as typeof Yallma3GenOneAgentRuntime);
+
+    const agent = new MainAgentV1(wsWithIndependentTask, ctx);
+    const results = await agent.run();
+
+    // wf-upstream ran twice (initial + retry)
+    expect(wfCalls.filter((id) => id === 'wf-upstream')).toHaveLength(2);
+    // wf-independent ran ONLY ONCE (preserved, not invalidated)
+    expect(wfCalls.filter((id) => id === 'wf-independent')).toHaveLength(1);
+    // agent ran twice (pushed back, then completed)
+    expect(agentRunCount).toBe(2);
+    expect(results['task-agent']).toBe('Done');
+    expect(results['task-independent']).toBe('Result from wf-independent');
+  });
+
   it('Branch B: re-runs agent task with injected retryIteration and corrective suggestions when relatedTaskId is absent', async () => {
     const { ctx, send } = makeContext();
 

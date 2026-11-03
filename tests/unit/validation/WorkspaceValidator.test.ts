@@ -468,6 +468,85 @@ describe("validateWorkflow", () => {
     const result = validateWorkflow(wf, 0);
     expect(result.valid).toBe(true);
   });
+
+  it("passes when McpClient in manual mode has Capability Type 'resource' without Tool Name", () => {
+    const wf = {
+      id: "wf-1",
+      name: "Test",
+      nodes: [
+        {
+          id: 1,
+          type: "McpClient",
+          title: "My Resource MCP",
+          config: {
+            "Selection Mode": "manual",
+            "Capability Type": "resource",
+            "Resource URI": "file:///path/to/resource",
+          },
+          sockets: [{ id: 101, title: "Out", type: "output", nodeId: 1 }],
+        },
+      ],
+      connections: [],
+    };
+    const result = validateWorkflow(wf, 0);
+    expect(result.valid).toBe(true);
+  });
+
+  it("passes when McpClient in manual mode has Capability Type 'prompt' without Tool Name", () => {
+    const wf = {
+      id: "wf-1",
+      name: "Test",
+      nodes: [
+        {
+          id: 1,
+          type: "McpClient",
+          title: "My Prompt MCP",
+          config: {
+            "Selection Mode": "manual",
+            "Capability Type": "prompt",
+            "Prompt Name": "summarize",
+          },
+          sockets: [{ id: 101, title: "Out", type: "output", nodeId: 1 }],
+        },
+      ],
+      connections: [],
+    };
+    const result = validateWorkflow(wf, 0);
+    expect(result.valid).toBe(true);
+  });
+
+  it("passes when McpClient in manual mode has empty Tool Name but incoming connection to input socket", () => {
+    const wf = {
+      id: "wf-1",
+      name: "Test",
+      nodes: [
+        {
+          id: 1,
+          title: "Sender Node",
+          sockets: [{ id: 101, title: "Out", type: "output", nodeId: 1 }],
+        },
+        {
+          id: 2,
+          type: "McpClient",
+          title: "Receiver MCP",
+          config: {
+            "Selection Mode": "manual",
+            "Capability Type": "tool",
+            "Tool Name": "",
+          },
+          sockets: [
+            { id: 201, title: "In", type: "input", nodeId: 2 },
+            { id: 202, title: "Out", type: "output", nodeId: 2 },
+          ],
+        },
+      ],
+      connections: [
+        { fromSocket: 101, toSocket: 201 },
+      ],
+    };
+    const result = validateWorkflow(wf, 0);
+    expect(result.valid).toBe(true);
+  });
 });
 
 describe("validateWorkflows", () => {

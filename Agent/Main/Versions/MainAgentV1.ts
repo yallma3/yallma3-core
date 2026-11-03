@@ -117,6 +117,11 @@ export class MainAgentV1 implements MainAgent {
       const task = this.getTask(layer.taskId);
       if (!task) continue;
 
+      if (taskStatuses[task.id]?.status === "success") {
+        step++;
+        continue;
+      }
+
       const taskStart = Date.now();
       this.tracer.recordStep({
         type: "task",
@@ -276,8 +281,16 @@ export class MainAgentV1 implements MainAgent {
               details: `Pushed back to upstream task '${relatedTask.title}': ${pushBack.reason}`,
             });
 
-            for (let i = relatedLayerIdx; i <= layerIdx; i++) {
-              const tid = layers[i].taskId;
+            // Clear only relatedTaskId and tasks that transitively depend on cleared tasks
+            const clearedTaskIds = new Set<string>([relatedTaskId]);
+            for (let i = relatedLayerIdx + 1; i <= layerIdx; i++) {
+              const currentL = layers[i];
+              if (currentL.context?.some((ctxId) => clearedTaskIds.has(ctxId)) || i === layerIdx) {
+                clearedTaskIds.add(currentL.taskId);
+              }
+            }
+
+            for (const tid of clearedTaskIds) {
               delete taskStatuses[tid];
               delete results[tid];
               delete this.taskPlans[tid];
@@ -312,7 +325,7 @@ export class MainAgentV1 implements MainAgent {
               correctiveSuggestions: pushBack.correctiveSuggestions,
             };
             this.emitInfo(
-              `Push-back received for task '${task.title}': Retrying agent '${agent?.name ?? task.title}' with corrective guidance (attempt ${nextAttempt} of ${maxBudget})...`
+              `Push-back received for task '${task.title}': Retrying agent '${agent?.name ?? task.title}' with corrective guidance (attempt ${nextAttempt} of ${maxBudget + 1})...`
             );
             this.tracer.recordStep({
               type: "task",

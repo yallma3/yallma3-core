@@ -535,6 +535,37 @@ describe('Yallma3GenOneAgentRuntime', () => {
       expect(firstPrompt).toContain('Please format output as JSON array with tasks');
     });
 
+    it('creates fallback push_back signal when reviewer returns unrecognized status and output unaccepted', async () => {
+      const mockLLMGenerate = vi.mocked(mockLLM.generateText);
+      mockLLMGenerate
+        .mockResolvedValueOnce('Some response')
+        .mockResolvedValueOnce(JSON.stringify({
+          task_completion_status: 'unknown_status',
+          feedback: 'Some feedback',
+        }))
+        .mockResolvedValueOnce(JSON.stringify({
+          accept: false,
+          reason: 'Still not acceptable',
+        }));
+
+      const plan: AgentStep[] = [{ id: '1', action: 'Step 1', rationale: 'First step', expectedOutput: 'Result 1' }];
+      const runtime = new Yallma3GenOneAgentRuntime(
+        mockAgent,
+        mockTask,
+        'Valid clean context data',
+        plan,
+        mockCtx
+      );
+
+      const result = await runtime.run();
+
+      expect(result.accepted).toBe(false);
+      expect(result.status).toBe('pushed_back');
+      expect(result.pushBack).toBeDefined();
+      expect(result.pushBack?.type).toBe('push_back');
+      expect(result.pushBack?.agentId).toBe(mockAgent.id);
+    });
+
     it('should handle JSON parsing errors in review', async () => {
       const mockLLMGenerate = vi.mocked(mockLLM.generateText);
       mockLLMGenerate

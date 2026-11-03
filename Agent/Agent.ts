@@ -354,8 +354,10 @@ export class Yallma3GenOneAgentRuntime {
 
         console.log("🔍 Review Result:", JSON.stringify(review, null, 2));
 
+        const completionStatus = review.task_completion_status?.toLowerCase();
+
         // If the review says the task is complete → accept immediately
-        if (review.task_completion_status === "complete") {
+        if (completionStatus === "complete") {
           console.log("🎉 Task marked complete by reviewer.");
           accepted = true;
           this.tracer?.recordStep({
@@ -369,11 +371,8 @@ export class Yallma3GenOneAgentRuntime {
           break;
         }
 
-        // Step 3: Final acceptance check — only if revision is suggested
-        if (
-          review.task_completion_status === "needs_revision" ||
-          review.task_completion_status === "inadequate"
-        ) {
+        // Step 3: Final acceptance check — only if revision is suggested or status is not complete
+        {
           const finalCheckPrompt = this.buildFinalCheckPrompt(output);
           const checkRaw = await this.llm.generateText(finalCheckPrompt);
 
@@ -434,6 +433,24 @@ export class Yallma3GenOneAgentRuntime {
 
       if (iteration >= this.maxIterations && !accepted) {
         console.warn("⚠️ Max iterations reached without acceptance, signaling push-back.");
+        if (!pushBackSignal) {
+          finalReason ??= "Reviewer returned an unrecognized completion status or rejected output";
+          const contextStr = typeof this.context === "string" ? this.context : JSON.stringify(this.context);
+          const hasUpstreamDefect =
+            contextStr.includes("MCP error") ||
+            contextStr.includes("isError") ||
+            contextStr.includes("[FAILED]") ||
+            contextStr.includes("Invalid arguments");
+          const relatedTaskId = hasUpstreamDefect && this.upstreamTaskIds.length > 0 ? this.upstreamTaskIds[0] : undefined;
+
+          pushBackSignal = {
+            type: "push_back",
+            reason: finalReason,
+            relatedTaskId,
+            correctiveSuggestions: finalReason,
+            agentId: this.agent.id,
+          };
+        }
       }
 
       try {
