@@ -24,6 +24,9 @@ export interface WorkspaceData {
 
   // Workflows
   workflows: Workflow[];
+
+  // Workspace-level (MainAgent global) maximum retry/iteration budget
+  maxIterations?: number;
 }
 
 export interface ConsoleEvent {

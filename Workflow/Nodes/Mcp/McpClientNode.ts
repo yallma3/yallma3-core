@@ -247,6 +247,23 @@ const metadata: NodeMetadata = {
   },
 };
 
+// ── Helper to extract MCP error text ────────────────────────────────────────
+
+function extractMcpError(result: unknown, defaultMsg: string): string {
+  if (result && typeof result === "object") {
+    const res = result as { content?: unknown; isError?: boolean };
+    if (Array.isArray(res.content)) {
+      const texts = res.content
+        .map((c: unknown) =>
+          c && typeof c === "object" && "text" in c ? String((c as { text: unknown }).text) : ""
+        )
+        .filter(Boolean);
+      if (texts.length > 0) return texts.join("\n");
+    }
+  }
+  return defaultMsg;
+}
+
 // ── Build the right transport client ─────────────────────────────────────────
 
 async function buildClient(n: McpClientNode): Promise<McpHttpClient | McpSTDIOClient> {
@@ -400,7 +417,12 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
           let result: unknown;
 
           if (decision.type === "tool") {
-            result = await client.callTool({ tool: decision.name, input: decision.input });
+            const toolResult = await client.callTool({ tool: decision.name, input: decision.input });
+            if ((toolResult as { isError?: boolean })?.isError === true) {
+              const errMsg = extractMcpError(toolResult, `Tool '${decision.name}' returned an error`);
+              throw new Error(`MCP tool '${decision.name}' failed: ${errMsg}`);
+            }
+            result = toolResult;
           } else if (decision.type === "resource") {
             if (typeof stdioClient.getResource !== "function") throw new Error("This transport does not support resources.");
             result = await stdioClient.getResource(decision.name);
@@ -471,6 +493,12 @@ export function createMcpClientNode(id: number, position: Position): McpClientNo
           const result = await client.callTool({ tool: toolName, input: inputRecord });
           await client.close();
           client = null;
+
+          if ((result as { isError?: boolean })?.isError === true) {
+            const errMsg = extractMcpError(result, `Tool '${toolName}' returned an error`);
+            throw new Error(`MCP tool '${toolName}' failed: ${errMsg}`);
+          }
+
           return { [n.id * 100 + 2]: JSON.stringify(result, null, 2) };
         }
 

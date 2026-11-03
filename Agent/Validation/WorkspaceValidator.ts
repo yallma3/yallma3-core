@@ -237,6 +237,52 @@ export function validateWorkflow(workflow: unknown, index: number): ValidationRe
     if (typeof node.id !== "number") {
       return error(`workflows[${index}].nodes[${ni}].id`, "Node id must be a number", "MISSING_FIELD");
     }
+    const nodeType = String(node.type || node.nodeType || "");
+    if (nodeType === "McpClient") {
+      let selectionMode = "manual";
+      let capabilityType = "tool";
+      let toolName: unknown;
+      if (node.config && typeof node.config === "object") {
+        const cfg = node.config as Record<string, unknown>;
+        if (typeof cfg["Selection Mode"] === "string") selectionMode = cfg["Selection Mode"].toLowerCase();
+        if (typeof cfg["Capability Type"] === "string") capabilityType = cfg["Capability Type"].toLowerCase();
+        toolName = cfg["Tool Name"];
+      } else if (Array.isArray(node.configParameters)) {
+        const cpList = node.configParameters as Array<{ parameterName?: string; paramValue?: unknown }>;
+        const smParam = cpList.find((p) => p?.parameterName === "Selection Mode");
+        if (typeof smParam?.paramValue === "string") selectionMode = smParam.paramValue.toLowerCase();
+        const ctParam = cpList.find((p) => p?.parameterName === "Capability Type");
+        if (typeof ctParam?.paramValue === "string") capabilityType = ctParam.paramValue.toLowerCase();
+        const tnParam = cpList.find((p) => p?.parameterName === "Tool Name");
+        toolName = tnParam?.paramValue;
+      }
+
+      const hasConfiguredTool = typeof toolName === "string" && toolName.trim().length > 0;
+      if (selectionMode === "manual" && capabilityType === "tool" && !hasConfiguredTool) {
+        const nodeSockets = (node.sockets as Array<Record<string, unknown>> | undefined) ?? [];
+        const inputSocketIds = new Set(
+          nodeSockets
+            .filter((s) => s?.type === "input" && typeof s.id === "number")
+            .map((s) => s.id as number)
+        );
+        if (typeof node.id === "number") {
+          inputSocketIds.add(node.id * 100 + 1);
+        }
+
+        const connections = (w.connections as Array<Record<string, unknown>> | undefined) ?? [];
+        const hasIncomingSocket = connections.some(
+          (c) => typeof c?.toSocket === "number" && inputSocketIds.has(c.toSocket)
+        );
+
+        if (!hasIncomingSocket) {
+          return error(
+            `workflows[${index}].nodes[${ni}].config.Tool Name`,
+            `McpClient node '${String(node.title || node.id)}' in workflow '${String(w.name || w.id)}' is set to manual selection mode with tool capability, but has no 'Tool Name' configured and no incoming input connection.`,
+            "MISSING_FIELD",
+          );
+        }
+      }
+    }
     const sockets = node.sockets as Array<Record<string, unknown>> | undefined;
     const sidSet = new Set<number>();
     if (Array.isArray(sockets)) {

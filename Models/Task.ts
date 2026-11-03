@@ -73,3 +73,12 @@ export interface Layer {
   taskId: string;
   context: string[];
 }
+
+export interface TaskPushBackSignal {
+  type: "push_back";
+  reason: string;
+  relatedTaskId?: string;
+  relatedTaskTitle?: string;
+  correctiveSuggestions?: string;
+  agentId?: string;
+}

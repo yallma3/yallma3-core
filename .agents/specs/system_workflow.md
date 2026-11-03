@@ -121,6 +121,29 @@ Each node module exports `register(registry: NodeRegistry): void`. Called once a
 | **Search** | SearchNode, ScraperNode, ArxivScraperNode, UrlRefrenceNode |
 | **Other** | SendMailNode, DataGenerationNode, publishToHuggingFaceNode |
 
+### McpClient Execution Paths: Workflow vs. Agent Ownership
+The `McpClient` capability can be assigned inside a **Workflow** (as a workflow node) or to an **Agent** (as an assigned tool):
+
+| Execution Context | Selection Mode | Driving LLM | Invocation Behavior |
+|---|---|---|---|
+| **Workflow Node** | `manual` | *None (Deterministic)* | Direct execution via `client.callTool({ tool: toolName, input })`. `Tool Name` is mandatory; if omitted, a validation/runtime error is reported immediately. Throws on `isError: true`. |
+| **Workflow Node** | `dynamic` | **Main LLM** (`workspaceData.mainLLM`) | MainAgent discovers MCP server capabilities and prompts the Main LLM to select the tool/resource/prompt and format inputs based on incoming socket data. |
+| **Agent Tool** | Assumed `dynamic` | **Owning Agent's LLM** (`agent.llm`) | MCP server tools are registered to the owning Agent's LLM via `toolExecutorAttacher`. The agent autonomously initiates tool calls during its reasoning/execution loop. |
+
+### MCP Tool Execution Error Contract
+- When calling external tools via MCP (`McpClientNode`, `McpToolCallNode`), the returned `result` object contains `{ content: [...], isError?: boolean }`.
+- If `result.isError === true`, the external tool call failed (e.g. invalid arguments, missing required fields). The node MUST extract the error message from `result.content` and throw `new Error(\`MCP tool '\${toolName}' failed: \${errMsg}\`)`.
+- The node MUST NOT serialize `{ isError: true }` as a regular string output on its output socket, preventing failed tool executions from being treated as successful workflow outputs.
+
+### Workflow Pre-Execution Validation
+- In `WorkspaceValidator`, for every `McpClient` node in `workflows`:
+  - If `Selection Mode` is `"manual"` (or omitted, defaulting to manual) and `Capability Type` is `"tool"` (or omitted, defaulting to tool), `Tool Name` MUST be a non-empty string UNLESS an incoming connection supplies the input socket. If neither is present, validation fails with an explicit error identifying the node and workflow.
+  - Manual `resource` and `prompt` capabilities do not require a `Tool Name`. Dynamic mode nodes resolve capabilities at runtime and do not require a pre-configured `Tool Name`.
+
+### Workflow Re-Execution via Downstream Push-Back
+- Workflows can be re-executed when a downstream agent signals a push-back against the workflow task (e.g. invalid or incomplete output).
+- When `MainAgentV1` triggers a retry of a workflow task, `executeWorkflowTask()` runs with a fresh trace execution step, clearing previous task errors if the retry succeeds.
+
 ## File Structure
 | File | Role |
 |------|------|

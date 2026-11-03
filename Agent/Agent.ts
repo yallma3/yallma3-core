@@ -1,5 +1,5 @@
 import type { Agent } from "../Models/Agent";
-import type { AgentStep, Task } from "../Models/Task";
+import type { AgentStep, Task, TaskPushBackSignal } from "../Models/Task";
 import { getLLMProvider } from "../LLM/LLMRunner";
 import type { LLMProvider, LLMOption } from "../Models/LLM";
 import type { ExecutionContext } from "../Execution/ExecutionContext";
@@ -12,13 +12,25 @@ import type { ExecutionTracer } from "../Execution/ExecutionTracer";
 
 const memoryStore: AgentMemoryStore = new FileAgentMemoryStore();
 
+export interface AgentExecutionResult {
+  status: "completed" | "failed" | "pushed_back";
+  output: string;
+  accepted: boolean;
+  reason?: string;
+  iterations: number;
+  pushBack?: TaskPushBackSignal;
+  toString(): string;
+}
+
 interface Review {
   task_completion_status: string;
-  feedback: string;
+  feedback: string | Record<string, unknown>;
 }
 
 interface FinalCheck {
   accept: boolean;
+  reason?: string;
+  next_action?: string;
 }
 
 export class AgentRuntime {
@@ -227,6 +239,9 @@ export class Yallma3GenOneAgentRuntime {
   private apiKey: string;
   private ctx: ExecutionContext;
   private maxIterations = 1;
+  private retryIteration?: number;
+  private correctiveSuggestions?: string;
+  private upstreamTaskIds: string[] = [];
 
   /**
    * Initializes the GenOne runtime with execution context, tool specs, planning steps, and optional tracer.
@@ -240,13 +255,16 @@ export class Yallma3GenOneAgentRuntime {
     workspaceKey?: string,
     workspaceLLM?: LLMOption,
     intent?: string,
-    private tracer?: ExecutionTracer
+    private tracer?: ExecutionTracer,
+    upstreamTaskIds: string[] = []
   ) {
     this.agent = agent;
     this.task = task;
     this.plan = plan;
     this.context = context;
     this.apiKey = agent.apiKey || workspaceKey || "No Key Provided";
+    this.maxIterations = agent.maxIterations && agent.maxIterations > 0 ? agent.maxIterations : 1;
+    this.upstreamTaskIds = upstreamTaskIds;
 
     const llmOption = agent.llm || workspaceLLM;
     let provider = getLLMProvider(llmOption, this.apiKey);
@@ -270,6 +288,11 @@ export class Yallma3GenOneAgentRuntime {
     this.ctx = ctx;
   }
 
+  setRetryContext(retryIteration?: number, correctiveSuggestions?: string) {
+    this.retryIteration = retryIteration;
+    this.correctiveSuggestions = correctiveSuggestions;
+  }
+
   private abortChecker: (() => boolean) | null = null;
 
   setAbortChecker(fn: () => boolean) {
@@ -283,10 +306,13 @@ export class Yallma3GenOneAgentRuntime {
   /**
    * Executes the agent review loop until completion or maximum iterations are reached.
    */
-  async run(): Promise<string> {
+  async run(): Promise<AgentExecutionResult> {
     let iteration = 0;
     let output = "";
-    let feedback: string | null = null;
+    let feedback: string | Record<string, unknown> | null = null;
+    let accepted = false;
+    let finalReason: string | undefined;
+    let pushBackSignal: TaskPushBackSignal | undefined;
 
     if (this.agent.tools.length > 0) {
       const attachedTools = await toolExecutorAttacher(
@@ -328,9 +354,12 @@ export class Yallma3GenOneAgentRuntime {
 
         console.log("🔍 Review Result:", JSON.stringify(review, null, 2));
 
+        const completionStatus = review.task_completion_status?.toLowerCase();
+
         // If the review says the task is complete → accept immediately
-        if (review.task_completion_status === "complete") {
+        if (completionStatus === "complete") {
           console.log("🎉 Task marked complete by reviewer.");
+          accepted = true;
           this.tracer?.recordStep({
             type: "agent_iteration",
             name: `${this.agent.name} (Iteration ${iteration + 1})`,
@@ -342,11 +371,8 @@ export class Yallma3GenOneAgentRuntime {
           break;
         }
 
-        // Step 3: Final acceptance check — only if revision is suggested
-        if (
-          review.task_completion_status === "needs_revision" ||
-          review.task_completion_status === "inadequate"
-        ) {
+        // Step 3: Final acceptance check — only if revision is suggested or status is not complete
+        {
           const finalCheckPrompt = this.buildFinalCheckPrompt(output);
           const checkRaw = await this.llm.generateText(finalCheckPrompt);
 
@@ -360,6 +386,7 @@ export class Yallma3GenOneAgentRuntime {
 
           if (finalCheck.accept) {
             console.log("🎉 Task accepted by final check.");
+            accepted = true;
             this.tracer?.recordStep({
               type: "agent_iteration",
               name: `${this.agent.name} (Iteration ${iteration + 1})`,
@@ -370,22 +397,87 @@ export class Yallma3GenOneAgentRuntime {
             });
             break;
           } else {
-            console.log("⚠️ Needs revision, applying feedback...");
-            feedback = review.feedback;
+            finalReason = finalCheck.reason || (typeof review.feedback === "string" ? review.feedback : JSON.stringify(review.feedback));
+            if (iteration + 1 < this.maxIterations) {
+              console.log("⚠️ Needs revision, applying feedback...");
+              feedback = review.feedback;
+            } else {
+              accepted = false;
+              const contextStr = typeof this.context === "string" ? this.context : JSON.stringify(this.context);
+              const hasUpstreamDefect =
+                contextStr.includes("MCP error") ||
+                contextStr.includes("isError") ||
+                contextStr.includes("[FAILED]") ||
+                contextStr.includes("Invalid arguments");
+
+              const feedbackObj = typeof review.feedback === "object" && review.feedback !== null ? review.feedback : {};
+              const suggestions = "improvement_suggestions" in feedbackObj
+                ? String(feedbackObj.improvement_suggestions)
+                : finalReason;
+
+              const relatedTaskId = hasUpstreamDefect && this.upstreamTaskIds.length > 0 ? this.upstreamTaskIds[0] : undefined;
+
+              pushBackSignal = {
+                type: "push_back",
+                reason: finalReason ?? "Output rejected by quality evaluation",
+                relatedTaskId,
+                correctiveSuggestions: suggestions,
+                agentId: this.agent.id,
+              };
+            }
           }
         }
 
         iteration++;
       }
 
-      if (iteration >= this.maxIterations) {
-        console.warn("⚠️ Max iterations reached, returning last output.");
+      if (iteration >= this.maxIterations && !accepted) {
+        console.warn("⚠️ Max iterations reached without acceptance, signaling push-back.");
+        if (!pushBackSignal) {
+          finalReason ??= "Reviewer returned an unrecognized completion status or rejected output";
+          const contextStr = typeof this.context === "string" ? this.context : JSON.stringify(this.context);
+          const hasUpstreamDefect =
+            contextStr.includes("MCP error") ||
+            contextStr.includes("isError") ||
+            contextStr.includes("[FAILED]") ||
+            contextStr.includes("Invalid arguments");
+          const relatedTaskId = hasUpstreamDefect && this.upstreamTaskIds.length > 0 ? this.upstreamTaskIds[0] : undefined;
+
+          pushBackSignal = {
+            type: "push_back",
+            reason: finalReason,
+            relatedTaskId,
+            correctiveSuggestions: finalReason,
+            agentId: this.agent.id,
+          };
+        }
       }
 
-      try { memoryStore.recordOutcome(this.agent, true); } catch { /* best-effort */ }
-      return output;
+      try {
+        memoryStore.recordOutcome(this.agent, accepted);
+      } catch {
+        /* best-effort */
+      }
+
+      const resultObj: AgentExecutionResult = {
+        status: accepted ? "completed" : pushBackSignal ? "pushed_back" : "failed",
+        output,
+        accepted,
+        reason: finalReason,
+        iterations: Math.min(iteration + 1, this.maxIterations),
+        pushBack: pushBackSignal,
+        toString() {
+          return this.output;
+        },
+      };
+
+      return resultObj;
     } catch (e) {
-      try { memoryStore.recordOutcome(this.agent, false); } catch { /* best-effort */ }
+      try {
+        memoryStore.recordOutcome(this.agent, false);
+      } catch {
+        /* best-effort */
+      }
       throw e;
     } finally {
       // Clean up MCP connections
@@ -413,6 +505,17 @@ export class Yallma3GenOneAgentRuntime {
   Your objective is to deliver the best possible output by strictly following this plan:
   ${JSON.stringify(this.plan, null, 2)}
   `;
+
+    if (this.retryIteration && this.retryIteration > 1) {
+      intro += `\nRETRY ITERATION: ${this.retryIteration}
+`;
+      if (this.correctiveSuggestions) {
+        intro += `\nCORRECTIVE ACTIONS & FEEDBACK FROM PREVIOUS ATTEMPT:
+${this.correctiveSuggestions}
+Please address all weaknesses and incorporate the corrective suggestions above.
+`;
+      }
+    }
 
     if (iteration !== 0) {
       const parsedFeedback =

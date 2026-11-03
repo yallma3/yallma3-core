@@ -119,7 +119,38 @@ surfaces as a returned `Error` from the workflow runtime and is re-thrown by
    - In `MainAgentV1.run()`, before any agent assignment (`assignBestFit`) or LLM execution is performed, the loop checks `taskStatuses[task.id]?.status === "blocked"`.
    - If blocked, `run()` records a `task` step in `ExecutionTracer` with `status: "blocked"`, emits an `info` skip event (`Task '<title>' skipped: <reason>`), and immediately advances to the next task.
    - This prevents wasteful downstream LLM execution (such as reasoning models) over failed upstream outputs.
-4. **Workspace Terminal Status & Truthful Reporting (`finalize`)**:
+4. **Agent Push-Back Protocol, Upstream Retries & Self-Retries with Prompt Injection**:
+   - When an agent runtime evaluation encounters a failure or cannot fulfill a deliverable, it emits a structured push-back (`TaskPushBackSignal`):
+     ```typescript
+     interface TaskPushBackSignal {
+       type: "push_back";
+       reason: string;
+       relatedTaskId?: string;          // Specific upstream task identified as causing the issue
+       relatedTaskTitle?: string;
+       correctiveSuggestions?: string; // Actionable remediation guidance
+       agentId?: string;
+     }
+     ```
+   - **MainAgent Failure Recognition & Branching**:
+     - `MainAgentV1` inspects the structure of the push-back signal to determine the retry target:
+       - **Branch A (Related Task Identified — `relatedTaskId` present)**:
+         - The failure is caused by defective or missing output from an upstream task (e.g. an unhandled MCP error or empty response).
+         - If Agent `maxIterations > 1` (agent has local iteration autonomy) OR if Agent `maxIterations === 1` and global `workspaceData.maxIterations ?? 3` allows, `MainAgentV1` re-runs `relatedTaskId`.
+         - **Selective Subgraph Invalidation**: `MainAgentV1` invalidates only `relatedTaskId` and the downstream tasks that transitively depend on it (based on `layer.context`). Independent tasks that already completed successfully are preserved and skipped (`status === 'success'`), preventing redundant LLM calls and duplicate workflow side effects.
+         - When `relatedTaskId` finishes, its new output updates `results[relatedTaskId]`, and the dependent downstream tasks are executed with refreshed context.
+       - **Branch B (No Related Task — `relatedTaskId` absent)**:
+         - The failure is internal to the agent deliverable (e.g. quality review rejection, score < threshold, missing elements in deliverable).
+         - The **agent itself** is retried by `MainAgentV1` (up to `maxBudget` retries, allowing `maxBudget + 1` total attempts).
+         - **Prompt Injection on Agent Retry**: The agent prompt for subsequent attempts is explicitly injected with:
+           1. The current retry iteration count (e.g., `Retry Iteration: 2 of 4`).
+           2. Corrective action suggestions (`correctiveSuggestions`), detailing specific flaws to address from previous feedback.
+   - **Review Loop Push-Back Safety**:
+     - If the agent review loop terminates without acceptance and without a push-back signal already set (e.g. unrecognized reviewer status), a fallback `push_back` signal is created with diagnostic details, preventing silent failures and enabling MainAgent retry or diagnostic capture.
+   - **Retry Exhaustion**:
+     - If the retry budget is exhausted without a successful completion, `MainAgentV1` halts retries, marks the task as `status: "failed"` with reason `"Push-back retry limit exceeded: <reason>"`, cascades `status: "blocked"` to downstream tasks, and records the failure in `diagnostics.rootCauses`.
+   - **Agent Memory Truthfulness**:
+     - If an agent's deliverable is ultimately rejected (`accept: false`), `FileAgentMemoryStore.recordOutcome(agent, false)` records a failure rather than a false success.
+5. **Workspace Terminal Status & Truthful Reporting (`finalize`)**:
    - In `MainAgentV1.finalize()`, task outcomes are evaluated across all layers:
      - `failed`: All tasks either failed or were blocked (`succeeded === 0 && failed > 0`). Emits WebSocket `error` with `code: "WORKSPACE_FAILED"` and records an `error` log.
      - `partial_success`: Some tasks succeeded, but others failed/blocked. Emits WebSocket warning and records a `warn` log.
@@ -178,6 +209,13 @@ The JSON sidecar serves as an end-to-end specimen for autonomous evaluator and o
 After `AgentRuntime.run()` completes, the system calls `agentMemoryStore.recordOutcome(agent, taskCompletedSuccessfully)` to persist the agent's outcome. Capability tags are added/removed via `addCapabilities`/`removeCapabilities` based on task analysis or LLM review.
 
 The agent memory is a separate subsystem (`Memory/`) with its own data model and persistence. See [Agent Memory System](system_agent_memory.md) for full details.
+
+## Agent Tool Binding & McpClient Execution
+
+Tools can be assigned to an agent via `agent.tools[]` (supporting types `"mcp"`, `"McpClient"`, `"workflow"`, `"function"`):
+- **Assumed Dynamic**: Any `McpClient` tool assigned to an agent operates in dynamic mode; the agent is not constrained to a static tool name.
+- **Owning Agent's LLM Execution**: Tools are discovered and registered to the **Owning Agent's LLM** (`agent.llm`) using `toolExecutorAttacher`, *never* the workspace Main LLM.
+- **Autonomous Tool Calls**: The agent's LLM is prompted with tool schemas and autonomously emits tool calls during its reasoning loop. The runtime executes them via `executeMcpTool` and returns tool results to the agent's LLM.
 
 ## See Also
 - [LLM System](system_llm.md) — provider contracts

@@ -334,7 +334,8 @@ describe('Yallma3GenOneAgentRuntime', () => {
 
       const result = await runtime.run();
 
-      expect(result).toBe('Agent response');
+      expect(result.output).toBe('Agent response');
+      expect(result.accepted).toBe(true);
       expect(mockCloseMcpConnections).toHaveBeenCalled();
     });
 
@@ -363,7 +364,8 @@ describe('Yallma3GenOneAgentRuntime', () => {
 
       const result = await runtime.run();
 
-      expect(result).toBe('Agent response');
+      expect(result.output).toBe('Agent response');
+      expect(result.accepted).toBe(true);
       expect(mockLLMGenerate).toHaveBeenCalledTimes(3); // response + review + final check
     });
 
@@ -392,8 +394,176 @@ describe('Yallma3GenOneAgentRuntime', () => {
 
       const result = await runtime.run();
 
-      expect(result).toBe('Agent response');
+      expect(result.output).toBe('Agent response');
+      expect(result.accepted).toBe(true);
       expect(mockLLMGenerate).toHaveBeenCalledTimes(3); // response + review + final check
+    });
+
+    it('should iterate locally when agent has maxIterations > 1 and revision is suggested', async () => {
+      const mockLLMGenerate = vi.mocked(mockLLM.generateText);
+      mockLLMGenerate
+        .mockResolvedValueOnce('Initial draft')
+        .mockResolvedValueOnce(JSON.stringify({
+          task_completion_status: 'needs_revision',
+          feedback: { weaknesses: 'Missing details', improvement_suggestions: 'Add more details' },
+        }))
+        .mockResolvedValueOnce(JSON.stringify({
+          accept: false,
+          reason: 'Needs improvement',
+          next_action: 'revise',
+        }))
+        .mockResolvedValueOnce('Refined draft')
+        .mockResolvedValueOnce(JSON.stringify({
+          task_completion_status: 'complete',
+          feedback: 'Great improvement',
+        }));
+
+      const multiIterAgent = { ...mockAgent, maxIterations: 2 };
+      const plan: AgentStep[] = [{ id: '1', action: 'Step 1', rationale: 'First step', expectedOutput: 'Result 1' }];
+      const runtime = new Yallma3GenOneAgentRuntime(
+        multiIterAgent,
+        mockTask,
+        'test context',
+        plan,
+        mockCtx
+      );
+
+      const result = await runtime.run();
+
+      expect(result.accepted).toBe(true);
+      expect(result.output).toBe('Refined draft');
+      expect(result.iterations).toBe(2);
+    });
+
+    it('signals push_back with relatedTaskId when upstream defect is in context and max iterations exceeded', async () => {
+      const mockLLMGenerate = vi.mocked(mockLLM.generateText);
+      mockLLMGenerate
+        .mockResolvedValueOnce('I cannot process because of tool error')
+        .mockResolvedValueOnce(JSON.stringify({
+          task_completion_status: 'needs_revision',
+          feedback: { weaknesses: 'Did not produce verdict', improvement_suggestions: 'Fix email tool' },
+        }))
+        .mockResolvedValueOnce(JSON.stringify({
+          accept: false,
+          reason: 'Deliverable missing',
+          next_action: 'revise',
+        }));
+
+      const plan: AgentStep[] = [{ id: '1', action: 'Step 1', rationale: 'First step', expectedOutput: 'Result 1' }];
+      const runtime = new Yallma3GenOneAgentRuntime(
+        mockAgent,
+        mockTask,
+        'MCP error -32602: Invalid arguments for tool read_email: Required at id',
+        plan,
+        mockCtx,
+        undefined,
+        undefined,
+        '',
+        undefined,
+        ['task-upstream-1']
+      );
+
+      const result = await runtime.run();
+
+      expect(result.accepted).toBe(false);
+      expect(result.status).toBe('pushed_back');
+      expect(result.pushBack?.relatedTaskId).toBe('task-upstream-1');
+      expect(result.pushBack?.reason).toContain('Deliverable missing');
+    });
+
+    it('signals push_back without relatedTaskId when deliverable is inadequate and context has no errors', async () => {
+      const mockLLMGenerate = vi.mocked(mockLLM.generateText);
+      mockLLMGenerate
+        .mockResolvedValueOnce('Poor response')
+        .mockResolvedValueOnce(JSON.stringify({
+          task_completion_status: 'needs_revision',
+          feedback: { weaknesses: 'Format wrong', improvement_suggestions: 'Use JSON array' },
+        }))
+        .mockResolvedValueOnce(JSON.stringify({
+          accept: false,
+          reason: 'Format is not JSON',
+          next_action: 'revise',
+        }));
+
+      const plan: AgentStep[] = [{ id: '1', action: 'Step 1', rationale: 'First step', expectedOutput: 'Result 1' }];
+      const runtime = new Yallma3GenOneAgentRuntime(
+        mockAgent,
+        mockTask,
+        'Valid clean context data',
+        plan,
+        mockCtx,
+        undefined,
+        undefined,
+        '',
+        undefined,
+        ['task-upstream-1']
+      );
+
+      const result = await runtime.run();
+
+      expect(result.accepted).toBe(false);
+      expect(result.status).toBe('pushed_back');
+      expect(result.pushBack?.relatedTaskId).toBeUndefined();
+      expect(result.pushBack?.correctiveSuggestions).toBe('Use JSON array');
+    });
+
+    it('injects retry iteration and corrective suggestions into prompt on retry', async () => {
+      const mockLLMGenerate = vi.mocked(mockLLM.generateText);
+      mockLLMGenerate
+        .mockResolvedValueOnce('Improved response')
+        .mockResolvedValueOnce(JSON.stringify({
+          task_completion_status: 'complete',
+          feedback: 'Well done',
+        }));
+
+      const plan: AgentStep[] = [{ id: '1', action: 'Step 1', rationale: 'First step', expectedOutput: 'Result 1' }];
+      const runtime = new Yallma3GenOneAgentRuntime(
+        mockAgent,
+        mockTask,
+        'test context',
+        plan,
+        mockCtx
+      );
+      runtime.setRetryContext(2, 'Please format output as JSON array with tasks');
+
+      await runtime.run();
+
+      expect(mockLLMGenerate).toHaveBeenCalled();
+      const firstPrompt = mockLLMGenerate.mock.calls[0][0];
+      expect(firstPrompt).toContain('RETRY ITERATION: 2');
+      expect(firstPrompt).toContain('CORRECTIVE ACTIONS & FEEDBACK FROM PREVIOUS ATTEMPT');
+      expect(firstPrompt).toContain('Please format output as JSON array with tasks');
+    });
+
+    it('creates fallback push_back signal when reviewer returns unrecognized status and output unaccepted', async () => {
+      const mockLLMGenerate = vi.mocked(mockLLM.generateText);
+      mockLLMGenerate
+        .mockResolvedValueOnce('Some response')
+        .mockResolvedValueOnce(JSON.stringify({
+          task_completion_status: 'unknown_status',
+          feedback: 'Some feedback',
+        }))
+        .mockResolvedValueOnce(JSON.stringify({
+          accept: false,
+          reason: 'Still not acceptable',
+        }));
+
+      const plan: AgentStep[] = [{ id: '1', action: 'Step 1', rationale: 'First step', expectedOutput: 'Result 1' }];
+      const runtime = new Yallma3GenOneAgentRuntime(
+        mockAgent,
+        mockTask,
+        'Valid clean context data',
+        plan,
+        mockCtx
+      );
+
+      const result = await runtime.run();
+
+      expect(result.accepted).toBe(false);
+      expect(result.status).toBe('pushed_back');
+      expect(result.pushBack).toBeDefined();
+      expect(result.pushBack?.type).toBe('push_back');
+      expect(result.pushBack?.agentId).toBe(mockAgent.id);
     });
 
     it('should handle JSON parsing errors in review', async () => {

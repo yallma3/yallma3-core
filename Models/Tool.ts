@@ -2,7 +2,7 @@
 
 export type Tool = {
   id?: string;
-  type: "function" | "workflow" | "mcp" | "basic";
+  type: "function" | "workflow" | "mcp" | "basic" | "McpClient";
   name: string;
   description: string;
   parameters: Record<string, unknown>;
