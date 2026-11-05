@@ -75,3 +75,26 @@
     - Verified text report executive summary headers.
 - **Verification Results**:
   - `bun x vitest run tests/unit/execution/ tests/unit/agent/ tests/integration/output/ tests/integration/routes/`: **13 test files passed, 138 tests passed, 0 failures**.
+
+### Phase 7: PR #23 Review Feedback Resolution
+- **Addressed Review Feedback**:
+  1. [`Agent/Main/Versions/MainAgentV1.ts`](file:///home/assem/work/yaLLMa3/yallma3-core/Agent/Main/Versions/MainAgentV1.ts):
+     - Pick duration from the final attempt in `telemetry.taskResults[taskId].durationMs` by scanning timed steps in reverse.
+     - Derived `blueprint.tasks` from `this.workspaceData.tasks` so tasks are preserved even on early abort / validation failure paths.
+  2. [`Execution/ExecutionTracer.ts`](file:///home/assem/work/yaLLMa3/yallma3-core/Execution/ExecutionTracer.ts):
+     - Routed `prompt` and `response` through `safeSanitizeValue` in `recordLLMInteraction` ensuring 100k character truncation guard applies to all text fields.
+     - Captured `usage` via `getLastUsage()` on error / catch paths in `wrapLLM` proxy.
+  3. [`LLM/LLMProvider.ts`](file:///home/assem/work/yaLLMa3/yallma3-core/LLM/LLMProvider.ts):
+     - Cleared `this.lastUsage = undefined;` at the start of `generateText` and `callLLM` across all 7 providers.
+     - Wrapped `generateText` loops in `try { ... } finally { this.lastUsage = cumulativeUsage; }` to capture token usage consumed before any error or iteration limit.
+  4. [`Models/WorkspaceOutput.ts`](file:///home/assem/work/yaLLMa3/yallma3-core/Models/WorkspaceOutput.ts):
+     - Added `"AUTH_ERROR" | "LLM_ERROR" | "TIMEOUT_ERROR"` to `WorkspaceDiagnosticRootCause.errorCategory`.
+  5. [`tests/unit/execution/ExecutionTracer.test.ts`](file:///home/assem/work/yaLLMa3/yallma3-core/tests/unit/execution/ExecutionTracer.test.ts):
+     - Controlled `Date.now` deterministically to assert exact `totalDurationMs` rollup.
+     - Added test for token usage capture on failed `generateText` calls.
+     - Added test for prompt/response string truncation.
+  6. [`tests/integration/output/JsonSidecarOutput.test.ts`](file:///home/assem/work/yaLLMa3/yallma3-core/tests/integration/output/JsonSidecarOutput.test.ts):
+     - Added exact token usage assertions (`4` calls, `500` total tokens, `400` prompt, `100` completion) and per-interaction usage assertions.
+     - Verified `blueprint.tasks` preservation on early aborted runs.
+- **Verification Results**:
+  - `bun x vitest run`: **33 test files passed, 434 tests passed, 0 failures**.

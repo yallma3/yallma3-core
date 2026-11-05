@@ -109,53 +109,57 @@ export class OpenAIProvider implements LLMProvider {
    * Unified entry point for generating text or running tool calls automatically
    */
   async generateText(prompt: string): Promise<string> {
+    this.lastUsage = undefined;
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
     let cumulativeUsage: TokenUsage | undefined;
 
-    while (iteration < maxIterations) {
-      const response = await this.callLLM(messages);
-      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
+    try {
+      while (iteration < maxIterations) {
+        const response = await this.callLLM(messages);
+        cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
-      // If no tool calls, return the content
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        this.lastUsage = cumulativeUsage;
-        return response.content || "";
+        // If no tool calls, return the content
+        if (!response.toolCalls || response.toolCalls.length === 0) {
+          return response.content || "";
+        }
+
+        // Execute tools and prepare for next iteration
+        const toolMessages = await this.executeTools(response.toolCalls);
+
+        // Build conversation history for next call
+        messages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: response.toolCalls.map((t) => ({
+              id: t.id,
+              type: "function",
+              function: {
+                name: t.name,
+                arguments: JSON.stringify(t.input),
+              },
+            })),
+          } as LLMMessage,
+          ...toolMessages,
+        ];
+
+        iteration++;
       }
 
-      // Execute tools and prepare for next iteration
-      const toolMessages = await this.executeTools(response.toolCalls);
-
-      // Build conversation history for next call
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: null,
-          tool_calls: response.toolCalls.map((t) => ({
-            id: t.id,
-            type: "function",
-            function: {
-              name: t.name,
-              arguments: JSON.stringify(t.input),
-            },
-          })),
-        } as LLMMessage,
-        ...toolMessages,
-      ];
-
-      iteration++;
+      throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+    } finally {
+      this.lastUsage = cumulativeUsage;
     }
-
-    this.lastUsage = cumulativeUsage;
-    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
    * Makes a raw call to the OpenAI API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    this.lastUsage = undefined;
     const body: Record<string, unknown> = {
       model: this.model,
       messages,
@@ -270,53 +274,57 @@ export class GroqProvider implements LLMProvider {
    * Unified entry point for generating text or running tool calls automatically
    */
   async generateText(prompt: string): Promise<string> {
+    this.lastUsage = undefined;
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
     let cumulativeUsage: TokenUsage | undefined;
 
-    while (iteration < maxIterations) {
-      const response = await this.callLLM(messages);
-      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
+    try {
+      while (iteration < maxIterations) {
+        const response = await this.callLLM(messages);
+        cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
-      // If no tool calls, return the content
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        this.lastUsage = cumulativeUsage;
-        return response.content || "";
+        // If no tool calls, return the content
+        if (!response.toolCalls || response.toolCalls.length === 0) {
+          return response.content || "";
+        }
+
+        // Execute tools and prepare for next iteration
+        const toolMessages = await this.executeTools(response.toolCalls);
+
+        // Build conversation history for next call
+        messages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: response.toolCalls.map((t) => ({
+              id: t.id,
+              type: "function",
+              function: {
+                name: t.name,
+                arguments: JSON.stringify(t.input),
+              },
+            })),
+          } as OpenAIMessage,
+          ...toolMessages,
+        ];
+
+        iteration++;
       }
 
-      // Execute tools and prepare for next iteration
-      const toolMessages = await this.executeTools(response.toolCalls);
-
-      // Build conversation history for next call
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: null,
-          tool_calls: response.toolCalls.map((t) => ({
-            id: t.id,
-            type: "function",
-            function: {
-              name: t.name,
-              arguments: JSON.stringify(t.input),
-            },
-          })),
-        } as OpenAIMessage,
-        ...toolMessages,
-      ];
-
-      iteration++;
+      throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+    } finally {
+      this.lastUsage = cumulativeUsage;
     }
-
-    this.lastUsage = cumulativeUsage;
-    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
    * Makes a raw call to the Groq API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    this.lastUsage = undefined;
     const body: Record<string, unknown> = {
       model: this.model,
       messages: messages,
@@ -435,53 +443,57 @@ export class OpenRouterProvider implements LLMProvider {
    * Unified entry point for generating text or running tool calls automatically
    */
   async generateText(prompt: string): Promise<string> {
+    this.lastUsage = undefined;
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
     let cumulativeUsage: TokenUsage | undefined;
 
-    while (iteration < maxIterations) {
-      const response = await this.callLLM(messages);
-      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
+    try {
+      while (iteration < maxIterations) {
+        const response = await this.callLLM(messages);
+        cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
-      // If no tool calls, return the content
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        this.lastUsage = cumulativeUsage;
-        return response.content || "";
+        // If no tool calls, return the content
+        if (!response.toolCalls || response.toolCalls.length === 0) {
+          return response.content || "";
+        }
+
+        // Execute tools and prepare for next iteration
+        const toolMessages = await this.executeTools(response.toolCalls);
+
+        // Build conversation history for next call
+        messages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: response.toolCalls.map((t) => ({
+              id: t.id,
+              type: "function",
+              function: {
+                name: t.name,
+                arguments: JSON.stringify(t.input),
+              },
+            })),
+          } as OpenAIMessage,
+          ...toolMessages,
+        ];
+
+        iteration++;
       }
 
-      // Execute tools and prepare for next iteration
-      const toolMessages = await this.executeTools(response.toolCalls);
-
-      // Build conversation history for next call
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: null,
-          tool_calls: response.toolCalls.map((t) => ({
-            id: t.id,
-            type: "function",
-            function: {
-              name: t.name,
-              arguments: JSON.stringify(t.input),
-            },
-          })),
-        } as OpenAIMessage,
-        ...toolMessages,
-      ];
-
-      iteration++;
+      throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+    } finally {
+      this.lastUsage = cumulativeUsage;
     }
-
-    this.lastUsage = cumulativeUsage;
-    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
    * Makes a raw call to the OpenRouter API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    this.lastUsage = undefined;
     const body: Record<string, unknown> = {
       model: this.model,
       messages,
@@ -598,55 +610,59 @@ export class GeminiProvider implements LLMProvider {
    * Unified entry point for generating text or running tool calls automatically
    */
   async generateText(prompt: string): Promise<string> {
+    this.lastUsage = undefined;
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
     let cumulativeUsage: TokenUsage | undefined;
 
-    while (iteration < maxIterations) {
-      const response = await this.callLLM(messages);
-      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
+    try {
+      while (iteration < maxIterations) {
+        const response = await this.callLLM(messages);
+        cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
-      // If no tool calls, return the content
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        this.lastUsage = cumulativeUsage;
-        return response.content || "";
+        // If no tool calls, return the content
+        if (!response.toolCalls || response.toolCalls.length === 0) {
+          return response.content || "";
+        }
+
+        // Execute tools and prepare for next iteration
+        const toolResults = await this.executeTools(response.toolCalls);
+
+        // Build conversation history for next call (Gemini format)
+        messages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: response.toolCalls
+              .map(
+                (call) =>
+                  `Calling ${call.name} with args: ${JSON.stringify(call.input)}`
+              )
+              .join(", "),
+          },
+          {
+            role: "user",
+            content: `Tool results: ${JSON.stringify(
+              toolResults.map((r) => r.functionResponse)
+            )}`,
+          },
+        ];
+
+        iteration++;
       }
 
-      // Execute tools and prepare for next iteration
-      const toolResults = await this.executeTools(response.toolCalls);
-
-      // Build conversation history for next call (Gemini format)
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: response.toolCalls
-            .map(
-              (call) =>
-                `Calling ${call.name} with args: ${JSON.stringify(call.input)}`
-            )
-            .join(", "),
-        },
-        {
-          role: "user",
-          content: `Tool results: ${JSON.stringify(
-            toolResults.map((r) => r.functionResponse)
-          )}`,
-        },
-      ];
-
-      iteration++;
+      throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+    } finally {
+      this.lastUsage = cumulativeUsage;
     }
-
-    this.lastUsage = cumulativeUsage;
-    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
    * Makes a raw call to the Gemini API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    this.lastUsage = undefined;
     const body: Record<string, unknown> = {
       contents: messages.map((msg) => ({
         role: msg.role === "assistant" ? "model" : msg.role,
@@ -785,52 +801,56 @@ export class ClaudeProvider implements LLMProvider {
    * Unified entry point for generating text or running tool calls automatically
    */
   async generateText(prompt: string): Promise<string> {
+    this.lastUsage = undefined;
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
     let cumulativeUsage: TokenUsage | undefined;
 
-    while (iteration < maxIterations) {
-      const response = await this.callLLM(messages);
-      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
+    try {
+      while (iteration < maxIterations) {
+        const response = await this.callLLM(messages);
+        cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
-      // If no tool calls, return the content
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        this.lastUsage = cumulativeUsage;
-        return response.content || "";
+        // If no tool calls, return the content
+        if (!response.toolCalls || response.toolCalls.length === 0) {
+          return response.content || "";
+        }
+
+        // Execute tools and prepare for next iteration
+        const toolMessages = await this.executeTools(response.toolCalls);
+
+        // Build conversation history for next call (Claude format)
+        messages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: JSON.stringify(
+              response.toolCalls.map((call) => ({
+                type: "tool_use",
+                id: call.id,
+                name: call.name,
+                input: call.input,
+              }))
+            ),
+          } as OpenAIMessage,
+          ...toolMessages,
+        ];
+
+        iteration++;
       }
 
-      // Execute tools and prepare for next iteration
-      const toolMessages = await this.executeTools(response.toolCalls);
-
-      // Build conversation history for next call (Claude format)
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: JSON.stringify(
-            response.toolCalls.map((call) => ({
-              type: "tool_use",
-              id: call.id,
-              name: call.name,
-              input: call.input,
-            }))
-          ),
-        } as OpenAIMessage,
-        ...toolMessages,
-      ];
-
-      iteration++;
+      throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+    } finally {
+      this.lastUsage = cumulativeUsage;
     }
-
-    this.lastUsage = cumulativeUsage;
-    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
    * Makes a raw call to the Claude API
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    this.lastUsage = undefined;
     const body: Record<string, unknown> = {
       model: this.model,
       max_tokens: 4096,
@@ -977,50 +997,54 @@ export class OllamaProvider implements LLMProvider {
    * Unified entry point for generating text or running tool calls automatically
    */
   async generateText(prompt: string): Promise<string> {
+    this.lastUsage = undefined;
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10;
     let iteration = 0;
     let cumulativeUsage: TokenUsage | undefined;
 
-    while (iteration < maxIterations) {
-      const response = await this.callLLM(messages);
-      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
+    try {
+      while (iteration < maxIterations) {
+        const response = await this.callLLM(messages);
+        cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        this.lastUsage = cumulativeUsage;
-        return response.content || "";
+        if (!response.toolCalls || response.toolCalls.length === 0) {
+          return response.content || "";
+        }
+
+        const toolMessages = await this.executeTools(response.toolCalls);
+
+        messages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: response.toolCalls.map((t) => ({
+              id: t.id,
+              type: "function",
+              function: {
+                name: t.name,
+                arguments: JSON.stringify(t.input),
+              },
+            })),
+          } as LLMMessage,
+          ...toolMessages,
+        ];
+
+        iteration++;
       }
 
-      const toolMessages = await this.executeTools(response.toolCalls);
-
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: null,
-          tool_calls: response.toolCalls.map((t) => ({
-            id: t.id,
-            type: "function",
-            function: {
-              name: t.name,
-              arguments: JSON.stringify(t.input),
-            },
-          })),
-        } as LLMMessage,
-        ...toolMessages,
-      ];
-
-      iteration++;
+      throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+    } finally {
+      this.lastUsage = cumulativeUsage;
     }
-
-    this.lastUsage = cumulativeUsage;
-    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   /**
    * Makes a raw call to the Ollama API using the official SDK
    */
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    this.lastUsage = undefined;
     try {
       // Convert messages to Ollama format
       const ollamaMessages = messages.map((msg) => {
@@ -1174,47 +1198,51 @@ export class DeepSeekProvider implements LLMProvider {
   }
 
   async generateText(prompt: string): Promise<string> {
+    this.lastUsage = undefined;
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10;
     let iteration = 0;
     let cumulativeUsage: TokenUsage | undefined;
 
-    while (iteration < maxIterations) {
-      const response = await this.callLLM(messages);
-      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
+    try {
+      while (iteration < maxIterations) {
+        const response = await this.callLLM(messages);
+        cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
-      if (!response.toolCalls || response.toolCalls.length === 0) {
-        this.lastUsage = cumulativeUsage;
-        return response.content || "";
+        if (!response.toolCalls || response.toolCalls.length === 0) {
+          return response.content || "";
+        }
+
+        const toolMessages = await this.executeTools(response.toolCalls);
+
+        messages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: response.toolCalls.map((t) => ({
+              id: t.id,
+              type: "function",
+              function: {
+                name: t.name,
+                arguments: JSON.stringify(t.input),
+              },
+            })),
+          } as LLMMessage,
+          ...toolMessages,
+        ];
+
+        iteration++;
       }
 
-      const toolMessages = await this.executeTools(response.toolCalls);
-
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: null,
-          tool_calls: response.toolCalls.map((t) => ({
-            id: t.id,
-            type: "function",
-            function: {
-              name: t.name,
-              arguments: JSON.stringify(t.input),
-            },
-          })),
-        } as LLMMessage,
-        ...toolMessages,
-      ];
-
-      iteration++;
+      throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
+    } finally {
+      this.lastUsage = cumulativeUsage;
     }
-
-    this.lastUsage = cumulativeUsage;
-    throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
   async callLLM(messages: LLMMessage[]): Promise<LLMResponse> {
+    this.lastUsage = undefined;
     const body: Record<string, unknown> = {
       model: this.model,
       messages: messages,

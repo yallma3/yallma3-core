@@ -1123,6 +1123,8 @@ __meta__: ${results["__meta__"]}
           const st = taskStatuses[l.taskId];
           const taskStep = this.tracer
             .getSteps()
+            .slice()
+            .reverse()
             .find((s) => s.taskId === l.taskId && s.type === "task" && s.durationMs !== undefined);
           taskResults[l.taskId] = {
             status: (st?.status as "success" | "failed" | "blocked") ?? "unknown",
@@ -1132,19 +1134,30 @@ __meta__: ${results["__meta__"]}
           };
         }
 
-        const blueprintTasks: WorkspaceTaskBlueprint[] = layers.map((l) => {
-          const t = this.workspaceData.tasks?.find((x: { id: string }) => x.id === l.taskId);
-          return {
-            taskId: l.taskId,
-            title: t?.title,
-            type: t?.type,
-            role: t?.role,
-            description: t?.description,
-            systemPrompt: t?.systemPrompt,
-            expectedOutput: t?.expectedOutput,
-            executorId: t?.executorId,
-          };
-        });
+        const blueprintTasks: WorkspaceTaskBlueprint[] = (this.workspaceData.tasks && this.workspaceData.tasks.length > 0)
+          ? this.workspaceData.tasks.map((t: { id: string; title?: string; type?: string; role?: string; description?: string; systemPrompt?: string; expectedOutput?: string; executorId?: string }) => ({
+              taskId: t.id,
+              title: t.title,
+              type: t.type,
+              role: t.role,
+              description: t.description,
+              systemPrompt: t.systemPrompt,
+              expectedOutput: t.expectedOutput,
+              executorId: t.executorId,
+            }))
+          : layers.map((l) => {
+              const t = this.workspaceData.tasks?.find((x: { id: string }) => x.id === l.taskId);
+              return {
+                taskId: l.taskId,
+                title: t?.title,
+                type: t?.type,
+                role: t?.role,
+                description: t?.description,
+                systemPrompt: t?.systemPrompt,
+                expectedOutput: t?.expectedOutput,
+                executorId: t?.executorId,
+              };
+            });
 
         const jsonPayload: WorkspaceOutputV2 = {
           meta: {

@@ -357,11 +357,15 @@ export class ExecutionTracer {
   recordLLMInteraction(interaction: LLMInteraction): void {
     const entry: LLMInteraction = {
       ...interaction,
-      prompt: interaction.prompt,
+      prompt: interaction.prompt !== undefined
+        ? (safeSanitizeValue(interaction.prompt) as string)
+        : undefined,
       messages: interaction.messages
         ? (safeSanitizeValue(interaction.messages) as unknown[])
         : undefined,
-      response: interaction.response,
+      response: interaction.response !== undefined
+        ? (safeSanitizeValue(interaction.response) as string)
+        : undefined,
       toolCalls: interaction.toolCalls
         ? (safeSanitizeValue(interaction.toolCalls) as unknown[])
         : undefined,
@@ -476,6 +480,10 @@ export class ExecutionTracer {
               });
               return response;
             } catch (err) {
+              const usage =
+                typeof (target as unknown as { getLastUsage?: () => TokenUsage | undefined }).getLastUsage === "function"
+                  ? (target as unknown as { getLastUsage: () => TokenUsage | undefined }).getLastUsage()
+                  : undefined;
               recordInteraction({
                 id: crypto.randomUUID(),
                 timestamp: new Date().toISOString(),
@@ -484,6 +492,7 @@ export class ExecutionTracer {
                 model: modelName,
                 prompt,
                 response: `Error: ${err instanceof Error ? err.message : String(err)}`,
+                usage,
                 durationMs: Date.now() - start,
               });
               throw err;
@@ -510,6 +519,10 @@ export class ExecutionTracer {
               });
               return res;
             } catch (err) {
+              const usage =
+                typeof (target as unknown as { getLastUsage?: () => TokenUsage | undefined }).getLastUsage === "function"
+                  ? (target as unknown as { getLastUsage: () => TokenUsage | undefined }).getLastUsage()
+                  : undefined;
               recordInteraction({
                 id: crypto.randomUUID(),
                 timestamp: new Date().toISOString(),
@@ -518,6 +531,7 @@ export class ExecutionTracer {
                 model: modelName,
                 messages,
                 response: `Error: ${err instanceof Error ? err.message : String(err)}`,
+                usage,
                 durationMs: Date.now() - start,
               });
               throw err;

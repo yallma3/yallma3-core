@@ -36,7 +36,16 @@ export interface WorkspaceDiagnosticRootCause {
   workflowId?: string;
   nodeId?: number;
   nodeTitle?: string;
-  errorCategory: "CONFIGURATION_ERROR" | "TRANSPORT_ERROR" | "TIMEOUT" | "VALIDATION_ERROR" | "EXECUTION_ERROR" | "RUNTIME_ERROR";
+  errorCategory:
+    | "CONFIGURATION_ERROR"
+    | "TRANSPORT_ERROR"
+    | "TIMEOUT"
+    | "TIMEOUT_ERROR"
+    | "AUTH_ERROR"
+    | "LLM_ERROR"
+    | "VALIDATION_ERROR"
+    | "EXECUTION_ERROR"
+    | "RUNTIME_ERROR";
   message: string;
   failedInput?: unknown;
   suggestedRemediation: string;

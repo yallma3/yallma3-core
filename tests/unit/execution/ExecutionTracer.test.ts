@@ -333,28 +333,101 @@ describe("ExecutionTracer — Core Capabilities", () => {
       { providerName: "DeepSeek", modelName: "deepseek-chat" }
     );
 
-    await wrapped.generateText("Prompt 1");
-    await wrapped.callLLM!([{ role: "user", content: "Prompt 2" }]);
+    const nowSpy = vi.spyOn(Date, "now");
+    nowSpy
+      .mockReturnValueOnce(1000) // generateText start
+      .mockReturnValueOnce(1050) // generateText end (50ms)
+      .mockReturnValueOnce(2000) // callLLM start
+      .mockReturnValueOnce(2080); // callLLM end (80ms)
+
+    try {
+      await wrapped.generateText("Prompt 1");
+      await wrapped.callLLM!([{ role: "user", content: "Prompt 2" }]);
+
+      const interactions = tracer.getLLMInteractions();
+      expect(interactions).toHaveLength(2);
+      expect(interactions[0].durationMs).toBe(50);
+      expect(interactions[0].usage).toEqual({
+        promptTokens: 150,
+        completionTokens: 50,
+        totalTokens: 200,
+      });
+      expect(interactions[1].durationMs).toBe(80);
+      expect(interactions[1].usage).toEqual({
+        promptTokens: 100,
+        completionTokens: 25,
+        totalTokens: 125,
+      });
+
+      const summary = tracer.getLLMUsageSummary();
+      expect(summary.totalCalls).toBe(2);
+      expect(summary.promptTokens).toBe(250);
+      expect(summary.completionTokens).toBe(75);
+      expect(summary.totalTokens).toBe(325);
+      expect(summary.totalDurationMs).toBe(130);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("captures token usage on failed generateText calls", async () => {
+    const tracer = new ExecutionTracer();
+
+    const mockProvider: LLMProvider = {
+      supportsTools: false,
+      registerTools: vi.fn(),
+      getLastUsage: vi.fn().mockReturnValue({
+        promptTokens: 80,
+        completionTokens: 20,
+        totalTokens: 100,
+      }),
+      generateText: vi.fn().mockRejectedValue(new Error("Network timeout")),
+    };
+
+    const wrapped = tracer.wrapLLM(
+      mockProvider,
+      { source: "agent", name: "AgentFail" },
+      { providerName: "OpenAI", modelName: "gpt-4o" }
+    );
+
+    await expect(wrapped.generateText("Failing prompt")).rejects.toThrow("Network timeout");
 
     const interactions = tracer.getLLMInteractions();
-    expect(interactions).toHaveLength(2);
+    expect(interactions).toHaveLength(1);
+    expect(interactions[0].response).toContain("Error: Network timeout");
     expect(interactions[0].usage).toEqual({
-      promptTokens: 150,
-      completionTokens: 50,
-      totalTokens: 200,
-    });
-    expect(interactions[1].usage).toEqual({
-      promptTokens: 100,
-      completionTokens: 25,
-      totalTokens: 125,
+      promptTokens: 80,
+      completionTokens: 20,
+      totalTokens: 100,
     });
 
     const summary = tracer.getLLMUsageSummary();
-    expect(summary.totalCalls).toBe(2);
-    expect(summary.promptTokens).toBe(250);
-    expect(summary.completionTokens).toBe(75);
-    expect(summary.totalTokens).toBe(325);
-    expect(summary.totalDurationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.totalCalls).toBe(1);
+    expect(summary.totalTokens).toBe(100);
+  });
+
+  it("truncates oversized prompts and responses exceeding 100,000 characters in recordLLMInteraction", () => {
+    const tracer = new ExecutionTracer();
+
+    const hugePrompt = "a".repeat(105_000);
+    const hugeResponse = "b".repeat(110_000);
+
+    tracer.recordLLMInteraction({
+      id: "huge-1",
+      timestamp: new Date().toISOString(),
+      caller: { source: "agent", name: "TestAgent" },
+      provider: "OpenAI",
+      model: "gpt-4o",
+      prompt: hugePrompt,
+      response: hugeResponse,
+    });
+
+    const interactions = tracer.getLLMInteractions();
+    expect(interactions).toHaveLength(1);
+    expect(interactions[0].prompt?.length).toBeLessThan(105_000);
+    expect(interactions[0].prompt).toContain("[Truncated: 105000 chars exceeds 100,000 char limit]");
+    expect(interactions[0].response?.length).toBeLessThan(110_000);
+    expect(interactions[0].response).toContain("[Truncated: 110000 chars exceeds 100,000 char limit]");
   });
 });
 

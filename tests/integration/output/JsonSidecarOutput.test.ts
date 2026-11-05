@@ -14,6 +14,11 @@ vi.mock("../../../LLM/LLMRunner", async (importOriginal) => {
     getLLMProvider: vi.fn(() => ({
       supportsTools: false,
       registerTools: vi.fn(),
+      getLastUsage: vi.fn().mockReturnValue({
+        promptTokens: 100,
+        completionTokens: 25,
+        totalTokens: 125,
+      }),
       generateText: vi.fn().mockResolvedValue(
         JSON.stringify({
           task_completion_status: "complete",
@@ -29,6 +34,11 @@ vi.mock("../../../LLM/LLMRunner", async (importOriginal) => {
           task_completion_status: "complete",
           feedback: "Great job",
         }),
+        usage: {
+          promptTokens: 100,
+          completionTokens: 25,
+          totalTokens: 125,
+        },
       }),
     })),
   };
@@ -888,6 +898,10 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(payload.meta.workspace).toBe("Aborted Workspace");
     expect(payload.result.exitStatus).toBe("aborted");
     expect(payload.result.status).toBe("aborted");
+    // Verify blueprint preserves tasks even when execution is aborted early before layers run
+    expect(payload.blueprint.tasks).toHaveLength(1);
+    expect(payload.blueprint.tasks[0].taskId).toBe("task-1");
+    expect(payload.blueprint.tasks[0].title).toBe("Task 1");
   });
 
   it("traces token consumption across LLM interactions, rolls up telemetry.llmUsage, and parses customMeta as a native object", async () => {
@@ -958,11 +972,25 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     });
     expect(typeof (payload.meta.customMeta as { timestamp: number }).timestamp).toBe("number");
 
-    // Verify telemetry namespaces
+    // Verify telemetry namespaces and exact token usage rollup
     expect(payload.telemetry).toBeDefined();
-    expect(payload.telemetry.llmUsage).toBeDefined();
-    expect(payload.telemetry.llmUsage.totalCalls).toBeGreaterThanOrEqual(0);
-    expect(payload.telemetry.llmUsage.totalTokens).toBeGreaterThanOrEqual(0);
+    expect(payload.telemetry.llmInteractions).toBeDefined();
+    expect(payload.telemetry.llmInteractions.length).toBe(4);
+    for (const interaction of payload.telemetry.llmInteractions) {
+      expect(interaction.usage).toEqual({
+        promptTokens: 100,
+        completionTokens: 25,
+        totalTokens: 125,
+      });
+    }
+
+    expect(payload.telemetry.llmUsage).toEqual({
+      totalCalls: 4,
+      totalDurationMs: expect.any(Number),
+      promptTokens: 400,
+      completionTokens: 100,
+      totalTokens: 500,
+    });
 
     // Verify text report executive summary
     const txtCall = calls.find((call) => String(call[0]).endsWith(".txt") && String(call[0]).includes("Token_Telemetry_Workspace_"));
@@ -970,6 +998,6 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     const txtContent = String(txtCall![1]);
     expect(txtContent).toContain("WORKSPACE EXECUTION REPORT: Token Telemetry Workspace");
     expect(txtContent).toContain("Status: COMPLETED | Exit: success");
-    expect(txtContent).toContain("LLM:");
+    expect(txtContent).toContain("LLM: 4 calls | 500 tokens (400 prompt, 100 completion)");
   });
 });
