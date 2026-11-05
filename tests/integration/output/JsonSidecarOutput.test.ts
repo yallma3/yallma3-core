@@ -232,25 +232,30 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     const payload = JSON.parse(String(jsonCall![1]));
 
     // 1. Workspace metadata and truthful status
-    expect(payload.workspace).toBe("Demo Analytics Workspace");
-    expect(payload.exitStatus).toBe("success");
-    expect(payload.status).toBe("completed");
-    expect(payload.statusReason).toBe("Workspace completed successfully.");
-    expect(payload.summary).toEqual({
+    expect(payload.meta.workspace).toBe("Demo Analytics Workspace");
+    expect(payload.meta.version).toBe("2.0.0");
+    expect(payload.meta.startTime).toBeDefined();
+    expect(payload.meta.endTime).toBeDefined();
+    expect(payload.meta.durationMs).toBeGreaterThanOrEqual(0);
+
+    expect(payload.result.exitStatus).toBe("success");
+    expect(payload.result.status).toBe("completed");
+    expect(payload.result.statusReason).toBe("Workspace completed successfully.");
+    expect(payload.result.summary).toEqual({
       totalTasks: 2,
       succeededTasks: 2,
       failedTasks: 0,
       blockedTasks: 0,
     });
-    expect(payload.taskConnections).toEqual([
+    expect(payload.blueprint.taskConnections).toEqual([
       { fromTask: "task-wf-1", toTask: "task-agent-2" },
     ]);
 
     // 2. Clean Workflow Graph verification
-    expect(payload.workflows).toBeInstanceOf(Array);
-    expect(payload.workflows).toHaveLength(1);
+    expect(payload.blueprint.workflows).toBeInstanceOf(Array);
+    expect(payload.blueprint.workflows).toHaveLength(1);
 
-    const wf = payload.workflows[0];
+    const wf = payload.blueprint.workflows[0];
     expect(wf.id).toBe("wf-clean-1");
     expect(wf.name).toBe("Clean Ingestion Flow");
     expect(wf.description).toBe("Data preparation workflow");
@@ -286,10 +291,10 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     });
 
     // 3. LLM Interactions verification
-    expect(payload.llmInteractions).toBeInstanceOf(Array);
-    expect(payload.llmInteractions.length).toBeGreaterThanOrEqual(1);
+    expect(payload.telemetry.llmInteractions).toBeInstanceOf(Array);
+    expect(payload.telemetry.llmInteractions.length).toBeGreaterThanOrEqual(1);
 
-    for (const interaction of payload.llmInteractions) {
+    for (const interaction of payload.telemetry.llmInteractions) {
       expect(interaction.id).toBeDefined();
       expect(interaction.timestamp).toBeDefined();
       expect(interaction.caller).toBeDefined();
@@ -300,13 +305,17 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
       expect(interaction.durationMs).toBeGreaterThanOrEqual(0);
     }
 
+    // LLM Usage summary verification
+    expect(payload.telemetry.llmUsage).toBeDefined();
+    expect(payload.telemetry.llmUsage.totalCalls).toBeGreaterThanOrEqual(1);
+
     // 4. Steps Logging verification
-    expect(payload.steps).toBeInstanceOf(Array);
-    expect(payload.steps.length).toBeGreaterThanOrEqual(2);
+    expect(payload.telemetry.steps).toBeInstanceOf(Array);
+    expect(payload.telemetry.steps.length).toBeGreaterThanOrEqual(2);
 
     // Should contain task steps and workflow node steps
-    const taskSteps = payload.steps.filter((s: { type: string }) => s.type === "task");
-    const nodeSteps = payload.steps.filter((s: { type: string }) => s.type === "workflow_node");
+    const taskSteps = payload.telemetry.steps.filter((s: { type: string }) => s.type === "task");
+    const nodeSteps = payload.telemetry.steps.filter((s: { type: string }) => s.type === "workflow_node");
 
     expect(taskSteps.length).toBeGreaterThanOrEqual(2);
     expect(nodeSteps.length).toBeGreaterThanOrEqual(2);
@@ -322,8 +331,8 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(executedNode2.output).toBe("Transformed: Source data payload");
 
     // 5. Autonomous Agent Optimization Specimen: Agents and Tasks Blueprint
-    expect(payload.agents).toHaveLength(1);
-    expect(payload.agents[0]).toMatchObject({
+    expect(payload.blueprint.agents).toHaveLength(1);
+    expect(payload.blueprint.agents[0]).toMatchObject({
       id: "agent-eval-1",
       name: "SummarizerAgent",
       role: "Executive Analyst",
@@ -334,20 +343,28 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
       model: "GPT-4o Mini",
     });
 
-    expect(payload.tasks).toHaveLength(2);
-    expect(payload.tasks[0]).toMatchObject({
+    expect(payload.blueprint.tasks).toHaveLength(2);
+    expect(payload.blueprint.tasks[0]).toMatchObject({
       taskId: "task-wf-1",
       title: "Run Ingestion Workflow",
       description: "Ingest and transform source data",
       expectedOutput: "transformed string",
-      status: "success",
     });
-    expect(payload.tasks[1]).toMatchObject({
+    expect(payload.blueprint.tasks[1]).toMatchObject({
       taskId: "task-agent-2",
       title: "Generate Summary",
       description: "Analyze ingested data",
       expectedOutput: "summary report",
+    });
+
+    // Telemetry taskResults verification
+    expect(payload.telemetry.taskResults["task-wf-1"]).toMatchObject({
       status: "success",
+      reason: null,
+    });
+    expect(payload.telemetry.taskResults["task-agent-2"]).toMatchObject({
+      status: "success",
+      reason: null,
     });
 
     // 6. Diagnostics verification
@@ -356,6 +373,17 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
       rootCauses: [],
       impactedTasks: [],
     });
+
+    // 7. Verify text file header contains executive summary
+    const txtCall = vi.mocked(writeFile).mock.calls.find((call) =>
+      String(call[0]).endsWith(".txt")
+    );
+    expect(txtCall).toBeDefined();
+    const txtContent = String(txtCall![1]);
+    expect(txtContent).toContain("WORKSPACE EXECUTION REPORT: Demo Analytics Workspace");
+    expect(txtContent).toContain("Status: COMPLETED | Exit: success");
+    expect(txtContent).toContain("Tasks: 2 total (2 succeeded, 0 failed, 0 blocked)");
+    expect(txtContent).toContain("LLM:");
 
     // 7. Verify workspace_artifacts WebSocket event
     const artifactsMsg = (
@@ -666,30 +694,29 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
 
     // Verify JSON sidecar content
     const payload = JSON.parse(String(jsonCall![1]));
-    expect(payload.workspace).toBe("Failing Pipeline Workspace");
-    expect(payload.status).toBe("failed");
-    expect(payload.exitStatus).toBe("blocked");
-    expect(payload.statusReason).toBe("Workspace execution failed: 1 task failed, 1 blocked.");
-    expect(payload.finalResult).toBeNull();
-    expect(payload.summary).toEqual({
+    expect(payload.meta.workspace).toBe("Failing Pipeline Workspace");
+    expect(payload.meta.version).toBe("2.0.0");
+    expect(payload.result.status).toBe("failed");
+    expect(payload.result.exitStatus).toBe("blocked");
+    expect(payload.result.statusReason).toBe("Workspace execution failed: 1 task failed, 1 blocked.");
+    expect(payload.result.finalOutput).toBeNull();
+    expect(payload.result.summary).toEqual({
       totalTasks: 2,
       succeededTasks: 0,
       failedTasks: 1,
       blockedTasks: 1,
     });
 
-    expect(payload.taskConnections).toEqual([
+    expect(payload.blueprint.taskConnections).toEqual([
       { fromTask: "task-failing-wf", toTask: "task-blocked-agent" },
     ]);
 
-    // Tasks status
-    expect(payload.tasks).toHaveLength(2);
-    expect(payload.tasks[0].taskId).toBe("task-failing-wf");
-    expect(payload.tasks[0].status).toBe("failed");
-    expect(payload.tasks[0].reason).toContain("SSE error: Unable to connect");
+    // Tasks status in telemetry.taskResults and blueprint.tasks
+    expect(payload.blueprint.tasks).toHaveLength(2);
+    expect(payload.telemetry.taskResults["task-failing-wf"].status).toBe("failed");
+    expect(payload.telemetry.taskResults["task-failing-wf"].reason).toContain("SSE error: Unable to connect");
 
-    expect(payload.tasks[1].taskId).toBe("task-blocked-agent");
-    expect(payload.tasks[1].status).toBe("blocked");
+    expect(payload.telemetry.taskResults["task-blocked-agent"].status).toBe("blocked");
 
     // Diagnostics schema for autonomous optimizer agents
     expect(payload.diagnostics.hasFailures).toBe(true);
@@ -712,8 +739,10 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
       impact: "BLOCKED",
     });
 
-    // Verify TXT file contains failure and blocked annotations
+    // Verify TXT file contains executive summary header with FAILED status and blocked annotations
     const txtContent = String(txtCall![1]);
+    expect(txtContent).toContain("WORKSPACE EXECUTION REPORT: Failing Pipeline Workspace");
+    expect(txtContent).toContain("Status: FAILED | Exit: blocked");
     expect(txtContent).toContain("[FAILED]");
     expect(txtContent).toContain("SSE error: Unable to connect");
     expect(txtContent).toContain("[BLOCKED]");
@@ -776,10 +805,10 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(jsonCall).toBeDefined();
 
     const payload = JSON.parse(String(jsonCall![1]));
-    expect(payload.workspace).toBe("Invalid Workspace");
-    expect(payload.exitStatus).toBe("validation_error");
-    expect(payload.status).toBe("failed");
-    expect(payload.statusReason).toContain("Workspace Validation Failed");
+    expect(payload.meta.workspace).toBe("Invalid Workspace");
+    expect(payload.result.exitStatus).toBe("validation_error");
+    expect(payload.result.status).toBe("failed");
+    expect(payload.result.statusReason).toContain("Workspace Validation Failed");
     expect(payload.diagnostics.hasFailures).toBe(true);
     expect(payload.diagnostics.rootCauses[0]).toMatchObject({
       source: "task",
@@ -856,8 +885,91 @@ describe("Integration: YALLMA3_OUTPUT_JSON Sidecar Generation", () => {
     expect(jsonCall).toBeDefined();
 
     const payload = JSON.parse(String(jsonCall![1]));
-    expect(payload.workspace).toBe("Aborted Workspace");
-    expect(payload.exitStatus).toBe("aborted");
-    expect(payload.status).toBe("aborted");
+    expect(payload.meta.workspace).toBe("Aborted Workspace");
+    expect(payload.result.exitStatus).toBe("aborted");
+    expect(payload.result.status).toBe("aborted");
+  });
+
+  it("traces token consumption across LLM interactions, rolls up telemetry.llmUsage, and parses customMeta as a native object", async () => {
+    process.env.YALLMA3_OUTPUT_JSON = "true";
+
+    const workspace: WorkspaceData = {
+      id: "ws-token-test",
+      name: "Token Telemetry Workspace",
+      description: "Testing token tracking and customMeta parsing",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      mainLLM: {
+        provider: "DeepSeek",
+        model: { id: "deepseek-chat", name: "DeepSeek Chat", contextWindow: { input: 64000, output: 4096 } },
+      },
+      apiKey: "sk-test",
+      useSavedCredentials: false,
+      workflows: [],
+      agents: [
+        {
+          id: "agent-1",
+          name: "Agent 1",
+          role: "Analyst",
+          background: "Data analyst",
+          description: "Data analyst",
+          systemPrompt: "Analyze data",
+          tools: [],
+          llm: {
+            provider: "DeepSeek",
+            model: { id: "deepseek-chat", name: "DeepSeek Chat", contextWindow: { input: 64000, output: 4096 } },
+          },
+        },
+      ],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Token Task",
+          description: "Task to measure tokens",
+          expectedOutput: "data",
+          type: "specific-agent",
+          executorId: "agent-1",
+          position: "0",
+          selected: false,
+          sockets: [],
+        },
+      ],
+      connections: [],
+    };
+
+    const { ctx } = createMockContext();
+    const agent = new MainAgentV1(workspace, ctx);
+    await agent.run();
+
+    const calls = vi.mocked(writeFile).mock.calls;
+    const jsonCall = calls.find(
+      (call) => String(call[0]).endsWith(".json") && String(call[0]).includes("Token_Telemetry_Workspace_")
+    );
+    expect(jsonCall).toBeDefined();
+
+    const payload = JSON.parse(String(jsonCall![1]));
+    expect(payload.meta.workspace).toBe("Token Telemetry Workspace");
+    expect(payload.meta.version).toBe("2.0.0");
+    expect(payload.meta.durationMs).toBeGreaterThanOrEqual(0);
+
+    // Verify customMeta parsed as native object
+    expect(payload.meta.customMeta).toMatchObject({
+      version: "2.0.0",
+    });
+    expect(typeof (payload.meta.customMeta as { timestamp: number }).timestamp).toBe("number");
+
+    // Verify telemetry namespaces
+    expect(payload.telemetry).toBeDefined();
+    expect(payload.telemetry.llmUsage).toBeDefined();
+    expect(payload.telemetry.llmUsage.totalCalls).toBeGreaterThanOrEqual(0);
+    expect(payload.telemetry.llmUsage.totalTokens).toBeGreaterThanOrEqual(0);
+
+    // Verify text report executive summary
+    const txtCall = calls.find((call) => String(call[0]).endsWith(".txt") && String(call[0]).includes("Token_Telemetry_Workspace_"));
+    expect(txtCall).toBeDefined();
+    const txtContent = String(txtCall![1]);
+    expect(txtContent).toContain("WORKSPACE EXECUTION REPORT: Token Telemetry Workspace");
+    expect(txtContent).toContain("Status: COMPLETED | Exit: success");
+    expect(txtContent).toContain("LLM:");
   });
 });

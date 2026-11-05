@@ -304,6 +304,58 @@ describe("ExecutionTracer — Core Capabilities", () => {
     expect(interactions).toHaveLength(1);
     expect(interactions[0].response).toContain("Error: Rate limit exceeded");
   });
+
+  it("records token consumption usage on generateText and callLLM and rolls up getLLMUsageSummary()", async () => {
+    const tracer = new ExecutionTracer();
+
+    const mockProvider: LLMProvider = {
+      supportsTools: true,
+      registerTools: vi.fn(),
+      getLastUsage: vi.fn().mockReturnValue({
+        promptTokens: 150,
+        completionTokens: 50,
+        totalTokens: 200,
+      }),
+      generateText: vi.fn().mockResolvedValue("Generated answer"),
+      callLLM: vi.fn().mockResolvedValue({
+        content: "Call answer",
+        usage: {
+          promptTokens: 100,
+          completionTokens: 25,
+          totalTokens: 125,
+        },
+      }),
+    };
+
+    const wrapped = tracer.wrapLLM(
+      mockProvider,
+      { source: "agent", name: "Agent1" },
+      { providerName: "DeepSeek", modelName: "deepseek-chat" }
+    );
+
+    await wrapped.generateText("Prompt 1");
+    await wrapped.callLLM!([{ role: "user", content: "Prompt 2" }]);
+
+    const interactions = tracer.getLLMInteractions();
+    expect(interactions).toHaveLength(2);
+    expect(interactions[0].usage).toEqual({
+      promptTokens: 150,
+      completionTokens: 50,
+      totalTokens: 200,
+    });
+    expect(interactions[1].usage).toEqual({
+      promptTokens: 100,
+      completionTokens: 25,
+      totalTokens: 125,
+    });
+
+    const summary = tracer.getLLMUsageSummary();
+    expect(summary.totalCalls).toBe(2);
+    expect(summary.promptTokens).toBe(250);
+    expect(summary.completionTokens).toBe(75);
+    expect(summary.totalTokens).toBe(325);
+    expect(summary.totalDurationMs).toBeGreaterThanOrEqual(0);
+  });
 });
 
 describe("ExecutionTracer — Verbose stdio output on YALLMA3_OUTPUT_JSON", () => {

@@ -37,3 +37,5 @@ export interface ConsoleEvent {
   details?: string;
   results?: string;
 }
+
+export * from "./WorkspaceOutput";

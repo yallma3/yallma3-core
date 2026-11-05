@@ -1,4 +1,22 @@
 {
+  "json-output-restructure-and-observability": {
+    "plan": ".agents/plans/plan_261105_json_output_restructure.md",
+    "research": ".agents/research/adr_261105_json_output_restructure.md",
+    "specs": [
+      ".agents/specs/product_output_json.md",
+      ".agents/specs/system_agent.md"
+    ],
+    "sourceFiles": [
+      "Agent/Main/Versions/MainAgentV1.ts",
+      "Execution/ExecutionTracer.ts",
+      "Models/WorkspaceOutput.ts"
+    ],
+    "testFiles": [
+      "tests/unit/execution/ExecutionTracer.test.ts",
+      "tests/integration/output/JsonSidecarOutput.test.ts"
+    ],
+    "description": "Partitioned v2 JSON output into 5 namespaces (meta, result, diagnostics, blueprint, telemetry), native JSON customMeta parsing, text report executive summary header, execution timing tracking, and LLM token usage telemetry roll-up."
+  },
   "client-output-download": {
     "plan": ".agents/plans/plan_261027_token_gated_output_download.md",
     "designOptions": ".agents/design-options/design-options_261027_client_download_output_files.md",

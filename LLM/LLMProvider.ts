@@ -4,6 +4,7 @@ import type {
   LLMMessage,
   LLMResponse,
   LLMProvider,
+  TokenUsage,
   OpenAIMessage,
   OpenAIResponse,
   OpenAIToolCall,
@@ -15,16 +16,40 @@ import type {
 import { Ollama } from "ollama";
 import type { Tool } from "ollama";
 
+function parseOpenAIUsage(usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }): TokenUsage | undefined {
+  if (!usage) return undefined;
+  return {
+    promptTokens: usage.prompt_tokens ?? 0,
+    completionTokens: usage.completion_tokens ?? 0,
+    totalTokens: usage.total_tokens ?? 0,
+  };
+}
+
+function accumulateUsage(acc: TokenUsage | undefined, current?: TokenUsage): TokenUsage | undefined {
+  if (!current) return acc;
+  if (!acc) return { ...current };
+  return {
+    promptTokens: acc.promptTokens + current.promptTokens,
+    completionTokens: acc.completionTokens + current.completionTokens,
+    totalTokens: acc.totalTokens + current.totalTokens,
+  };
+}
+
 export class OpenAIProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
+  private lastUsage?: TokenUsage;
 
   supportsTools = true;
 
   constructor(model: string, apiKey: string) {
     this.model = model;
     this.apiKey = apiKey;
+  }
+
+  getLastUsage(): TokenUsage | undefined {
+    return this.lastUsage;
   }
 
   /**
@@ -87,12 +112,15 @@ export class OpenAIProvider implements LLMProvider {
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
+    let cumulativeUsage: TokenUsage | undefined;
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
+      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
       // If no tool calls, return the content
       if (!response.toolCalls || response.toolCalls.length === 0) {
+        this.lastUsage = cumulativeUsage;
         return response.content || "";
       }
 
@@ -120,6 +148,7 @@ export class OpenAIProvider implements LLMProvider {
       iteration++;
     }
 
+    this.lastUsage = cumulativeUsage;
     throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
@@ -185,7 +214,10 @@ export class OpenAIProvider implements LLMProvider {
       rawContent ||
       (toolCalls?.length && toolCalls[0] ? `Calling tool ${toolCalls[0].name}` : "");
 
-    return { content, toolCalls };
+    const usage = parseOpenAIUsage(json.usage);
+    this.lastUsage = usage;
+
+    return { content, toolCalls, usage };
   }
 }
 
@@ -193,12 +225,17 @@ export class GroqProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
+  private lastUsage?: TokenUsage;
 
   supportsTools = true;
 
   constructor(model: string, apiKey: string) {
     this.model = model;
     this.apiKey = apiKey;
+  }
+
+  getLastUsage(): TokenUsage | undefined {
+    return this.lastUsage;
   }
 
   /**
@@ -236,12 +273,15 @@ export class GroqProvider implements LLMProvider {
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
+    let cumulativeUsage: TokenUsage | undefined;
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
+      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
       // If no tool calls, return the content
       if (!response.toolCalls || response.toolCalls.length === 0) {
+        this.lastUsage = cumulativeUsage;
         return response.content || "";
       }
 
@@ -269,6 +309,7 @@ export class GroqProvider implements LLMProvider {
       iteration++;
     }
 
+    this.lastUsage = cumulativeUsage;
     throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
@@ -338,7 +379,10 @@ export class GroqProvider implements LLMProvider {
       rawContent ||
       (toolCalls?.length && toolCalls[0] ? `calling tool ${toolCalls[0].name}` : "");
 
-    return { content, toolCalls };
+    const usage = parseOpenAIUsage(json.usage);
+    this.lastUsage = usage;
+
+    return { content, toolCalls, usage };
   }
 }
 
@@ -346,12 +390,17 @@ export class OpenRouterProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
+  private lastUsage?: TokenUsage;
 
   supportsTools = true;
 
   constructor(model: string, apiKey: string) {
     this.model = model;
     this.apiKey = apiKey;
+  }
+
+  getLastUsage(): TokenUsage | undefined {
+    return this.lastUsage;
   }
 
   /**
@@ -389,12 +438,15 @@ export class OpenRouterProvider implements LLMProvider {
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
+    let cumulativeUsage: TokenUsage | undefined;
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
+      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
       // If no tool calls, return the content
       if (!response.toolCalls || response.toolCalls.length === 0) {
+        this.lastUsage = cumulativeUsage;
         return response.content || "";
       }
 
@@ -422,6 +474,7 @@ export class OpenRouterProvider implements LLMProvider {
       iteration++;
     }
 
+    this.lastUsage = cumulativeUsage;
     throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
@@ -487,19 +540,27 @@ export class OpenRouterProvider implements LLMProvider {
       rawContent ||
       (toolCalls?.length && toolCalls[0] ? `calling tool ${toolCalls[0].name}` : "");
 
-    return { content, toolCalls };
+    const usage = parseOpenAIUsage(json.usage);
+    this.lastUsage = usage;
+
+    return { content, toolCalls, usage };
   }
 }
 export class GeminiProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
+  private lastUsage?: TokenUsage;
 
   supportsTools = true;
 
   constructor(model: string, apiKey: string) {
     this.model = model;
     this.apiKey = apiKey;
+  }
+
+  getLastUsage(): TokenUsage | undefined {
+    return this.lastUsage;
   }
 
   /**
@@ -540,12 +601,15 @@ export class GeminiProvider implements LLMProvider {
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
+    let cumulativeUsage: TokenUsage | undefined;
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
+      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
       // If no tool calls, return the content
       if (!response.toolCalls || response.toolCalls.length === 0) {
+        this.lastUsage = cumulativeUsage;
         return response.content || "";
       }
 
@@ -575,6 +639,7 @@ export class GeminiProvider implements LLMProvider {
       iteration++;
     }
 
+    this.lastUsage = cumulativeUsage;
     throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
@@ -649,9 +714,19 @@ export class GeminiProvider implements LLMProvider {
       rawContent ||
       (functionCalls.length && functionCalls[0] ? `calling tool ${functionCalls[0].name}` : "");
 
+    const usage: TokenUsage | undefined = json.usageMetadata
+      ? {
+          promptTokens: json.usageMetadata.promptTokenCount ?? 0,
+          completionTokens: json.usageMetadata.candidatesTokenCount ?? 0,
+          totalTokens: json.usageMetadata.totalTokenCount ?? 0,
+        }
+      : undefined;
+    this.lastUsage = usage;
+
     return {
       content,
       toolCalls: functionCalls.length ? functionCalls : null,
+      usage,
     };
   }
 }
@@ -660,12 +735,17 @@ export class ClaudeProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
+  private lastUsage?: TokenUsage;
 
   supportsTools = true;
 
   constructor(model: string, apiKey: string) {
     this.model = model;
     this.apiKey = apiKey;
+  }
+
+  getLastUsage(): TokenUsage | undefined {
+    return this.lastUsage;
   }
 
   /**
@@ -708,12 +788,15 @@ export class ClaudeProvider implements LLMProvider {
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
+    let cumulativeUsage: TokenUsage | undefined;
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
+      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
       // If no tool calls, return the content
       if (!response.toolCalls || response.toolCalls.length === 0) {
+        this.lastUsage = cumulativeUsage;
         return response.content || "";
       }
 
@@ -740,6 +823,7 @@ export class ClaudeProvider implements LLMProvider {
       iteration++;
     }
 
+    this.lastUsage = cumulativeUsage;
     throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
@@ -797,9 +881,19 @@ export class ClaudeProvider implements LLMProvider {
     const finalContent =
       rawText || (toolUses?.length && toolUses[0] ? `calling tool ${toolUses[0].name}` : "");
 
+    const usage: TokenUsage | undefined = json.usage
+      ? {
+          promptTokens: json.usage.input_tokens ?? 0,
+          completionTokens: json.usage.output_tokens ?? 0,
+          totalTokens: (json.usage.input_tokens ?? 0) + (json.usage.output_tokens ?? 0),
+        }
+      : undefined;
+    this.lastUsage = usage;
+
     return {
       content: finalContent,
       toolCalls: toolUses?.length ? toolUses : null,
+      usage,
     };
   }
 }
@@ -809,6 +903,7 @@ export class OllamaProvider implements LLMProvider {
   private apiKey: string;
   private client: Ollama;
   private tools: LLMSpecTool[] = [];
+  private lastUsage?: TokenUsage;
 
   supportsTools = true;
 
@@ -820,6 +915,10 @@ export class OllamaProvider implements LLMProvider {
     this.model = model;
     this.client = new Ollama({ host: baseUrl });
     this.apiKey = apiKey;
+  }
+
+  getLastUsage(): TokenUsage | undefined {
+    return this.lastUsage;
   }
 
   /**
@@ -881,11 +980,14 @@ export class OllamaProvider implements LLMProvider {
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10;
     let iteration = 0;
+    let cumulativeUsage: TokenUsage | undefined;
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
+      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
       if (!response.toolCalls || response.toolCalls.length === 0) {
+        this.lastUsage = cumulativeUsage;
         return response.content || "";
       }
 
@@ -911,6 +1013,7 @@ export class OllamaProvider implements LLMProvider {
       iteration++;
     }
 
+    this.lastUsage = cumulativeUsage;
     throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
@@ -977,11 +1080,24 @@ export class OllamaProvider implements LLMProvider {
            input: (tc.function?.arguments as Record<string, unknown>) || {},
          })) || null;
 
+       const promptTokens = (response as unknown as { prompt_eval_count?: number }).prompt_eval_count;
+       const completionTokens = (response as unknown as { eval_count?: number }).eval_count;
+       const usage: TokenUsage | undefined =
+         promptTokens !== undefined || completionTokens !== undefined
+           ? {
+               promptTokens: promptTokens ?? 0,
+               completionTokens: completionTokens ?? 0,
+               totalTokens: (promptTokens ?? 0) + (completionTokens ?? 0),
+             }
+           : undefined;
+       this.lastUsage = usage;
+
       return {
         content:
           content ||
           (toolCalls?.length ? `Calling tool ${toolCalls[0]!.name}` : ""),
         toolCalls,
+        usage,
       };
     } catch (error) {
       console.error("Ollama API error:", error);
@@ -998,12 +1114,17 @@ export class DeepSeekProvider implements LLMProvider {
   private model: string;
   private apiKey: string;
   private tools: LLMSpecTool[] = [];
+  private lastUsage?: TokenUsage;
 
   supportsTools = true;
 
   constructor(model: string, apiKey: string) {
     this.model = model;
     this.apiKey = apiKey;
+  }
+
+  getLastUsage(): TokenUsage | undefined {
+    return this.lastUsage;
   }
 
   registerTools(tools: LLMSpecTool[]) {
@@ -1056,11 +1177,14 @@ export class DeepSeekProvider implements LLMProvider {
     let messages: LLMMessage[] = [{ role: "user", content: prompt }];
     let maxIterations = 10;
     let iteration = 0;
+    let cumulativeUsage: TokenUsage | undefined;
 
     while (iteration < maxIterations) {
       const response = await this.callLLM(messages);
+      cumulativeUsage = accumulateUsage(cumulativeUsage, response.usage);
 
       if (!response.toolCalls || response.toolCalls.length === 0) {
+        this.lastUsage = cumulativeUsage;
         return response.content || "";
       }
 
@@ -1086,6 +1210,7 @@ export class DeepSeekProvider implements LLMProvider {
       iteration++;
     }
 
+    this.lastUsage = cumulativeUsage;
     throw new Error(`Maximum tool call iterations (${maxIterations}) exceeded`);
   }
 
@@ -1151,7 +1276,10 @@ export class DeepSeekProvider implements LLMProvider {
       rawContent ||
       (toolCalls?.length && toolCalls[0] ? `calling tool ${toolCalls[0].name}` : "");
 
-    return { content, toolCalls };
+    const usage = parseOpenAIUsage(json.usage);
+    this.lastUsage = usage;
+
+    return { content, toolCalls, usage };
   }
 }
 

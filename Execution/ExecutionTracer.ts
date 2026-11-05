@@ -1,7 +1,7 @@
 import type { Workflow } from "../Models/Workflow";
 import type { WorkspaceData } from "../Models/Workspace";
 import type { BaseNode, Connection } from "../Workflow/types/types";
-import type { LLMProvider } from "../Models/LLM";
+import type { LLMProvider, TokenUsage } from "../Models/LLM";
 
 export interface CleanSocket {
   id: number;
@@ -56,7 +56,16 @@ export interface LLMInteraction {
   messages?: unknown[];
   response: string;
   toolCalls?: unknown[];
+  usage?: TokenUsage;
   durationMs?: number;
+}
+
+export interface LLMUsageSummary {
+  totalCalls: number;
+  totalDurationMs: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
 }
 
 export interface ExecutionStep {
@@ -89,7 +98,14 @@ function safeSanitizeValue(value: unknown, depth = 0): unknown {
   if (depth > 5) return "[Truncated: max depth reached]";
   if (value === null || value === undefined) return value;
   const t = typeof value;
-  if (t === "string" || t === "number" || t === "boolean") return value;
+  if (t === "string") {
+    const s = value as string;
+    if (s.length > 100_000) {
+      return s.slice(0, 100_000) + `... [Truncated: ${s.length} chars exceeds 100,000 char limit]`;
+    }
+    return s;
+  }
+  if (t === "number" || t === "boolean") return value;
   if (t === "function") return undefined;
   if (t === "symbol" || t === "bigint") return String(value);
 
@@ -386,9 +402,36 @@ export class ExecutionTracer {
   }
 
   /**
+   * Returns aggregated token and latency usage metrics across all recorded LLM interactions.
+   */
+  getLLMUsageSummary(): LLMUsageSummary {
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let totalTokens = 0;
+    let totalDurationMs = 0;
+
+    for (const interaction of this.llmInteractions) {
+      totalDurationMs += interaction.durationMs ?? 0;
+      if (interaction.usage) {
+        promptTokens += interaction.usage.promptTokens ?? 0;
+        completionTokens += interaction.usage.completionTokens ?? 0;
+        totalTokens += interaction.usage.totalTokens ?? 0;
+      }
+    }
+
+    return {
+      totalCalls: this.llmInteractions.length,
+      totalDurationMs,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+    };
+  }
+
+  /**
    * Wraps an LLMProvider instance with transparent tracing.
    * Intercepts `generateText` and `callLLM` to capture prompts, completions,
-   * tool calls, model info, and durationMs.
+   * tool calls, model info, token usage, and durationMs.
    */
   wrapLLM(
     provider: LLMProvider,
@@ -416,6 +459,10 @@ export class ExecutionTracer {
             let response = "";
             try {
               response = await target.generateText(prompt);
+              const usage =
+                typeof (target as unknown as { getLastUsage?: () => TokenUsage | undefined }).getLastUsage === "function"
+                  ? (target as unknown as { getLastUsage: () => TokenUsage | undefined }).getLastUsage()
+                  : undefined;
               recordInteraction({
                 id: crypto.randomUUID(),
                 timestamp: new Date().toISOString(),
@@ -424,6 +471,7 @@ export class ExecutionTracer {
                 model: modelName,
                 prompt,
                 response,
+                usage,
                 durationMs: Date.now() - start,
               });
               return response;
@@ -457,6 +505,7 @@ export class ExecutionTracer {
                 messages,
                 response: res.content || "",
                 toolCalls: res.toolCalls ?? undefined,
+                usage: res.usage,
                 durationMs: Date.now() - start,
               });
               return res;
