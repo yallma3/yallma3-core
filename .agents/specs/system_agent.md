@@ -157,33 +157,48 @@ surfaces as a returned `Error` from the workflow runtime and is re-thrown by
      - `completed`: All tasks succeeded (`failed === 0 && blocked === 0`). Emits WebSocket success and records a `success` log.
      - `aborted`: Workspace was stopped prematurely.
    - The engine never emits a false "Workspace completed successfully" event when tasks fail or are blocked.
-   - In `saveResults()`, the JSON sidecar records root `status`, `statusReason`, `summary` (`totalTasks`, `succeededTasks`, `failedTasks`, `blockedTasks`), task-level `reason`, and truthful `finalResult` (null on failure).
+   - In `saveResults()`, the `.txt` report contains an executive summary header displaying workspace name, overall status, exit status, duration, and summary counts before listing individual task results.
    - The text output file records `[FAILED] <reason>` and `[BLOCKED] <reason>` rather than `undefined`.
 
 ## Structured Output & ExecutionTracer
 
 When `YALLMA3_OUTPUT_JSON=true` or `1`, `MainAgentV1.saveResults()` generates a clean, machine-readable JSON sidecar file (`Output/<workspaceName>_<timestamp>.json`).
 
-### Autonomous Agent Optimization Specimen
-The JSON sidecar serves as an end-to-end specimen for autonomous evaluator and optimizer agents to detect problems and recommend concrete workspace enhancements:
-- **Full Declarative Blueprint**:
-  - `taskConnections`: Preserves task dependency DAG (`fromTask`, `toTask`).
-  - `tasks`: Full declarative configuration (`title`, `type`, `role`, `description`, `systemPrompt`, `expectedOutput`, `executorId`) alongside runtime outcome (`status`, `reason`, `durationMs`, `result`).
-  - `agents`: Full agent configuration (`name`, `role`, `background`, `systemPrompt`, `llm`, `tools`).
-  - `workflows`: Clean, executable node graphs stripped of canvas UI clutter.
-- **First-Class Diagnostics Block (`diagnostics`)**:
+### Autonomous Agent Optimization Specimen (v2 Namespaced Schema)
+The JSON sidecar serves as an end-to-end specimen for autonomous evaluator and optimizer agents to detect problems and recommend concrete workspace enhancements, cleanly partitioned into 5 namespaces:
+- **`meta`**:
+  - `workspace`: Workspace name.
+  - `workspaceId`: Workspace UUID.
+  - `version`: Engine schema version (`"2.0.0"`).
+  - `startTime`, `endTime`, `durationMs`: Total workspace execution duration.
+  - `generatedAt`: ISO timestamp.
+  - `customMeta`: Parsed native JSON object of custom workspace metadata (safely parsed from `__meta__`).
+- **`result`**:
+  - `status`: `"completed" | "failed" | "partial_success" | "aborted"`.
+  - `exitStatus`: `"success" | "aborted" | "blocked" | "validation_error"`.
+  - `statusReason`: Concise human-readable summary.
+  - `summary`: Counts (`totalTasks`, `succeededTasks`, `failedTasks`, `blockedTasks`).
+  - `finalOutput`: Final workspace output string or null.
+- **`diagnostics`**:
   - `hasFailures`: boolean flag.
-  - `rootCauses`: Array pinpointing root-cause failures to exact components (`source`, `taskId`, `workflowId`, `nodeId`, `nodeType`, `errorCategory`, `message`, `failedInput`, `suggestedRemediation`).
-  - `impactedTasks`: Array of downstream tasks blocked or affected by upstream failures.
-- **Truthful Status & Summary**:
-  - Root `status`: `"completed" | "failed" | "partial_success" | "aborted"`.
-  - Root `statusReason`: Concise human-readable summary.
-  - Root `summary`: Execution counts (`totalTasks`, `succeededTasks`, `failedTasks`, `blockedTasks`).
-  - Trailing `exitStatus`: `"success" | "aborted" | "blocked" | "validation_error"` (repurposing the legacy `aborted: boolean`).
+  - `rootCauses`: Array pinpointing root-cause failures to exact components (`source`, `taskId`, `workflowId`, `nodeId`, `nodeTitle`, `errorCategory`, `message`, `failedInput`, `suggestedRemediation`).
+  - `impactedTasks`: Array of downstream tasks blocked or affected by upstream failures (`taskId`, `title`, `impact`, `reason`).
+- **`blueprint` (Pure Declarative Specification)**:
+  - `mainLLM`: Provider and model settings.
+  - `agents`: Complete agent definitions (`id`, `name`, `role`, `background`, `systemPrompt`, `llm`, `tools`).
+  - `workflows`: Clean workflow graphs (`id`, `name`, `description`, `nodes`, `connections`) stripped of UI canvas coordinates and flags.
+  - `tasks`: Declarative task definitions (`taskId`, `title`, `type`, `role`, `description`, `systemPrompt`, `expectedOutput`, `executorId`).
+  - `taskConnections`: Task dependency DAG edges (`fromTask`, `toTask`).
+- **`telemetry` (Pure Runtime Telemetry)**:
+  - `taskResults`: Map of `taskId` to `{ status, reason, durationMs, output }`.
+  - `steps`: Chronological step traces with status, inputs, outputs, and timings.
+  - `llmInteractions`: Intercepted LLM calls with caller context, provider, model, prompt, response, toolCalls, duration, and token usage (`promptTokens`, `completionTokens`, `totalTokens`).
+  - `llmUsage`: Aggregated token and latency metrics (`totalCalls`, `totalDurationMs`, `promptTokens`, `completionTokens`, `totalTokens`).
+  - `logs`: System and execution log entries with levels and timestamps.
 
 ### ExecutionTracer (`Execution/ExecutionTracer.ts`)
 - **Workflow Graph Sanitization**: Strips UI clutter (`x, y, width, height, selected, processing`, and i18n maps) and produces clean `{ id, type, title, category, config, inputs, outputs }` nodes and semantic `{ fromNodeId, fromSocket, fromSocketTitle, toNodeId, toSocket, toSocketTitle }` connections.
-- **LLM Interaction Interception**: Proxies `LLMProvider` transparently via `tracer.wrapLLM(provider, callerInfo)`, capturing prompts, completions, tool calls, model/provider identity, and execution duration.
+- **LLM Interaction Interception & Token Tracing**: Proxies `LLMProvider` transparently via `tracer.wrapLLM(provider, callerInfo)`, capturing prompts, completions, tool calls, model/provider identity, execution duration, and upstream token usage (`promptTokens`, `completionTokens`, `totalTokens`).
 - **Granular Step Tracing**: Records task lifecycle, agent iterations (prompting, review, final check), and workflow node executions (inputs, outputs, status: executed/skipped/failed).
 - **Output Artifact Notification & Capability Token Gating**: Upon completing file saving in `saveResults()`, `MainAgentV1` issues capability tokens via `OutputTokenManager` and sends a `workspace_artifacts` WebSocket event containing `downloadUrl` and `viewUrl` for all generated output files (`.txt` and `.json`), enabling direct client retrieval without CORS exposure or directory traversal risk.
 

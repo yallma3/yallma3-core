@@ -54,9 +54,16 @@ export interface LLMMessage {
   tool_calls?: unknown[];
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface LLMResponse {
   content: string;
   toolCalls?: ToolCall[] | null;
+  usage?: TokenUsage;
 }
 
 // API Response Types
@@ -186,4 +193,9 @@ export interface LLMProvider {
    * Useful if you want to subclass LLMProvider for different APIs (OpenAI, Gemini, Claude, etc.)
    */
   callLLM?(messages: LLMMessage[]): Promise<LLMResponse>;
+
+  /**
+   * Optional helper to retrieve the token usage of the most recent invocation.
+   */
+  getLastUsage?(): TokenUsage | undefined;
 }

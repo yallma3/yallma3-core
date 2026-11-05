@@ -25,9 +25,10 @@ import type { ExecutionContext } from "../../../Execution/ExecutionContext";
 import { validateWorkspace } from "../../Validation/WorkspaceValidator";
 import { ExecutionTracer, logVerboseWorkspaceGraph } from "../../../Execution/ExecutionTracer";
 import { OutputTokenManager } from "../../../Execution/OutputTokenManager";
+import type { WorkspaceOutputV2, WorkspaceTaskBlueprint, WorkspaceTaskResult } from "../../../Models/WorkspaceOutput";
 
 export class MainAgentV1 implements MainAgent {
-  version = "1.0.0";
+  version = "2.0.0";
   private aborted = false;
   private currentWorkflowId: string | null = null;
   private workspaceId: string;
@@ -35,6 +36,7 @@ export class MainAgentV1 implements MainAgent {
   private taskRetries: Record<string, number> = {};
   private pendingRetryContext: Record<string, { retryIteration: number; correctiveSuggestions?: string }> = {};
   private taskPlans: Record<string, AgentStep[]> = {};
+  private executionStartTime: number = Date.now();
 
   constructor(
     workspaceData: WorkspaceData,
@@ -56,6 +58,7 @@ export class MainAgentV1 implements MainAgent {
   }
 
   async run(): Promise<Record<string, string>> {
+    this.executionStartTime = Date.now();
     if (!this.workspaceData) {
       console.warn("[MainAgentV1] No workspace data available for execution.");
       return {};
@@ -1038,14 +1041,28 @@ export class MainAgentV1 implements MainAgent {
         })
         .join("\n");
 
-      const output = `${this.workspaceData.name} Workspace Execution Results
-Generated: ${new Date().toISOString()}
-MainLLM: ${this.workspaceData.mainLLM?.provider} -- ${
-        this.workspaceData.mainLLM?.model?.name
-      }
-Agents LLMs: ${this.workspaceData.agents
-        ?.map((a) => `${a.name} -- ${a.llm?.provider} ${a.llm?.model?.name}`)
-        ?.join(", ")}
+      const endTime = Date.now();
+      const startTimeIso = new Date(this.executionStartTime).toISOString();
+      const endTimeIso = new Date(endTime).toISOString();
+      const durationMs = Math.max(0, endTime - this.executionStartTime);
+      const durationSec = (durationMs / 1000).toFixed(2);
+
+      const llmUsage = this.tracer.getLLMUsageSummary();
+      const statusHeader = workspaceStatus.toUpperCase();
+      const tokensSummary = `${llmUsage.totalCalls} calls | ${llmUsage.totalTokens.toLocaleString()} tokens (${llmUsage.promptTokens.toLocaleString()} prompt, ${llmUsage.completionTokens.toLocaleString()} completion)`;
+
+      const header = `============================================================
+WORKSPACE EXECUTION REPORT: ${this.workspaceData.name}
+Status: ${statusHeader} | Exit: ${exitStatus} | Duration: ${durationSec}s
+Tasks: ${summary.totalTasks} total (${summary.succeededTasks} succeeded, ${summary.failedTasks} failed, ${summary.blockedTasks} blocked)
+LLM: ${tokensSummary}
+============================================================
+Generated: ${endTimeIso}
+MainLLM: ${this.workspaceData.mainLLM?.provider} -- ${this.workspaceData.mainLLM?.model?.name}
+Agents LLMs: ${this.workspaceData.agents?.map((a) => `${a.name} -- ${a.llm?.provider} ${a.llm?.model?.name}`).join(", ") || "None"}
+============================================================`;
+
+      const output = `${header}
 
 ${taskTextLines}
 __meta__: ${results["__meta__"]}
@@ -1092,56 +1109,104 @@ __meta__: ${results["__meta__"]}
           })
           .filter((c): c is { fromTask: string; toTask: string } => Boolean(c.fromTask && c.toTask));
 
-        const jsonPayload = {
-          workspace: this.workspaceData.name,
-          status: workspaceStatus,
-          statusReason,
-          summary,
-          taskConnections,
-          workflows: this.tracer.getWorkflows(),
-          generatedAt: new Date().toISOString(),
-          mainLLM: {
-            provider: this.workspaceData.mainLLM?.provider,
-            model: this.workspaceData.mainLLM?.model?.name,
-            modelId: this.workspaceData.mainLLM?.model?.id,
+        let customMeta: Record<string, unknown> | string | null = null;
+        if (results["__meta__"]) {
+          try {
+            customMeta = JSON.parse(results["__meta__"]);
+          } catch {
+            customMeta = results["__meta__"];
+          }
+        }
+
+        const taskResults: Record<string, WorkspaceTaskResult> = {};
+        for (const l of layers) {
+          const st = taskStatuses[l.taskId];
+          const taskStep = this.tracer
+            .getSteps()
+            .slice()
+            .reverse()
+            .find((s) => s.taskId === l.taskId && s.type === "task" && s.durationMs !== undefined);
+          taskResults[l.taskId] = {
+            status: (st?.status as "success" | "failed" | "blocked") ?? "unknown",
+            reason: st?.reason ?? null,
+            durationMs: taskStep?.durationMs ?? 0,
+            output: results[l.taskId] ?? null,
+          };
+        }
+
+        const blueprintTasks: WorkspaceTaskBlueprint[] = (this.workspaceData.tasks && this.workspaceData.tasks.length > 0)
+          ? this.workspaceData.tasks.map((t: { id: string; title?: string; type?: string; role?: string; description?: string; systemPrompt?: string; expectedOutput?: string; executorId?: string }) => ({
+              taskId: t.id,
+              title: t.title,
+              type: t.type,
+              role: t.role,
+              description: t.description,
+              systemPrompt: t.systemPrompt,
+              expectedOutput: t.expectedOutput,
+              executorId: t.executorId,
+            }))
+          : layers.map((l) => {
+              const t = this.workspaceData.tasks?.find((x: { id: string }) => x.id === l.taskId);
+              return {
+                taskId: l.taskId,
+                title: t?.title,
+                type: t?.type,
+                role: t?.role,
+                description: t?.description,
+                systemPrompt: t?.systemPrompt,
+                expectedOutput: t?.expectedOutput,
+                executorId: t?.executorId,
+              };
+            });
+
+        const jsonPayload: WorkspaceOutputV2 = {
+          meta: {
+            workspace: this.workspaceData.name,
+            workspaceId: this.workspaceId,
+            version: "2.0.0",
+            startTime: startTimeIso,
+            endTime: endTimeIso,
+            durationMs,
+            generatedAt: endTimeIso,
+            layerCount: layers.length,
+            customMeta,
           },
-          agents: (this.workspaceData.agents ?? []).map((a) => ({
-            id: a.id,
-            name: a.name,
-            role: a.role,
-            background: a.background,
-            systemPrompt: a.systemPrompt,
-            provider: a.llm?.provider,
-            model: a.llm?.model?.name,
-            modelId: a.llm?.model?.id,
-            tools: a.tools ?? [],
-          })),
-          tasks: layers.map((l) => {
-            const t = this.workspaceData.tasks?.find((x: { id: string }) => x.id === l.taskId);
-            const st = taskStatuses[l.taskId];
-            return {
-              taskId: l.taskId,
-              title: t?.title,
-              type: t?.type,
-              role: t?.role,
-              description: t?.description,
-              systemPrompt: t?.systemPrompt,
-              expectedOutput: t?.expectedOutput,
-              executorId: t?.executorId,
-              status: st?.status ?? "unknown",
-              reason: st?.reason ?? null,
-              result: results[l.taskId] ?? null,
-            };
-          }),
+          result: {
+            status: workspaceStatus,
+            exitStatus,
+            statusReason,
+            summary,
+            finalOutput: results["__final__"] ?? null,
+          },
           diagnostics: this.buildDiagnostics(taskStatuses, validationError),
-          steps: this.tracer.getSteps(),
-          llmInteractions: this.tracer.getLLMInteractions(),
-          logs: this.tracer.getLogs(),
-          finalResult: results["__final__"] ?? null,
-          exitStatus,
-          version: this.version,
-          layerCount: layers.length,
-          meta: results["__meta__"],
+          blueprint: {
+            mainLLM: {
+              provider: this.workspaceData.mainLLM?.provider,
+              model: this.workspaceData.mainLLM?.model?.name,
+              modelId: this.workspaceData.mainLLM?.model?.id,
+            },
+            agents: (this.workspaceData.agents ?? []).map((a) => ({
+              id: a.id,
+              name: a.name,
+              role: a.role,
+              background: a.background,
+              systemPrompt: a.systemPrompt,
+              provider: a.llm?.provider,
+              model: a.llm?.model?.name,
+              modelId: a.llm?.model?.id,
+              tools: a.tools ?? [],
+            })),
+            workflows: this.tracer.getWorkflows(),
+            tasks: blueprintTasks,
+            taskConnections,
+          },
+          telemetry: {
+            taskResults,
+            steps: this.tracer.getSteps(),
+            llmInteractions: this.tracer.getLLMInteractions(),
+            llmUsage,
+            logs: this.tracer.getLogs(),
+          },
         };
         await writeFile(jsonPath, JSON.stringify(jsonPayload, null, 2), "utf8");
         const jsonToken = tokenManager.generateToken(jsonFilename);
